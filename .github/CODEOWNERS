@@ -1,6 +1,6 @@
 # Code owners get review requests automatically for the paths they own.
 # Fill in GitHub handles once everyone has joined, then (optionally) turn on
-# "require code owner review" in the develop ruleset.
+# "require code owner review" in the main ruleset.
 #
 # Everything: the three developers
 # *                        @dev-pk @dev-co @dev-kp

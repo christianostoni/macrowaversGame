@@ -1,4 +1,4 @@
-<!-- Title = squash commit on develop. Format: type(scope): summary   e.g. feat(orbit): snap moons to a stable orbit -->
+<!-- Title = squash commit on main. Format: type(scope): summary   e.g. feat(orbit): snap moons to a stable orbit -->
 
 ## What
 

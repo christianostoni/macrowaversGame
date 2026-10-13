@@ -1,51 +1,51 @@
 # How we work
 
-Five people, 40 days, one-week sprints, one Vision Pro each. This document is the contract that keeps `develop`
-buildable every day and `main` shippable at every sprint end. Ask in the team chat if anything here is unclear,
+Five people, 40 days, one-week sprints, one Vision Pro each. This document is the contract that keeps `main`
+buildable every day and ready for the demo at every sprint end. Ask in the team chat if anything here is unclear,
 then fix the document in a PR.
 
 ## 1. Branches
 
-GitFlow with two long-lived branches and three kinds of short-lived ones.
+One long-lived branch, `main`, and short-lived branches that start from it and come back to it through a PR.
+`main` is the merge of the finished features: it always builds and always runs.
 
 | Branch | Lives | Comes from | Goes into | Merge style |
 |---|---|---|---|---|
-| `main` | Forever | | | Only `release/*` and `hotfix/*`, merge commit, tagged `vX.Y.Z` |
-| `develop` | Forever | `main` at day 0 | | Default branch. PRs only |
-| `feature/AR126-<n>-<slug>` | Days | `develop` | `develop` | Squash merge |
-| `spike/AR126-<n>-<slug>` | Days | `develop` | Nowhere | Throwaway. Rename to `feature/` to keep it |
-| `release/X.Y.Z` | 1 or 2 days | `develop` | `main` and `develop` | Merge commit |
-| `hotfix/X.Y.Z` | Hours | `main` | `main` and `develop` | Merge commit |
+| `main` | Forever | | | Default branch. PRs only, tagged `vX.Y.Z` at each sprint end |
+| `feature/AR126-<n>-<slug>` | Days | `main` | `main` | Squash merge |
+| `fix/AR126-<n>-<slug>` | Hours | `main` | `main` | Squash merge |
+| `spike/AR126-<n>-<slug>` | Days | `main` | Nowhere | Throwaway. Rename to `feature/` to keep it |
 
 Names are checked by CI. The Jira key (`AR126-12`) in the branch name is what links the branch, its commits and the
-PR to the ticket once GitHub for Jira is connected. Slugs are lowercase with dashes: `feature/AR126-12-orbit-gesture`.
+PR to the ticket once GitHub for Jira is connected: use it whenever there is a ticket. Slugs are lowercase with
+dashes: `feature/AR126-12-orbit-gesture`.
 
-Never push directly to `main` or `develop`. The rulesets refuse it, and so should you.
+Never push directly to `main`. Everything goes through a PR, and so should you.
 
 ## 2. A feature, start to finish
 
 ```bash
-git switch develop && git pull               # start from a fresh develop
+git switch main && git pull                # start from a fresh main
 git switch -c feature/AR126-12-orbit-gesture
 # ...work, commit small, push often...
 git push                                   # first push sets the upstream
-gh pr create --base develop --fill         # or use the GitHub UI; the template asks the right questions
+gh pr create --base main --fill            # or use the GitHub UI; the template asks the right questions
 ```
 
 1. **Keep it small.** Aim for a PR a teammate can review in 15 minutes: under about 400 changed lines, one thing.
-   Split big features into steps that each leave `develop` working (a flag or an unused type is fine).
-2. **Rebase, don't merge, to catch up:** `git pull --rebase origin develop` on your branch. The Quick start in
+   Split big features into steps that each leave `main` working (a flag or an unused type is fine).
+2. **Rebase, don't merge, to catch up:** `git pull --rebase origin main` on your branch. The Quick start in
    README.md sets `pull.rebase` for you. Never rebase a branch someone else has checked out.
 3. **Open the PR early** as a draft if you want eyes on the direction. Mark it ready when CI is green.
-4. **Review within one working day.** One approval is required. Reviewers pull the branch and run it for anything
+4. **Review within one working day.** One approval is expected. Reviewers pull the branch and run it for anything
    visual or spatial; the simulator is fine unless the PR touches hands, world sensing, immersion or comfort, in which
    case the reviewer runs it on a headset.
-5. **The author merges,** with "Squash and merge". The PR title becomes the commit on `develop`, so it follows the
+5. **The author merges,** with "Squash and merge". The PR title becomes the commit on `main`, so it follows the
    commit format below. The branch is deleted automatically.
-6. Move the Jira ticket. Done means merged into `develop` and the checklist in the PR template ticked.
+6. Move the Jira ticket. Done means merged into `main` and the checklist in the PR template ticked.
 
 Spikes (Sprint 1 research, "does hand tracking feel OK for this?") are `spike/` branches. They can be messy, they
-are never merged, and their findings go into the Jira ticket or a doc, not into `develop`.
+are never merged, and their findings go into the Jira ticket or a doc, not into `main`.
 
 ## 3. Commits
 
@@ -78,25 +78,20 @@ Sprints end on Thursdays. Sprint 1 is research; the first release is the end of 
 | Sprint 5 | `v0.4.0` | Feature and content complete |
 | Sprint 6 | `v1.0.0` | Release. Fixes only during this sprint |
 
-Release captain rotates each sprint. On the last sprint day:
+Release captain rotates each sprint. There is no release branch: a release is a tag on `main`. On the last
+sprint day:
 
-```bash
-git switch develop && git pull && git switch -c release/0.2.0
-# Xcode -> Macrowavers target -> General: Version 0.2.0, Build +1. Add "## [0.2.0] - <date>" to CHANGELOG.md.
-git commit -am "chore(release): start 0.2.0" && git push
-```
-
-1. Move the `Unreleased` notes in `CHANGELOG.md` under the new version. Only bug fixes land on the release branch,
-   as normal PRs into `release/0.2.0`. Features keep flowing into `develop` in the meantime.
-2. Build the release branch on every headset. The sprint review demo runs from this build.
-3. Open two PRs from `release/0.2.0`: into `main` (use "Create a merge commit") and into `develop`.
-   Merge `main` first.
+1. Freeze `main` for the afternoon: only `fix/` PRs merge until the demo build is tagged.
+2. Open a small PR `chore(release): 0.2.0` from `feature/AR126-<n>-release-0-2-0` that bumps the version
+   (Xcode -> Macrowavers target -> General: Version 0.2.0, Build +1) and moves the `Unreleased` notes in
+   `CHANGELOG.md` under `## [0.2.0] - <date>`. Merge it.
+3. Build `main` on every headset. The sprint review demo runs from this build.
 4. Tag `main`: `git switch main && git pull && git tag -a v0.2.0 -m "Sprint 2" && git push origin v0.2.0`.
    The Release workflow turns the tag into a GitHub Release with the changelog notes.
-5. Delete the release branch. Hand the captain role to the next person.
+5. Hand the captain role to the next person.
 
-**Hotfix**: something on `main` is broken and the demo is tomorrow. Branch `hotfix/0.2.1` from `main`, bump the version as above, fix, two PRs
-(into `main` and `develop`), tag `v0.2.1`.
+**Fix after the tag**: something in the demo build is broken. Branch `fix/AR126-<n>-<slug>` from `main`, fix, PR,
+then bump the patch version and tag `v0.2.1` as above.
 
 ## 5. The Xcode project
 
@@ -144,9 +139,9 @@ A PR can be merged when:
 | Quick start in README.md | Once per machine |
 | `open Macrowavers.xcodeproj` | Open the project |
 | Cmd-U, `swiftlint lint --strict`, `swiftlint --fix` | What CI runs |
-| `git switch -c feature/AR126-12-slug develop` | New feature branch (after `git pull` on `develop`) |
-| `git switch -c spike/AR126-27-slug develop` | New throwaway branch |
-| `git switch -c release/0.2.0 develop` | Cut the sprint release (then bump the version, see section 4) |
-| `git switch -c hotfix/0.2.1 main` | Fix on `main` |
-| `gh pr create --base develop --fill` | Open a PR from the terminal |
+| `git switch -c feature/AR126-12-slug main` | New feature branch (after `git pull` on `main`) |
+| `git switch -c fix/AR126-31-slug main` | New bug fix branch |
+| `git switch -c spike/AR126-27-slug main` | New throwaway branch |
+| `git tag -a v0.2.0 -m "Sprint 2"` | Tag the sprint release on `main` (see section 4) |
+| `gh pr create --base main --fill` | Open a PR from the terminal |
 | `gh pr checkout 42` | Review a teammate's PR locally |

@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [develop, main, "release/**", "hotfix/**"]
+    branches: [main]
   push:
-    branches: [develop, main]
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -41,22 +41,19 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Head branch follows the GitFlow naming rules
+      - name: Head branch follows the naming rules
         env:
           HEAD: ${{ github.head_ref }}
           BASE: ${{ github.base_ref }}
         run: |
-          ok='^(feature|spike)/AR126-[0-9]+-[a-z0-9-]+$|^(release|hotfix)/[0-9]+\.[0-9]+\.[0-9]+$|^(main|develop)$'
+          # The Jira key is recommended (it links the branch to the ticket) but not required.
+          ok='^(feature|fix|spike)/(AR126-[0-9]+-)?[a-z0-9-]+$'
           if ! [[ "$HEAD" =~ $ok ]]; then
-            echo "::error::Branch '$HEAD' must be feature/AR126-<n>-<slug>, spike/AR126-<n>-<slug>, release/<x.y.z> or hotfix/<x.y.z>"
+            echo "::error::Branch '$HEAD' must be feature/AR126-<n>-<slug>, fix/AR126-<n>-<slug> or spike/AR126-<n>-<slug> (lowercase, dashes)"
             exit 1
           fi
           if [[ "$HEAD" == spike/* ]]; then
             echo "::error::Spikes are throwaway. To keep the work, rename the branch: git branch -m feature/${HEAD#spike/}"
-            exit 1
-          fi
-          if [[ "$BASE" == main && ! "$HEAD" =~ ^(release|hotfix)/ ]]; then
-            echo "::error::Only release/* and hotfix/* branches merge into main"
             exit 1
           fi
           echo "ok: $HEAD -> $BASE"

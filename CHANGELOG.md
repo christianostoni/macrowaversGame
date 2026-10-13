@@ -6,7 +6,7 @@ and versions follow [Semantic Versioning](https://semver.org). One release per s
 ## [Unreleased]
 
 ### Added
-- Repository with GitFlow workflow, CI, Git LFS and an empty visionOS 27 app skeleton. The Xcode project is
+- Repository with a feature-branch workflow (PRs into `main`, one tag per sprint), CI, Git LFS and an empty visionOS 27 app skeleton. The Xcode project is
   committed and uses synced folders (no XcodeGen).
 
 ### Changed

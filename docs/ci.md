@@ -1,12 +1,11 @@
 # CI
 
-`.github/workflows/ci.yml` runs on every PR into `develop`, `main`, `release/*`, `hotfix/*` and on every push to
-`develop` and `main`:
+`.github/workflows/ci.yml` runs on every PR into `main` and on every push to `main`:
 
 | Job | Runner | What |
 |---|---|---|
 | PR title | ubuntu | Conventional Commits format |
-| Branch name | ubuntu | GitFlow naming, spikes cannot merge, only release/hotfix into main |
+| Branch name | ubuntu | `feature/`, `fix/` or `spike/` naming; spikes cannot merge |
 | Lint | ubuntu (SwiftLint container) | `swiftlint lint --strict` |
 | Build and test | macOS | `xcodebuild test` on the visionOS simulator (the `.xcodeproj` is committed) |
 

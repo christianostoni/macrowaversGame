@@ -1,6 +1,6 @@
 # 1. GitFlow with one release per sprint
 
-Date: 2026-09-29. Status: accepted.
+Date: 2026-09-29. Status: superseded by [0005](0005-feature-branches-into-main.md).
 
 ## Context
 

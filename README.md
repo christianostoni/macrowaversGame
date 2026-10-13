@@ -29,20 +29,18 @@ New files under `Sources/` and `Tests/` join the targets automatically (synced f
 
 ## How we work
 
-The workflow is GitFlow with one release per sprint. **Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first branch.**
-In short:
+Feature branches merged into `main` through reviewed PRs, one tagged release per sprint.
+**Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first branch.** In short:
 
 ```
-main     ──●────────────────●─────────────●──   tagged v0.1.0, v0.2.0 ... v1.0.0 (one per sprint)
-            \              /↑\           /↑
-develop  ────●───●───●───●──●───●───●───●──●─   integration branch, PRs only
-              \     /     \         /
-feature/       ●───●       ●───●───●             feature/AR126-12-orbit-gesture, squash-merged
+main      ──●──────●──────●──────●──●──   always builds; tag v0.1.0, v0.2.0 ... v1.0.0 at each sprint end
+             \    /        \    /
+feature/      ●──●          ●──●           feature/AR126-12-orbit-gesture or fix/..., squash-merged
 ```
 
-- Branch from `develop`: `git switch develop && git pull && git switch -c feature/AR126-12-orbit-gesture`
-- Open a PR into `develop`. CI must be green and one teammate approves. Squash merge.
-- Sprint end: `release/0.2.0` from `develop`, fix only, PR into `main` and `develop`, tag.
+- Branch from `main`: `git switch main && git pull && git switch -c feature/AR126-12-orbit-gesture`
+- Open a PR into `main`. CI must be green and one teammate approves. Squash merge.
+- Sprint end: bump the version in a small PR, then tag `main` (`v0.2.0`).
 - Tracker: Jira project AR126. GitHub Issues are off on purpose.
 
 ## Layout
