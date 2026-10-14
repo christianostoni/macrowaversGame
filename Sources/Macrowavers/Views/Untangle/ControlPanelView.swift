@@ -122,7 +122,7 @@ struct ControlPanelView: View {
                 }
             }
             .labelStyle(.iconOnly)
-            Text("Drag the platform or its handle to move it. Rotate it with both hands.")
+            Text("Tilt or rotate the dragon to see the knot better.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

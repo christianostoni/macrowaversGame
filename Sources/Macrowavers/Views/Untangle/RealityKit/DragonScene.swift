@@ -11,9 +11,6 @@ struct DragonNodeComponent: Component {
     let index: Int
 }
 
-/// Segna le parti della piattaforma che l'utente può afferrare per spostarla/ruotarla.
-struct PlayAreaHandleComponent: Component {}
-
 /// Collega il drago al ViewModel. Ogni frame il `DragonBodySystem` legge dove le mani hanno portato
 /// i collider afferrati, fa avanzare il gioco, riallinea gli altri collider e aggiorna il rig (grafica).
 struct DragonBodyComponent: Component {
@@ -34,7 +31,6 @@ struct DragonBodySystem: System {
     @MainActor
     static func registerAll() {
         DragonNodeComponent.registerComponent()
-        PlayAreaHandleComponent.registerComponent()
         DragonBodyComponent.registerComponent()
         OrbitComponent.registerComponent()
         DragonTapTargetComponent.registerComponent()
@@ -61,12 +57,11 @@ struct DragonBodySystem: System {
                              worldFromLocal: entity.transformMatrix(relativeTo: nil),
                              orbit: entity.components[OrbitComponent.self]?.scenePath())
 
-            // Capitolo della storia: tocco sull'isola, presa nel minigioco, niente in volo; piattaforma e
-            // drago appaiono e spariscono con dissolvenza.
+            // Capitolo della storia: tocco sull'isola, presa nel minigioco, niente in volo; il drago appare
+            // e sparisce con dissolvenza.
             if var state = entity.components[DetanglingStateComponent.self] {
                 state.apply(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config)
-                state.fade(phase: viewModel.phase, dragonOpacity: viewModel.dragonOpacity,
-                           dragon: entity, deltaTime: deltaTime)
+                state.fade(dragonOpacity: viewModel.dragonOpacity, dragon: entity, deltaTime: deltaTime)
                 entity.components.set(state)
             }
 
@@ -94,10 +89,10 @@ struct DragonBodySystem: System {
     }
 }
 
-/// Costruisce la scena: piattaforma spostabile + drago (rig grafico + collider invisibili + indicatori).
+/// Costruisce la scena: area di gioco (senza grafica: il drago giace nell'aria davanti all'utente)
+/// + drago (rig grafico + collider invisibili + indicatori).
 enum DragonSceneBuilder {
     static let playAreaName = "PlayArea"
-    static let platformRadius: Float = 0.4
     static let hoverColor = PlatformColor(red: 1, green: 0.85, blue: 0.4, alpha: 1)
 
     /// `orbitAnchor`: l'albero attorno a cui il drago gira finché l'utente non lo tocca.
@@ -108,19 +103,11 @@ enum DragonSceneBuilder {
         playArea.position = viewModel.placement.position
         playArea.orientation = viewModel.placement.rotation
 
-        // Piattaforma nascosta finché il drago non arriva (la fa apparire `DetanglingStateComponent`).
-        let platform = makePlatform()
-        let handle = makeHandle()
-        for part in [platform, handle] {
-            part.isEnabled = false
-            part.components.set(OpacityComponent(opacity: 0))
-            playArea.addChild(part)
-        }
         let dragon = await makeDragon(viewModel: viewModel, viewer: viewer)
         // Invisibile finché non è al suo posto attorno all'albero.
         dragon.components.set(OpacityComponent(opacity: 0))
         dragon.components.set(OrbitComponent(anchor: orbitAnchor, path: .aroundTree))
-        dragon.components.set(DetanglingStateComponent(playAreaParts: [platform, handle]))
+        dragon.components.set(DetanglingStateComponent())
         playArea.addChild(dragon)
         return playArea
     }
@@ -179,37 +166,6 @@ enum DragonSceneBuilder {
         collider.components.set(CollisionComponent(shapes: [shape]))
         collider.components.set(InputTargetComponent())
         #endif
-    }
-
-    /// Piattaforma semitrasparente su cui giace il drago (piano y = 0 della simulazione).
-    @MainActor
-    private static func makePlatform() -> Entity {
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: PlatformColor(red: 0.6, green: 0.8, blue: 1, alpha: 1))
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.25))
-        let platform = ModelEntity(mesh: .generateCylinder(height: 0.004, radius: platformRadius), materials: [material])
-        platform.name = "Platform"
-        platform.position.y = -0.002
-        platform.components.set(PlayAreaHandleComponent())
-        platform.components.set(CollisionComponent(shapes: [.generateBox(width: platformRadius * 2, height: 0.01,
-                                                                         depth: platformRadius * 2)]))
-        platform.components.set(InputTargetComponent())
-        platform.components.set(HoverEffectComponent())
-        return platform
-    }
-
-    /// Maniglia sul bordo vicino all'utente, come la barra delle finestre di visionOS.
-    @MainActor
-    private static func makeHandle() -> Entity {
-        let handle = ModelEntity(mesh: .generateBox(width: 0.18, height: 0.012, depth: 0.025, cornerRadius: 0.006),
-                                 materials: [SimpleMaterial(color: .white, roughness: 0.3, isMetallic: false)])
-        handle.name = "PlatformHandle"
-        handle.position = SIMD3(0, 0.006, platformRadius + 0.04)
-        handle.components.set(PlayAreaHandleComponent())
-        handle.components.set(CollisionComponent(shapes: [.generateBox(width: 0.22, height: 0.04, depth: 0.06)]))
-        handle.components.set(InputTargetComponent())
-        handle.components.set(HoverEffectComponent())
-        return handle
     }
 }
 

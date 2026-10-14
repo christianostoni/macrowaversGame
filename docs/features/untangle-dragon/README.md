@@ -1,8 +1,8 @@
 # Untangle the Dragon (AR126-100)
 
 A mixed-reality chapter of the Persian fairy tale: a floating island with a tree at its centre appears in the
-room, and a dragon is coiled around the tree. The player taps the dragon, which flies to them and lands on a
-platform in front of them, tangled in a knot. The player grabs the body with their hands and untangles it.
+room, and a dragon is coiled around the tree. The player taps the dragon, which flies to them and settles in
+the air in front of them, tangled in a knot. The player grabs the body with their hands and untangles it.
 Once free, the dragon thanks the player and flies away into the sky.
 
 Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary Sketchfab dragon (see
@@ -15,7 +15,7 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
 2. In the main window tap **Untangle the Dragon**: a control panel opens.
 3. Tap **Start**: an `ImmersiveSpace` in `.mixed` style opens, with the floating island ~2.2 m in front of you
    and the dragon circling its tree.
-4. Look at the dragon and pinch (tap): it flies to you, stops to look at you, then lands tangled on the platform.
+4. Look at the dragon and pinch (tap): it flies to you, stops to look at you, then settles tangled in front of you.
 5. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
@@ -26,12 +26,12 @@ uses a seated eye height of 1.15 m.
 | Moment | Behaviour |
 |---|---|
 | Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. Looking at the dragon highlights it |
-| Tap the dragon | It flies to ~1 m from your eyes and hovers looking at you (the future artifact mechanic goes here), then lands on the platform that fades in, tracing the knot with its body |
+| Tap the dragon | It flies to ~1 m from your eyes and hovers looking at you (the future artifact mechanic goes here), then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel |
 | Grab | The part you look at glows; pinch to grab, up to two parts at once; the dragon turns to your hand and growls if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
 | Solved (0 crossings, body released for 0.6 s) | Turns gold, celebrates for 1.5 s, then **takes off**, circles you once, hovers in front of you roaring its thanks and **flies away into the sky**, fading out before it reaches the real ceiling. **Play Again** puts it back on the island |
-| Platform | Drag it (or its handle) to move it, also in height; rotate it with two hands or the panel buttons; tilt it with the slider. Default is tuned for a seated player |
+| Play area | Invisible: the knot floats at knee/table height in front of the player. Rotate it with the panel buttons, tilt it with the slider, reset it. Default is tuned for a seated player |
 
 All user-facing text is in English. Code comments are in Italian.
 
@@ -48,11 +48,11 @@ Sources/Macrowavers/
 │   ├── DragonFlight.swift              Flights (orbit, approach, landing, farewell) with a "follow the leader" body
 │   ├── DragonPhase.swift               Story chapters (captive → approaching → landing → untangling → free → gone)
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
-│   ├── PlayAreaPlacement.swift         Platform position, rotation, tilt
+│   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
 │   └── UntangleViewModel.swift         @Observable @MainActor view model shared by panel and immersive space
 └── Views/Untangle/
-    ├── ControlPanelView.swift          Panel: state, Start/Close, platform controls
-    ├── DragonImmersiveView.swift       RealityView, grab events, platform gestures
+    ├── ControlPanelView.swift          Panel: state, Start/Close, play area controls
+    ├── DragonImmersiveView.swift       RealityView, island, grab events, tap on the dragon
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers
         ├── DragonJourney.swift           Story ECS: OrbitComponent, DetanglingStateComponent, DragonTapTargetComponent
@@ -77,8 +77,7 @@ SwiftUI views and the RealityKit layer only read state and forward user actions.
 1. reads where the hands moved the grabbed colliders and passes them to the view model as targets;
 2. `viewModel.update(...)` gets the orbit from `OrbitComponent` (in scene space) and, depending on the chapter,
    runs the flight or the dragon's behaviour, the physics step, crossings, mood and win;
-3. `DetanglingStateComponent` applies the chapter to the entities (only when it changes) and fades the
-   platform and the dragon;
+3. `DetanglingStateComponent` applies the chapter to the entities (only when it changes) and fades the dragon;
 4. moves the other colliders to the simulated (or flying) positions;
 5. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the red spheres.
 
@@ -90,8 +89,10 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
   observe the view model, so the system compares the chapter with the one already applied and reconfigures
   only on change: *tap* (no `ManipulationComponent`, larger 9 cm colliders tagged `DragonTapTargetComponent`,
   which is what the `SpatialTapGesture` targets, so it never steals the pinch from grabbing), *grab*
-  (`ManipulationComponent`, head excluded), *none* while flying. The platform is hidden on the island, fades in
-  when the dragon arrives and can be moved only during the puzzle (the knot it lands on must not move).
+  (`ManipulationComponent`, head excluded), *none* while flying.
+- **No visible platform.** The knot lies on an invisible plane (`y = 0` of the play area): a floor appearing
+  in the room when the dragon arrives looked out of place. The play area can still be rotated, tilted and reset
+  from the panel; it cannot be dragged by hand any more.
 - **Orbit = a two-turn torus curve around the trunk (`OrbitPath`).** After one turn radius and height swap, so
   the 2.35 m body (more than one turn) wraps the tree without crossing itself (headless: closest gap 14 cm,
   6 cm needed). The head advances at a fixed speed per second (frame-rate independent) and the body follows its
@@ -108,7 +109,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
   The simulation is deterministic and testable without a headset.
 - **Friction, anchored head and a tension limit.** Without friction the knot slipped loose by itself; with
   both ends free a single pull solved the puzzle; without a tension limit a taut body tunnels through itself.
-- **Win = zero crossings seen from above.** Segments are projected on the platform plane and intersections
+- **Win = zero crossings seen from above.** Segments are projected on the play area plane and intersections
   are counted. Simple, robust and it matches what the player sees.
 - **`ManipulationComponent` for grabbing (visionOS 26+).** A SwiftUI `DragGesture` handles one interaction at
   a time; `ManipulationComponent` gives one grab per hand, so the player can hold a loop up with one hand and
@@ -180,7 +181,7 @@ Per-part hover on a single skinned mesh needs a ShaderGraph material using the h
 On the code side the spine follows a Catmull-Rom spline through the simulated nodes (not the polyline, which
 showed corners), and the first stretch of neck (`SkeletalDragonRig.Asset.neckBlendLength`) leaves the back of
 the head in the head's direction, so the rigid head and the neck do not show a seam when the head turns (when
-it looks up the neck is lifted a little so it does not sink under the platform). The head sits inside a
+it looks up the neck is lifted a little so it does not sink below the knot plane). The head sits inside a
 container entity: the code moves the container and never overwrites the transform of the asset's root.
 
 ### Temporary asset
@@ -227,14 +228,12 @@ rotation on the file's root, which is why the head is wrapped in a container.
 crossings, the knot not untying by itself, rigid turns keeping crossings, the anchored head, two-handed grabs,
 the fit starting with a turn after the delay, the dragon waiting while held, flight keeping its distance from
 the player, the orbit never crossing itself, the landing matching the knot, the farewell ending, the story
-flow (tap → puzzle), platform clamping, restart and play again.
+flow (tap → puzzle), tilt clamping, restart and play again.
 
 ## Known limits
 
 - Pulling very hard can make one part clip through another for a moment (see `maxTension`).
-- The direction of the two-handed platform rotation is not verified on device (flip the sign in
-  `DragonImmersiveView.rotateGesture` if needed).
-- While rearing up the neck is raised only visually; colliders stay on the platform for ~1 s.
+- While rearing up the neck is raised only visually; colliders stay on the play area plane for ~1 s.
 - Smoke and fire sizes are eyeballed and need tuning on device.
 - The island (2.2 m away, ~1.5 m wide in the scene, floating rocks ~2.2 m) does not know the room: reduce
   `IslandPlacement.standard` in small spaces.

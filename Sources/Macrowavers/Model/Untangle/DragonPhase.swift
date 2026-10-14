@@ -31,12 +31,4 @@ enum DragonPhase: Equatable {
         case .approaching, .landing, .free, .gone: .none
         }
     }
-
-    /// La piattaforma appare quando il drago arriva e sparisce quando se ne va.
-    var showsPlayArea: Bool {
-        switch self {
-        case .approaching, .landing, .untangling, .free: true
-        case .captive, .gone: false
-        }
-    }
 }

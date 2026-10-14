@@ -14,7 +14,6 @@ struct PlayAreaPlacement: Equatable {
     static let seated = PlayAreaPlacement(position: SIMD3(0, 0.75, -0.6), yaw: 0, tilt: 15 * .pi / 180)
 
     static let tiltRange: ClosedRange<Float> = 0...(45 * .pi / 180)
-    static let heightRange: ClosedRange<Float> = 0.3...1.8
 
     var rotation: simd_quatf {
         simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: tilt, axis: SIMD3(1, 0, 0))

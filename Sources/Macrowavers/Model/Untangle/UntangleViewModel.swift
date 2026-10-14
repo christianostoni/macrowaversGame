@@ -177,12 +177,6 @@ final class UntangleViewModel {
 
     // MARK: - Azioni sulla piattaforma
 
-    func movePlayArea(to position: SIMD3<Float>) {
-        var position = position
-        position.y = min(max(position.y, PlayAreaPlacement.heightRange.lowerBound), PlayAreaPlacement.heightRange.upperBound)
-        placement.position = position
-    }
-
     func rotatePlayArea(yaw: Float) {
         placement.yaw = yaw
     }

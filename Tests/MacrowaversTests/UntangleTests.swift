@@ -174,10 +174,8 @@ struct UntangleViewModelTests {
     @Test func platformPlacementIsClamped() {
         let viewModel = UntangleViewModel()
         viewModel.setTilt(10)
-        viewModel.movePlayArea(to: SIMD3(0, 5, -1))
 
         #expect(viewModel.placement.tilt == PlayAreaPlacement.tiltRange.upperBound)
-        #expect(viewModel.placement.position.y == PlayAreaPlacement.heightRange.upperBound)
     }
 
     @Test func storyStartsWithTheDragonBoundToTheTree() {

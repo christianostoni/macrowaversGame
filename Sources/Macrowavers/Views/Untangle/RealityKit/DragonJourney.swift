@@ -25,18 +25,15 @@ struct OrbitComponent: Component {
 /// del minigioco (`ManipulationComponent`).
 struct DragonTapTargetComponent: Component {}
 
-/// Stato della storia già applicato alle entità del drago e della piattaforma.
+/// Stato della storia già applicato alle entità del drago.
 /// Il `DragonBodySystem` confronta la fase del ViewModel con quella applicata e riconfigura le entità
-/// solo quando cambia (tocco ↔ presa ↔ nessuna interazione); ogni frame sfuma piattaforma e drago.
+/// solo quando cambia (tocco ↔ presa ↔ nessuna interazione); ogni frame sfuma il drago.
 struct DetanglingStateComponent: Component {
     /// `nil` = mai applicata (il primo frame configura tutto).
     var appliedPhase: DragonPhase?
-    /// Disco e maniglia della piattaforma: appaiono con il drago, si afferrano solo durante il minigioco.
-    let playAreaParts: [Entity]
-    var playAreaOpacity: Float = 0
     var dragonOpacity: Float = 0
 
-    /// Tempo per far apparire o sparire la piattaforma.
+    /// Tempo per far apparire il drago.
     static let fadeDuration: Float = 0.6
     /// Raggio dei collider da toccare: più grande del corpo, il drago si muove ed è lontano.
     static let tapRadius: Float = 0.09
@@ -47,23 +44,11 @@ struct DetanglingStateComponent: Component {
         if appliedPhase?.interaction != phase.interaction {
             Self.configure(colliders, for: phase.interaction, config: config)
         }
-        for part in playAreaParts {
-            part.components[InputTargetComponent.self]?.isEnabled = phase == .untangling
-        }
         appliedPhase = phase
     }
 
     @MainActor
-    mutating func fade(phase: DragonPhase, dragonOpacity newDragonOpacity: Float, dragon: Entity, deltaTime: Float) {
-        let target: Float = phase.showsPlayArea ? 1 : 0
-        if playAreaOpacity != target {
-            let step = deltaTime / Self.fadeDuration
-            playAreaOpacity = target > playAreaOpacity ? min(target, playAreaOpacity + step) : max(target, playAreaOpacity - step)
-            for part in playAreaParts {
-                part.isEnabled = playAreaOpacity > 0
-                part.components.set(OpacityComponent(opacity: playAreaOpacity))
-            }
-        }
+    mutating func fade(dragonOpacity newDragonOpacity: Float, dragon: Entity, deltaTime: Float) {
         // Svanire lo decide il ViewModel (andandosene); apparire è sempre una dissolvenza (niente comparse di colpo).
         let opacity = newDragonOpacity > dragonOpacity
             ? min(newDragonOpacity, dragonOpacity + deltaTime / Self.fadeDuration) : newDragonOpacity
