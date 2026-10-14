@@ -9,7 +9,7 @@ struct FruitPanelView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Text(title)
+            Text(orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored ? "No artifact in this one" : title)
                 .font(.headline)
             Text(hint)
                 .font(.subheadline)
@@ -24,8 +24,15 @@ struct FruitPanelView: View {
                 Button("Close It Again", systemImage: "arrow.counterclockwise") {
                     orchard.restartFruit()
                 }
-                Button("Back to the Tree", systemImage: "arrow.uturn.backward") {
-                    orchard.back()
+                if orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored {
+                    Button("Back to the Tree", systemImage: "arrow.uturn.backward") {
+                        orchard.back()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Back to the Tree", systemImage: "arrow.uturn.backward") {
+                        orchard.back()
+                    }
                 }
             }
             .disabled(orchard.artifact == .flying)
@@ -49,7 +56,7 @@ struct FruitPanelView: View {
         case .apple: appleHint
         case .pomegranate:
             orchard.pomegranateBurst
-                ? "Drag the seeds around. No artifact in here: try an apple."
+                ? "Drag the seeds around, then put it back on the tree and try an apple."
                 : "Pull it apart with both hands."
         case nil: ""
         }
@@ -65,11 +72,11 @@ struct FruitPanelView: View {
         case .revealed:
             return orchard.focusedFruitID == orchard.artifactFruitID
                 ? "Something glows inside! Tap it to send it to the dragon."
-                : "Only worms in this one."
+                : "Only worms in this one: the artifact is in another apple. Put it back on the tree."
         case .flying:
             return "The artifact flies to the dragon…"
         case .hidden, .used:
-            return "Only worms in this one."
+            return "Only worms in this one. Put it back on the tree."
         }
     }
 }

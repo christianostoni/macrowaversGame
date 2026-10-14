@@ -1,16 +1,23 @@
 import SwiftUI
 
-/// Dragon panel: a single window (`Window`, never duplicated) that opens when the player taps the dragon.
-/// Shows the dragon's state, also as debug info, the mini-game controls and the scene restart.
-/// The immersive space and the island are managed by the main window (`ContentView`).
+/// Dragon panel, inside the immersive space (a RealityView attachment, to the player's right): appears when
+/// the player taps the dragon. Shows the dragon's state, also as debug info, the mini-game controls and the
+/// scene restart. Being part of the space, it can never overlap the island or the dragon by accident.
 struct DragonPanelView: View {
-    static let windowID = "DragonPanel"
+    static let attachmentID = "DragonPanel"
 
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
 
     var body: some View {
         VStack(spacing: 16) {
+            HStack {
+                Spacer()
+                Button("Close", systemImage: "xmark") {
+                    viewModel.isDragonPanelVisible = false
+                }
+                .labelStyle(.iconOnly)
+            }
             status
             Divider()
             debugInfo
@@ -23,8 +30,9 @@ struct DragonPanelView: View {
                 .foregroundStyle(.secondary)
         }
         .multilineTextAlignment(.center)
-        .padding(32)
-        .frame(width: 480)
+        .frame(width: 440)
+        .padding(28)
+        .glassBackgroundEffect()
         .animation(.default, value: viewModel.phase)
     }
 

@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Scene hierarchy:
-/// - main window (island): launch, environment management, restart of the whole game;
-/// - dragon panel: single-instance `Window`, opened only by tapping the dragon, never restored at launch;
-/// - immersive space (.mixed) with the island, its fruit and the dragon.
-/// They all share the same view models; only the main window and the space open and close the others.
+/// Scene hierarchy: one launch window and one immersive space, never visible together.
+/// - launch window: opens the island, then closes so it never overlaps the 3D content;
+/// - immersive space (.mixed) with the island, its fruit and the dragon. Its controls are panels inside the
+///   space (island panel on the left, dragon panel on the right), placed outside the play area.
+/// Closing the space (Restart Game or Digital Crown) brings the launch window back.
 @main
 struct MacrowaversApp: App {
     @State private var appModel = AppModel()
@@ -26,22 +26,6 @@ struct MacrowaversApp: App {
                 .environment(orchardViewModel)
         }
         .windowResizability(.contentSize)
-
-        Window("Dragon", id: DragonPanelView.windowID) {
-            DragonPanelView()
-                .environment(untangleViewModel)
-                .environment(orchardViewModel)
-        }
-        .windowResizability(.contentSize)
-        // Opens only from the game: not at app launch and never restored from a previous session.
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
-        .defaultWindowPlacement { _, context in
-            if let island = context.windows.first(where: { $0.id == ContentView.windowID }) {
-                return WindowPlacement(.trailing(island))
-            }
-            return WindowPlacement()
-        }
 
         ImmersiveSpace(id: DragonImmersiveView.spaceID) {
             DragonImmersiveView()

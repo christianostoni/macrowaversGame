@@ -10,11 +10,16 @@ struct DragonImmersiveView: View {
 
     /// Turntable: how much the island turns compared to the angle the hand draws around the trunk.
     private static let spinGain: Float = 2
+    /// Side panels: 0.9 m from the player, 50° to the left / right, a little below a seated player's eyes.
+    /// Outside everything that moves: the island (±20°), the dragon's approach (~1 m straight ahead), the knot
+    /// and the fruit in front of the player, the farewell circles (≥ 1.1 m).
+    private static let panelDistance: Float = 0.9
+    private static let panelAngle: Float = 50 * .pi / 180
+    private static let panelHeight: Float = 1.0
 
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
     /// Rotation of the island when the current gesture started.
     @State private var islandYawStart: Float?
     /// Subscriptions to the grab events on the dragon: they must stay alive as long as the view exists.
@@ -35,6 +40,14 @@ struct DragonImmersiveView: View {
             let orchardRoot = await OrchardSceneBuilder.makeOrchard(
                 viewModel: orchard, viewer: viewer, island: island, deliveryTarget: dragonHead)
             content.add(orchardRoot)
+            // Island panel on the left, dragon panel on the right.
+            if let islandPanel = attachments.entity(for: IslandControlsView.attachmentID) {
+                content.add(Self.placeSidePanel(islandPanel, angle: -Self.panelAngle))
+            }
+            if let dragonPanel = attachments.entity(for: DragonPanelView.attachmentID) {
+                dragonPanel.isEnabled = viewModel.isDragonPanelVisible
+                content.add(Self.placeSidePanel(dragonPanel, angle: Self.panelAngle))
+            }
             // Instructions under the fruit in front of the player.
             if let panel = attachments.entity(for: FruitPanelView.attachmentID),
                let stage = orchardRoot.findEntity(named: OrchardSceneBuilder.stageName) {
@@ -45,6 +58,7 @@ struct DragonImmersiveView: View {
             subscriptions = subscribeToDragonGrabs(content)
         } update: { content, attachments in
             attachments.entity(for: FruitPanelView.attachmentID)?.isEnabled = orchard.focusedFruitID != nil
+            attachments.entity(for: DragonPanelView.attachmentID)?.isEnabled = viewModel.isDragonPanelVisible
             // Reading `placement`/`islandPlacement` here re-runs this block on every change.
             if let island = content.entities.first(where: { $0.name == IslandSceneBuilder.islandName }),
                var turntable = island.components[TurntableComponent.self] {
@@ -61,6 +75,16 @@ struct DragonImmersiveView: View {
                 FruitPanelView()
                     .environment(orchard)
             }
+            Attachment(id: IslandControlsView.attachmentID) {
+                IslandControlsView()
+                    .environment(viewModel)
+                    .environment(orchard)
+            }
+            Attachment(id: DragonPanelView.attachmentID) {
+                DragonPanelView()
+                    .environment(viewModel)
+                    .environment(orchard)
+            }
         }
         .gesture(tapDragonGesture)
         .orchardInteractions()
@@ -69,12 +93,12 @@ struct DragonImmersiveView: View {
         .task { await viewer.start() }
         .onAppear { viewModel.immersiveSpaceState = .open }
         .onDisappear {
-            // Closed from the panel or by the system (Digital Crown): no orphan windows, start over.
+            // Closed from the island panel or by the system (Digital Crown): start over from the launch window.
             viewer.stop()
-            dismissWindow(id: DragonPanelView.windowID)
             viewModel.resetGame()
             orchard.reset()
             viewModel.immersiveSpaceState = .closed
+            openWindow(id: ContentView.windowID)
         }
     }
 
@@ -87,9 +111,15 @@ struct DragonImmersiveView: View {
             .targetedToEntity(where: .has(DragonTapTargetComponent.self))
             .onEnded { _ in
                 viewModel.tapDragon()
-                // Single-instance `Window`: if it is already open it comes to the front, it is never duplicated.
-                openWindow(id: DragonPanelView.windowID)
+                viewModel.isDragonPanelVisible = true
             }
+    }
+
+    /// Puts a panel to the side of the player, turned towards them (it keeps facing them as they move).
+    private static func placeSidePanel(_ panel: Entity, angle: Float) -> Entity {
+        panel.position = SIMD3(panelDistance * sin(angle), panelHeight, -panelDistance * cos(angle))
+        panel.components.set(BillboardComponent())
+        return panel
     }
 
     // MARK: - Island

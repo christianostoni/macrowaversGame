@@ -150,6 +150,31 @@ struct OrchardViewModelTests {
         #expect(orchard.artifact == .hidden)
     }
 
+    @Test func wrongFruitStaysUntilThePlayerSendsItBack() {
+        let orchard = OrchardViewModel(apples: 2, pomegranates: 1)
+        // Pomegranate: never the artifact, but it does not leave by itself.
+        let pomegranate = orchard.fruits.first { $0.kind == .pomegranate }?.id ?? -1
+        orchard.focus(fruit: pomegranate)
+        orchard.setPomegranateOpening(1)
+        for _ in 0..<(60 * 20) { orchard.update(deltaTime: 1.0 / 60.0) }
+        #expect(orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored)
+        #expect(orchard.focusedFruitID == pomegranate)
+        orchard.back()
+        #expect(orchard.focusedFruitID == nil)
+
+        // Second apple after the artifact came out of the first: empty, stays until sent back.
+        orchard.focus(fruit: 0)
+        #expect(!orchard.isFocusedFruitEmpty)
+        clearWorms(orchard)
+        orchard.back()
+        orchard.focus(fruit: 1)
+        orchard.setAppleOpening(1)
+        for _ in 0..<(60 * 20) { orchard.update(deltaTime: 1.0 / 60.0) }
+        #expect(orchard.isFocusedFruitEmpty)
+        #expect(orchard.focusedFruitID == 1)
+        #expect(orchard.artifact == .revealed)
+    }
+
     @Test func pomegranateBurstsButHasNoArtifact() {
         let orchard = OrchardViewModel(apples: 1, pomegranates: 1)
         let pomegranate = orchard.fruits.first { $0.kind == .pomegranate }

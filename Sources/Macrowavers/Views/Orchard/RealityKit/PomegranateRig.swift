@@ -16,6 +16,10 @@ final class PomegranateRig {
     private var seeds: [Entity] = []
     private let seedMaterial: PhysicallyBasedMaterial
     private var appliedOpening: Float = -1
+    /// Opening currently drawn: eases towards the requested one, so the halves never snap shut.
+    private var displayedOpening: Float = 0
+    /// Where each seed sits packed inside the fruit (they fly back there when the fruit closes).
+    private var packedTransforms: [Transform] = []
     private var hasBurst = false
     /// Increases on every reset: a burst still settling must not touch the new seeds.
     private var burstGeneration = 0
@@ -48,6 +52,14 @@ final class PomegranateRig {
 
     // MARK: - Updates from the view model
 
+    /// Moves the drawn opening towards `target`; the seeds burst out or fly back in with `burst`.
+    func ease(towards target: Float, burst: Bool, deltaTime: Float) {
+        let rate: Float = target < displayedOpening ? 4 : 14
+        displayedOpening += (target - displayedOpening) * (1 - exp(-deltaTime * rate))
+        if abs(target - displayedOpening) < 0.002 { displayedOpening = target }
+        apply(opening: displayedOpening, burst: burst)
+    }
+
     /// 0 = closed, 1 = open: the halves move apart and turn like a book, showing the cut faces.
     func apply(opening: Float, burst: Bool) {
         if opening != appliedOpening {
@@ -62,7 +74,7 @@ final class PomegranateRig {
         if burst && !hasBurst {
             burstSeeds()
         } else if !burst && hasBurst {
-            reset()
+            gatherSeeds()
         }
     }
 
@@ -95,15 +107,22 @@ final class PomegranateRig {
         seed.components[FloatingComponent.self]?.base ?? seed.position
     }
 
-    private func reset() {
+    /// The seeds fly back into the fruit (they do not vanish) and stop being draggable.
+    private func gatherSeeds() {
         burstGeneration += 1
         hasBurst = false
-        seeds.forEach { $0.removeFromParent() }
-        spawnSeeds()
+        for (index, seed) in seeds.enumerated() where index < packedTransforms.count {
+            seed.components.remove(FloatingComponent.self)
+            seed.components.remove(InputTargetComponent.self)
+            seed.components.remove(HoverEffectComponent.self)
+            seed.move(to: packedTransforms[index], relativeTo: root, duration: 0.5 + Double(index % 5) * 0.05,
+                      timingFunction: .easeIn)
+        }
     }
 
     private func spawnSeeds() {
         seeds = []
+        packedTransforms = []
         for _ in 0..<Self.seedCount {
             let seed = Entity()
             let model = ModelEntity(mesh: .generateSphere(radius: 0.008), materials: [seedMaterial])
@@ -121,6 +140,7 @@ final class PomegranateRig {
             seed.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.016)]))
             root.addChild(seed)
             seeds.append(seed)
+            packedTransforms.append(seed.transform)
         }
     }
 

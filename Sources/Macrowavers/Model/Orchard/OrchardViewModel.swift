@@ -73,6 +73,25 @@ final class OrchardViewModel {
     }
 
     var focusedFruit: Fruit? { fruits.first { $0.id == focusedFruitID } }
+
+    /// The focused fruit cannot give the artifact (a pomegranate, or an apple when the artifact is already out
+    /// of another one): the "wrong fruit". It never leaves by itself: the player sends it back to the tree.
+    var isFocusedFruitEmpty: Bool {
+        guard let fruit = focusedFruit else { return false }
+        switch fruit.kind {
+        case .pomegranate: return true
+        case .apple: return artifact != .guarded && artifactFruitID != fruit.id
+        }
+    }
+
+    /// The player has looked inside the focused fruit (opened the apple / burst the pomegranate).
+    var isFocusedFruitExplored: Bool {
+        switch focusedFruit?.kind {
+        case .apple: appleOpening >= wormSettings.minimumOpening
+        case .pomegranate: pomegranateBurst
+        case nil: false
+        }
+    }
     var wormCount: Int { wormSettings.count }
     /// The artifact is out of the fruit (or already used): nothing left to look for.
     var isArtifactFound: Bool { artifact == .revealed || artifact == .flying || artifact == .used }
