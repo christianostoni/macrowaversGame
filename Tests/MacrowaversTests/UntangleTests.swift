@@ -53,7 +53,7 @@ struct TangleSimulationTests {
             simulation.step(deltaTime: 1.0 / 60.0)
         }
 
-        // Si alza finché il limite di tensione lo permette, mentre l'altra mano tiene la coda.
+        // It rises as far as the tension limit allows, while the other hand holds the tail.
         #expect(simulation.positions[20].y > restingHeight + 0.01)
         #expect(simulation.isGrabbed(config.nodeCount - 1))
     }
@@ -131,7 +131,7 @@ struct DragonFlightTests {
 
         #expect(flight.maneuver == .orbit)
         #expect(closestSelf > 2 * config.radius)
-        // Nessuno scatto: a 0,35 m/s un nodo si sposta di meno di 1 cm per frame.
+        // No jumps: at 0.35 m/s a node moves less than 1 cm per frame.
         #expect(largestStep < 0.01)
     }
 
@@ -178,7 +178,7 @@ struct UntangleViewModelTests {
         #expect(viewModel.placement.tilt == PlayAreaPlacement.tiltRange.upperBound)
     }
 
-    /// L'isola nella posizione standard, eventualmente ruotata.
+    /// The island in its standard placement, optionally turned.
     private func islandOrbit(yaw: Float = 0) -> AnchoredOrbit {
         var island = IslandPlacement.standard
         island.yaw = yaw
@@ -187,7 +187,7 @@ struct UntangleViewModelTests {
 
     @Test func storyStartsWithTheDragonBoundToTheTree() {
         let viewModel = UntangleViewModel(shape: .trefoil)
-        // Sull'isola il drago non si afferra: il tocco lo fa solo arrabbiare.
+        // On the island the dragon cannot be grabbed: a tap only makes it angry.
         viewModel.grab(node: viewModel.config.nodeCount - 1)
         viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: matrix_identity_float4x4,
                          orbit: islandOrbit())
@@ -201,14 +201,15 @@ struct UntangleViewModelTests {
         #expect(viewModel.phase == .alerted)
         #expect(viewModel.mood == .restless)
 
-        // Dopo la rabbia scende da solo verso l'utente.
+        // After the fit of anger it calms down and keeps circling: only the artifact brings it down.
         var elapsed: Float = 0
         while viewModel.phase == .alerted && elapsed < viewModel.alertDuration + 1 {
             viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: matrix_identity_float4x4,
                              orbit: islandOrbit())
             elapsed += 1.0 / 60.0
         }
-        #expect(viewModel.phase == .approaching)
+        #expect(viewModel.phase == .captive)
+        #expect(viewModel.mood == .calm)
         #expect(elapsed >= viewModel.alertDuration - 0.05)
     }
 
@@ -220,7 +221,7 @@ struct UntangleViewModelTests {
         }
         for _ in 0..<120 { frame(0, 1.0 / 60.0) }
         let before = viewModel.displayPositions
-        // L'isola gira di 90° in un istante (nessun tempo che passa): il drago deve girare rigidamente con lei.
+        // The island turns 90° in an instant (no time passes): the dragon must turn rigidly with it.
         frame(.pi / 2, 0)
         let turn = simd_quatf(angle: .pi / 2, axis: SIMD3(0, 1, 0))
         let tree = IslandPlacement.standard.position
@@ -241,7 +242,7 @@ struct UntangleViewModelTests {
         let beforeCall = viewModel.displayPositions
         viewModel.callDragon()
         #expect(viewModel.phase == .approaching)
-        // Lasciare l'isola non fa scattare il corpo (cambia solo lo spazio in cui vola).
+        // Leaving the island does not make the body jump (only the space it flies in changes).
         #expect(zip(viewModel.displayPositions, beforeCall).allSatisfy { simd_distance($0, $1) < 0.001 })
 
         var frames = 0
@@ -252,7 +253,7 @@ struct UntangleViewModelTests {
 
         #expect(viewModel.phase == .untangling)
         #expect(viewModel.crossingCount == 3)
-        // Tra la prima posa e il groviglio simulato non ci sono salti visibili.
+        // Between the first pose and the simulated tangle there are no visible jumps.
         #expect(zip(viewModel.displayPositions, viewModel.nodePositions).allSatisfy { simd_distance($0, $1) < 0.03 })
     }
 

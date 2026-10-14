@@ -7,9 +7,9 @@ import UIKit
 import AppKit
 #endif
 
-/// Effetti del drago condivisi da tutti i rig: fumo dalle narici, fiammata, versi.
-/// I suoni sono opzionali: se nel bundle ci sono `DragonGrowl`, `DragonRoar`, `DragonRumble`,
-/// `DragonWhoosh` (wav/m4a/mp3) vengono riprodotti come audio spaziale dalla testa.
+/// Dragon effects shared by every rig: smoke from the nostrils, fire, sounds.
+/// Sounds are optional: if the bundle contains `DragonGrowl`, `DragonRoar`, `DragonRumble`,
+/// `DragonWhoosh` (wav/m4a/mp3) they play as spatial audio from the head.
 @MainActor
 final class DragonEffects {
     private let smoke = Entity()
@@ -32,7 +32,7 @@ final class DragonEffects {
         }
     }
 
-    /// `nostrils` e `mouth` sono i punti da cui escono fumo e fuoco (figli della testa).
+    /// `nostrils` and `mouth` are where smoke and fire come out (children of the head).
     func attach(nostrils: Entity, mouth: Entity, voice: Entity) {
         nostrils.addChild(smoke)
         mouth.addChild(fire)
@@ -43,7 +43,7 @@ final class DragonEffects {
     }
 
     func update(pose: DragonPose, frame: DragonFrame) {
-        // Aggiorna gli emettitori solo quando l'intensità cambia di un "gradino".
+        // Updates the emitters only when the intensity changes by a "step".
         let newSmoke = Int((pose.smoke * 10).rounded())
         if newSmoke != smokeLevel {
             smokeLevel = newSmoke
@@ -58,7 +58,7 @@ final class DragonEffects {
         playSounds(for: frame)
     }
 
-    /// Versi legati ai cambi di movimento, manovra o stato d'animo.
+    /// Sounds tied to changes of move, manoeuvre or mood.
     private func playSounds(for frame: DragonFrame) {
         if frame.action != lastAction {
             lastAction = frame.action
@@ -104,7 +104,7 @@ final class DragonEffects {
         return nil
     }
 
-    /// Sbuffi di fumo grigio che salgono e si allargano.
+    /// Grey puffs of smoke that rise and spread.
     private static func smokeEmitter() -> ParticleEmitterComponent {
         var emitter = ParticleEmitterComponent()
         emitter.emitterShape = .point
@@ -124,7 +124,7 @@ final class DragonEffects {
         return emitter
     }
 
-    /// Getto di fuoco breve, giallo → rosso.
+    /// Short burst of fire, yellow → red.
     private static func fireEmitter() -> ParticleEmitterComponent {
         var emitter = ParticleEmitterComponent()
         emitter.emitterShape = .point
@@ -143,13 +143,13 @@ final class DragonEffects {
     }
 }
 
-/// Ali del drago placeholder: una membrana per lato agganciata alle "spalle".
-/// Chiuse lungo il corpo, si spiegano quando il drago si impenna o è libero.
+/// Wings of the placeholder dragon: one membrane per side attached to the "shoulders".
+/// Folded along the body, they spread when the dragon rears up or is free.
 @MainActor
 final class ProceduralWings {
     let entity = Entity()
     private var pivots: [(side: Float, pivot: Entity)] = []
-    /// Nodo del corpo a cui sono attaccate le ali.
+    /// Body node the wings are attached to.
     let shoulderIndex: Int
 
     init(radius: Float, shoulderIndex: Int) {
@@ -168,7 +168,7 @@ final class ProceduralWings {
                                                       cornerRadius: 0.001),
                                    materials: [membrane])
             skin.position = SIMD3(side * wingSpan / 2, 0, -radius * 0.8)
-            // Osso anteriore dell'ala.
+            // Front bone of the wing.
             let bone = ModelEntity(mesh: .generateBox(width: wingSpan, height: radius * 0.25, depth: radius * 0.25,
                                                       cornerRadius: radius * 0.1),
                                    materials: [boneMaterial])
@@ -180,7 +180,7 @@ final class ProceduralWings {
         }
     }
 
-    /// `position` e `forward` della spalla (spazio del drago). In volo `forward` è inclinato: le ali seguono.
+    /// `position` and `forward` of the shoulder (dragon space). In flight `forward` is tilted: the wings follow.
     func update(position: SIMD3<Float>, forward: SIMD3<Float>, pose: DragonPose, radius: Float) {
         let body = simd_length(forward) > 1e-5
             ? DragonLifeAnimator.orientation(looking: simd_normalize(forward))
@@ -189,7 +189,7 @@ final class ProceduralWings {
         entity.orientation = body
 
         let flare = pose.wingFlare
-        // Chiuse: piegate all'indietro e adagiate. Spiegate: aperte e alzate.
+        // Folded: bent backwards and lying down. Spread: open and raised.
         let sweep = 1.2 - 0.9 * flare
         let lift = -0.15 + 1.0 * flare + pose.wingFlap
         for (side, pivot) in pivots {

@@ -100,6 +100,12 @@ jobs:
           "$xc/Contents/Developer/usr/bin/xcodebuild" -version
           "$xc/Contents/Developer/usr/bin/xcodebuild" -showsdks | grep -i xros || echo "::warning::No visionOS SDK listed"
 
+      # The apple's shader (AppleSpiral.metal) needs Xcode's Metal Toolchain, a separate download since Xcode 26.
+      - name: Metal Toolchain
+        run: |
+          xcodebuild -showComponent MetalToolchain | grep -q "Status: installed" \
+            || xcodebuild -downloadComponent MetalToolchain
+
       - name: Local build settings
         run: cp -n Configs/Local.xcconfig.example Configs/Local.xcconfig || true
 

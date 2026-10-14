@@ -13,7 +13,7 @@ Branch `feature/AR126-100-untangle-dragon` · Jira AR126-100 · full docs in
 [docs/features/untangle-dragon/README.md](docs/features/untangle-dragon/README.md)
 
 A mixed-reality chapter of the tale. A floating island appears in the room with a dragon bound to the tree at its
-centre. The player spins the island, taps the dragon (it gets angry), calls it down, and the dragon settles in front
+centre. The player spins the island, finds the artifact hidden in an apple to soothe the dragon, and it settles in front
 of them with its long body tied in a knot. The player has to set it free:
 
 - **Untangle it with your hands.** Pinch and drag any part of the body, even two parts at once (one per hand), and
@@ -27,12 +27,20 @@ of them with its long body tied in a knot. The player has to set it free:
 - **Two windows only.** The main window opens the island, spins it and restarts the whole game; the dragon panel
   (opened by tapping the dragon) shows its state and debug info and restarts the dragon's scene.
 
+### The Tree's Fruit
+
+Full docs in [docs/features/apple-artifact/README.md](docs/features/apple-artifact/README.md). Apples and a
+pomegranate hang on the island's tree. Pick one and it comes close: pull the apple's stem to open its spiral cut
+(a Metal shader), catch the worms that crawl and burrow between the slices, and the artifact rises out. Tapped,
+it flies to the dragon and soothes it. The pomegranate bursts into seeds you can play with.
+
 Open it from the main window with **Open the Island**. It uses a placeholder dragon built in code until the
 design team's asset (`DragonBody` / `DragonHead`) is added; the asset specification is in the feature docs.
 
 ## Requirements
 
 - macOS 26 or later, Xcode 27 with a visionOS 26.5 (or later) simulator runtime
+- Xcode's Metal Toolchain: `xcodebuild -downloadComponent MetalToolchain` (for the apple's shader)
 - Reality Composer Pro 3 (separate beta download from Apple)
 - Homebrew (for `brew bundle`: GitHub CLI, Git LFS, SwiftLint)
 - Vision Pro in Developer Mode, paired in Xcode's Device Hub, for anything with hands, room sensing or comfort

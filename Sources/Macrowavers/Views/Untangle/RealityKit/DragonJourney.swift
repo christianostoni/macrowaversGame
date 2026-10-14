@@ -6,13 +6,13 @@ import UIKit
 import AppKit
 #endif
 
-/// Il drago gira attorno a un'entità (la base del tronco dell'albero).
-/// Il percorso è nello spazio dell'ancora; ogni frame il `DragonBodySystem` passa al ViewModel anche la
-/// trasformazione dell'ancora nella scena: il drago prigioniero vola nello spazio dell'albero, quindi segue
-/// l'isola se ruota, si sposta, scala o fluttua.
+/// The dragon circles an entity (the base of the tree's trunk).
+/// The path is in the anchor's space; every frame the `DragonBodySystem` also passes the anchor's
+/// transform in the scene to the view model: the captive dragon flies in the tree's space, so it follows
+/// the island when it turns, moves, scales or bobs.
 struct OrbitComponent: Component {
     let anchor: Entity
-    /// Percorso nello spazio dell'ancora (metri dell'asset dell'isola).
+    /// Path in the anchor's space (island asset metres).
     var path: OrbitPath
 
     @MainActor
@@ -21,22 +21,22 @@ struct OrbitComponent: Component {
     }
 }
 
-/// Segna i collider del drago che si possono toccare (solo mentre è prigioniero sull'isola).
-/// Il `SpatialTapGesture` punta a questo componente, non ai collider: così non compete con le prese
-/// del minigioco (`ManipulationComponent`).
+/// Marks the dragon's colliders that can be tapped (only while it is captive on the island).
+/// The `SpatialTapGesture` targets this component, not the colliders: so it does not compete with the
+/// mini-game's grabs (`ManipulationComponent`).
 struct DragonTapTargetComponent: Component {}
 
-/// Stato della storia già applicato alle entità del drago.
-/// Il `DragonBodySystem` confronta la fase del ViewModel con quella applicata e riconfigura le entità
-/// solo quando cambia (tocco ↔ presa ↔ nessuna interazione); ogni frame sfuma il drago.
+/// Story state already applied to the dragon's entities.
+/// The `DragonBodySystem` compares the view model's chapter with the applied one and reconfigures the
+/// entities only when it changes (tap ↔ grab ↔ no input); every frame it fades the dragon.
 struct DetanglingStateComponent: Component {
-    /// `nil` = mai applicata (il primo frame configura tutto).
+    /// `nil` = never applied (the first frame configures everything).
     var appliedPhase: DragonPhase?
     var dragonOpacity: Float = 0
 
-    /// Tempo per far apparire il drago.
+    /// Time for the dragon to appear.
     static let fadeDuration: Float = 0.6
-    /// Raggio dei collider da toccare: più grande del corpo, il drago si muove ed è lontano.
+    /// Radius of the tappable colliders: larger than the body, the dragon moves and is far away.
     static let tapRadius: Float = 0.09
 
     @MainActor
@@ -50,7 +50,7 @@ struct DetanglingStateComponent: Component {
 
     @MainActor
     mutating func fade(dragonOpacity newDragonOpacity: Float, dragon: Entity, deltaTime: Float) {
-        // Svanire lo decide il ViewModel (andandosene); apparire è sempre una dissolvenza (niente comparse di colpo).
+        // Fading out is decided by the view model (as it leaves); appearing is always a fade (no sudden pop).
         let opacity = newDragonOpacity > dragonOpacity
             ? min(newDragonOpacity, dragonOpacity + deltaTime / Self.fadeDuration) : newDragonOpacity
         if opacity != dragonOpacity {
@@ -59,8 +59,8 @@ struct DetanglingStateComponent: Component {
         }
     }
 
-    /// Prigioniero: tutto il corpo si tocca (sfere grandi, evidenziate se guardate).
-    /// Minigioco: ogni nodo si afferra, tranne la testa ancorata. In volo: niente.
+    /// Captive: the whole body can be tapped (large spheres, highlighted when looked at).
+    /// Mini-game: every node can be grabbed except the anchored head. Flying: nothing.
     @MainActor
     private static func configure(_ colliders: [Entity], for interaction: DragonPhase.Interaction, config: TangleConfig) {
         for (index, collider) in colliders.enumerated() {

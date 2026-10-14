@@ -9,9 +9,9 @@ import AppKit
 typealias PlatformColor = NSColor
 #endif
 
-/// Fotografia di un frame di gioco passata al rig: tutto quello che serve per disegnare il drago.
+/// Snapshot of a game frame passed to the rig: everything needed to draw the dragon.
 struct DragonFrame {
-    /// Posizioni della simulazione nello spazio del drago (indice 0 = testa).
+    /// Positions of the simulation in the dragon's space (index 0 = head).
     var positions: [SIMD3<Float>]
     var mood: DragonMood
     var action: DragonAction?
@@ -19,28 +19,28 @@ struct DragonFrame {
     var restlessness: Float
     var strain: Float
     var time: Float
-    /// Punto che la testa deve guardare quando è tirato (il nodo nella mano dell'utente).
+    /// Point the head looks at when pulled (the node in the player's hand).
     var lookTarget: SIMD3<Float>?
-    /// Occhi dell'utente (il cavaliere) nello spazio del drago.
+    /// The player's (the knight's) eyes in the dragon's space.
     var viewer: SIMD3<Float>
-    /// Presente quando il drago vola (attorno all'albero, verso l'utente, mentre si posa, libero).
+    /// Present while the dragon flies (around the tree, towards the player, while settling, free).
     var flight: FlightFrame?
 }
 
 struct FlightFrame {
     var maneuver: DragonFlight.Maneuver
     var progress: Float
-    /// Velocità della testa nello spazio del drago.
+    /// Velocity of the head in the dragon's space.
     var velocity: SIMD3<Float>
 }
 
-/// La "pelle" del drago: come viene disegnato. Le collisioni e la fisica sono separate,
-/// quindi si può sostituire il placeholder con l'asset vero senza toccare la logica di gioco.
+/// The dragon's "skin": how it is drawn. Collisions and physics are separate,
+/// so the placeholder can be swapped for the real asset without touching the game logic.
 @MainActor
 protocol DragonRig: AnyObject {
     var entity: Entity { get }
-    /// Riceve i collider (uno per nodo, indice = nodo). Un rig può agganciare la propria grafica
-    /// ai collider: l'effetto hover di visionOS illumina i figli dell'entità guardata.
+    /// Receives the colliders (one per node, index = node). A rig can attach its visuals to the
+    /// colliders: visionOS's hover effect lights up the children of the entity being looked at.
     func attach(to colliders: [Entity])
     func update(_ frame: DragonFrame, deltaTime: Float)
 }
@@ -50,7 +50,7 @@ extension DragonRig {
 }
 
 enum DragonRigLoader {
-    /// Usa l'asset del design team se presente nel bundle, altrimenti il placeholder procedurale.
+    /// Uses the design team's asset when it is in the bundle, otherwise the procedural placeholder.
     @MainActor
     static func load(config: TangleConfig) async -> DragonRig {
         if let skeletal = await SkeletalDragonRig.load(config: config) {
@@ -60,29 +60,29 @@ enum DragonRigLoader {
     }
 }
 
-/// Posa "espressiva" del drago calcolata a ogni frame. Valida per qualsiasi rig.
+/// "Expressive" pose of the dragon computed every frame. Valid for any rig.
 struct DragonPose {
     var headOrientation = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
-    /// Di quanto si alza la testa sul collo (m) e quanti nodi partecipano.
+    /// How high the head rises on the neck (m) and how many nodes take part.
     var neckLift: Float = 0.02
     var neckLength: Float = 5
-    /// 0 = bocca chiusa, 1 = spalancata.
+    /// 0 = mouth closed, 1 = wide open.
     var jawOpen: Float = 0
-    /// 0 = ali chiuse lungo il corpo, 1 = spiegate.
+    /// 0 = wings folded along the body, 1 = spread.
     var wingFlare: Float = 0
-    /// Angolo extra del battito d'ali (radianti).
+    /// Extra angle of the wing beat (radians).
     var wingFlap: Float = 0
-    /// 0...1: fumo dalle narici.
+    /// 0...1: smoke from the nostrils.
     var smoke: Float = 0
-    /// 0...1: fiammata dalla bocca.
+    /// 0...1: fire from the mouth.
     var fire: Float = 0
-    /// Ampiezza dell'ondulazione laterale del corpo (m).
+    /// Amplitude of the body's sideways wave (m).
     var bodyWave: Float = 0
 }
 
-/// Animazioni "di vita" puramente visive: non toccano la simulazione, quindi il puzzle resta identico
-/// anche se il drago si impenna, ondeggia o spiega le ali. Pensate come davanti a un drago vero:
-/// tiene d'occhio il cavaliere, avvisa (fumo, ringhio) prima di attaccare, e i movimenti hanno peso.
+/// "Alive" animations, purely visual: they never touch the simulation, so the puzzle stays the same
+/// even when the dragon rears up, sways or spreads its wings. Designed as if facing a real dragon:
+/// it keeps an eye on the knight, warns (smoke, growl) before attacking, and its moves have weight.
 struct DragonLifeAnimator {
     let config: TangleConfig
     private(set) var pose = DragonPose()
@@ -91,18 +91,18 @@ struct DragonLifeAnimator {
         self.config = config
     }
 
-    /// Respiro: un'onda di gonfiore che scorre dalla testa alla coda.
+    /// Breathing: a swelling wave running from head to tail.
     func breathScale(node index: Int, time: Float) -> Float {
         1 + 0.06 * sin(time * 2.2 - Float(index) * 0.25)
     }
 
-    /// Chiusura delle palpebre (1 = aperte, 0 = chiuse): un battito ogni ~3,5 s.
+    /// Eyelids (1 = open, 0 = closed): one blink every ~3.5 s.
     func eyeOpenness(time: Float) -> Float {
         let phase = time.truncatingRemainder(dividingBy: 3.5)
         return phase < 0.15 ? abs(phase - 0.075) / 0.075 : 1
     }
 
-    /// Posizioni da disegnare: simulazione + collo sollevato + ondulazione + tremore.
+    /// Positions to draw: simulation + raised neck + wave + trembling.
     func visualPositions(_ frame: DragonFrame) -> [SIMD3<Float>] {
         let positions = frame.positions
         let trembleAmount: Float = switch frame.mood {
@@ -112,10 +112,10 @@ struct DragonLifeAnimator {
         }
         return positions.indices.map { index in
             var position = positions[index]
-            // Il collo si alza gradualmente verso la testa.
+            // The neck rises gradually towards the head.
             let neckWeight = max(0, 1 - Float(index) / pose.neckLength)
             position.y += pose.neckLift * neckWeight * neckWeight
-            // Ondulazione laterale che scorre lungo il corpo (serpeggiare).
+            // Sideways wave running along the body (snaking).
             if pose.bodyWave > 0 {
                 let previous = positions[max(index - 1, 0)]
                 let next = positions[min(index + 1, positions.count - 1)]
@@ -148,7 +148,7 @@ struct DragonLifeAnimator {
         var pitchOffset: Float = 0
         var responsiveness: Float = 5
 
-        // Posizione attuale (disegnata) della testa: da qui parte lo sguardo.
+        // Current (drawn) position of the head: the gaze starts here.
         let head = headBase + SIMD3(0, pose.neckLift, 0)
         let toward = { (point: SIMD3<Float>) -> SIMD3<Float> in
             let direction = point - head
@@ -161,7 +161,7 @@ struct DragonLifeAnimator {
         } else {
             switch frame.mood {
             case .calm:
-                // Si guarda intorno, ma ogni tanto fissa il cavaliere.
+                // Looks around, but every now and then stares at the knight.
                 if time.truncatingRemainder(dividingBy: 9) < 3.5 {
                     look = toward(frame.viewer)
                 } else {
@@ -175,7 +175,7 @@ struct DragonLifeAnimator {
                 yawOffset = 0.08 * sin(time * 25) * frame.strain
                 responsiveness = 9
             case .restless:
-                // Avviso: fissa il cavaliere, scuote la testa, fumo dalle narici, bocca che ringhia.
+                // Warning: stares at the knight, shakes its head, smoke from the nostrils, growling mouth.
                 look = toward(frame.viewer)
                 yawOffset = 0.3 * sin(time * (6 + 8 * frame.restlessness)) * frame.restlessness
                 target.neckLift = 0.04 + 0.05 * frame.restlessness
@@ -186,7 +186,7 @@ struct DragonLifeAnimator {
                 responsiveness = 8
                 animateAction(frame, target: &target, look: &look, pitch: &pitchOffset, toward: toward)
             case .free:
-                // Gratitudine: testa alta verso il cavaliere, ali spiegate che battono piano.
+                // Gratitude: head high towards the knight, wings spread and beating slowly.
                 look = toward(frame.viewer)
                 target.neckLift = 0.12 + 0.02 * sin(time * 4)
                 target.neckLength = 8
@@ -201,7 +201,7 @@ struct DragonLifeAnimator {
         blend(toward: target, amount: 1 - exp(-deltaTime * responsiveness))
     }
 
-    /// Interpolazione morbida verso la posa bersaglio: il drago ha peso, niente scatti.
+    /// Smooth blend towards the target pose: the dragon has weight, no jerks.
     private mutating func blend(toward target: DragonPose, amount blend: Float) {
         pose.headOrientation = simd_slerp(pose.headOrientation, target.headOrientation, blend)
         pose.neckLift += (target.neckLift - pose.neckLift) * blend
@@ -214,14 +214,14 @@ struct DragonLifeAnimator {
         pose.bodyWave += (target.bodyWave - pose.bodyWave) * blend
     }
 
-    /// Posa per ogni movimento dell'attacco d'ira.
+    /// Pose for each move of the fit of anger.
     private func animateAction(_ frame: DragonFrame, target: inout DragonPose, look: inout SIMD3<Float>,
                                pitch: inout Float, toward: (SIMD3<Float>) -> SIMD3<Float>) {
         let progress = frame.actionProgress
         let time = frame.time
         switch frame.action {
         case .rearUp:
-            // Si alza, fissa il cavaliere, ruggisce verso l'alto con una fiammata, poi ricade.
+            // Rises, stares at the knight, roars upwards with a burst of fire, then drops back.
             let rise = smoothstep(0, 0.3, progress) * (1 - smoothstep(0.8, 1, progress))
             let roar = smoothstep(0.35, 0.45, progress) * (1 - smoothstep(0.7, 0.8, progress))
             target.neckLift = 0.22 * rise
@@ -234,7 +234,7 @@ struct DragonLifeAnimator {
             target.wingFlare = rise
             target.wingFlap = 0.35 * sin(time * 10) * rise
         case .turn(let angle):
-            // La testa guida la rotazione, il corpo serpeggia dietro.
+            // The head leads the turn, the body snakes behind.
             look = rotate(toward(frame.positions[0] + (frame.positions[0] - frame.positions[1])), by: angle > 0 ? 0.8 : -0.8)
             target.neckLift = 0.07
             target.wingFlare = 0.35
@@ -255,15 +255,15 @@ struct DragonLifeAnimator {
         }
     }
 
-    /// Posa in volo: la testa segue la traiettoria (o guarda l'utente quando si ferma davanti a lui),
-    /// le ali battono forte per salire, planano in discesa, si chiudono in picchiata.
+    /// Flight pose: the head follows the path (or looks at the player when it stops in front of them),
+    /// the wings beat hard to climb, glide on the way down, fold in a dive.
     private func animateFlight(_ flight: FlightFrame, frame: DragonFrame, target: inout DragonPose,
                                look: inout SIMD3<Float>, toward: (SIMD3<Float>) -> SIMD3<Float>) {
         let time = frame.time
         let progress = flight.progress
         let speed = simd_length(flight.velocity)
         if speed > 0.05 { look = flight.velocity / speed }
-        // In volo il corpo è già in 3D: niente collo sollevato né ondulazione extra.
+        // In flight the body is already in 3D: no raised neck nor extra wave.
         target.neckLift = 0
         target.neckLength = 1
         target.wingFlare = 1
@@ -274,22 +274,22 @@ struct DragonLifeAnimator {
             target.wingFlap = 0.75 * sin(time * 10)
             target.jawOpen = 0.6 * sin(min(progress * 3, 1) * .pi)
         case .cruise:
-            // Batte quando sale, plana quando scende.
+            // Beats when climbing, glides when descending.
             let effort = max(0.15, min(1, 0.4 + climb * 1.5))
             target.wingFlap = 0.5 * effort * sin(time * 6)
         case .swoop:
-            // Ali raccolte in picchiata, si riaprono risalendo.
+            // Wings tucked in the dive, open again when climbing.
             target.wingFlare = progress < 0.5 ? 0.35 : 1
             target.wingFlap = progress < 0.5 ? 0 : 0.6 * sin(time * 9)
         case .hover:
-            // Sospeso davanti al cavaliere: lo guarda e ruggisce con una fiammata verso l'alto.
+            // Hovering in front of the knight: looks at them and roars with a burst of fire upwards.
             look = toward(frame.viewer)
             let roar = smoothstep(0.35, 0.45, progress) * (1 - smoothstep(0.75, 0.85, progress))
             target.wingFlap = 0.6 * sin(time * 8)
             target.jawOpen = roar
             target.fire = roar
             target.smoke = roar * 0.5
-            // Ruggisce alzando il muso, per non soffiare il fuoco addosso all'utente.
+            // Roars with its snout up, so it does not breathe fire on the player.
             look = simd_normalize(look + SIMD3(0, 1.2 * roar, 0))
         case .loop:
             target.wingFlap = 0.4 * sin(time * 7)
@@ -298,21 +298,21 @@ struct DragonLifeAnimator {
         }
     }
 
-    /// Posa dall'isola alla piattaforma e nell'addio: prigioniero, chiamato, mentre si posa, mentre se ne va.
+    /// Pose from the island to the play area and in the farewell: captive, called, settling, leaving.
     private func animateJourney(_ flight: FlightFrame, frame: DragonFrame, target: inout DragonPose,
                                 look: inout SIMD3<Float>, toward: (SIMD3<Float>) -> SIMD3<Float>) {
         let time = frame.time
         let progress = flight.progress
         switch flight.maneuver {
         case .orbit where frame.mood == .restless:
-            // Disturbato: gira più in fretta senza staccare gli occhi dal cavaliere, ringhia e sbuffa fumo.
+            // Disturbed: circles faster without taking its eyes off the knight, growls and snorts smoke.
             look = toward(frame.viewer)
             target.wingFlare = 1
             target.wingFlap = 0.6 * sin(time * 8)
             target.jawOpen = 0.3 + 0.15 * sin(time * 5)
             target.smoke = 0.9
         case .orbit:
-            // Prigioniero: plana attorno all'albero; ogni tanto lancia un'occhiata al cavaliere e sbuffa.
+            // Captive: glides around the tree; now and then it glances at the knight and snorts.
             target.wingFlap = 0.35 * sin(time * 4)
             if time.truncatingRemainder(dividingBy: 10) < 2.5 {
                 let glance = look + toward(frame.viewer)
@@ -320,17 +320,17 @@ struct DragonLifeAnimator {
             }
             target.smoke = 0.3 * max(0, sin(time * 0.7))
         case .approach:
-            // Vola verso il cavaliere, poi si ferma a guardarlo: si sta calmando.
+            // Flies towards the knight, then stops to look at them: it is calming down.
             let arrived = smoothstep(0.4, 0.6, progress)
             target.wingFlap = (0.65 - 0.3 * arrived) * sin(time * 7)
             if arrived > 0 { look = toward(frame.viewer) }
         case .land:
-            // Si posa: le ali si richiudono mentre il corpo si adagia nel groviglio.
+            // Settling: the wings fold while the body lies down into the knot.
             let settle = smoothstep(0.2, 1, progress)
             target.wingFlare = 1 - 0.85 * settle
             target.wingFlap = 0.5 * (1 - settle) * sin(time * 6)
         case .depart:
-            // Ruggito d'addio, poi battiti forti verso il cielo.
+            // Farewell roar, then strong wing beats towards the sky.
             let roar = smoothstep(0, 0.08, progress) * (1 - smoothstep(0.2, 0.3, progress))
             target.jawOpen = roar
             target.wingFlap = 0.8 * sin(time * 9)
@@ -339,7 +339,7 @@ struct DragonLifeAnimator {
         }
     }
 
-    /// Orientamento con il muso (+Z) lungo `direction`, senza rollio.
+    /// Orientation with the snout (+Z) along `direction`, no roll.
     static func orientation(looking direction: SIMD3<Float>) -> simd_quatf {
         let yaw = atan2(direction.x, direction.z)
         let pitch = -asin(max(-1, min(1, direction.y)))

@@ -17,9 +17,12 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
 3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island window): the
    dragon turns with it.
 4. Look at the dragon and pinch (tap): it gets angry for ~3 s and the **dragon panel** opens next to the main
-   window, with its state and debug info. Then it flies to you on its own (or tap **Call It Now** in the panel),
-   stops to look at you, and settles tangled in front of you.
-5. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
+   window, with its state and debug info. It won't come near you until it is soothed.
+5. Pick a fruit on the tree, open an apple and catch its worms to free the **artifact** (see
+   [The tree's fruit](../apple-artifact/README.md)). Tap the artifact: it flies to the dragon, which flies to
+   you, stops to look at you and settles tangled in front of you. (**Call It Now** in the dragon panel skips
+   the artifact, for testing.)
+6. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
 uses a seated eye height of 1.15 m.
@@ -29,15 +32,15 @@ uses a seated eye height of 1.15 m.
 | Moment | Behaviour |
 |---|---|
 | Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
-| Tap the dragon | It gets angry: circles faster, glares at you, growls and snorts smoke. The dragon panel opens with "The dragon is getting angry!" and debug info (phase, mood, action, crossings, restlessness, strain) |
-| After ~3 s of anger (or **Call It Now** in the panel; the future artifact goes here) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
+| Tap the dragon | For ~3 s it gets angry: circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling. The dragon panel opens with "The dragon is getting angry!" and debug info (phase, mood, action, crossings, restlessness, strain) |
+| The artifact reaches it (or **Call It Now** in the panel) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel |
 | Grab | The part you look at glows; pinch to grab, up to two parts at once; the dragon turns to your hand and growls if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
 | Solved (0 crossings, body released for 0.6 s) | Turns gold, celebrates for 1.5 s, then **takes off**, circles you once, hovers in front of you roaring its thanks and **flies away into the sky**, fading out before it reaches the real ceiling. **Restart Scene** puts it back on the island |
 | Play area | Invisible: the knot floats at knee/table height in front of the player. Rotate it with the panel buttons, tilt it with the slider, reset it. Default is tuned for a seated player |
 
-All user-facing text is in English. Code comments are in Italian.
+Everything is in English: user-facing text, code comments and tooling.
 
 ## Code layout
 
@@ -158,7 +161,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
 
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-    -P Assets/Blender/untangle-dragon/crea_asset_isola.py -- <FloatingIsland.usdc> <output folder>
+    -P Assets/Blender/untangle-dragon/make_island_asset.py -- <FloatingIsland.usdc> <output folder>
 ```
 
 - The source file points to external textures (`./textures/*_BaseColor.png`) that were never exported; the
@@ -169,7 +172,10 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
   the code uses the origin as the orbit centre with no offsets.
 - Y-up export with *Convert Orientation* (rotation on the file root, so the code never overwrites the loaded
   entity's transform).
-- 3 meshes / 3 materials (3 draw calls), ~24k triangles, no collision (it is not interactive).
+- Six empty objects `fruit_01` … `fruit_06` mark where the fruit hangs: the script casts rays at the canopy from
+  outside and puts each point just off the foliage. Move them in Blender to move the fruit.
+- 3 meshes / 3 materials (3 draw calls), ~24k triangles. The code adds a collider only below the ground (the
+  rock, to spin the island).
 - Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.4 m, canopy from 0.5 m above the ground. In the
   scene it is scaled 0.8 (`IslandPlacement.standard`), 2.8 m away, ground at 1.12 m. If it is missing, the dragon circles an empty spot.
 
@@ -218,7 +224,7 @@ They are generated without opening Blender by the scripts in `Assets/Blender/unt
 
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-    -P Assets/Blender/untangle-dragon/crea_asset_drago.py -- <scene.gltf> <output folder>
+    -P Assets/Blender/untangle-dragon/make_dragon_asset.py -- <scene.gltf> <output folder>
 ```
 
 The script removes the legs and closes the holes with curved patches (the hole border is unrolled on the
