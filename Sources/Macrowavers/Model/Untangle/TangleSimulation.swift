@@ -1,46 +1,46 @@
 import simd
 
-/// Parametri della simulazione del corpo del drago.
-/// Tutte le misure sono in metri (unità di RealityKit).
+/// Parameters of the dragon's body simulation.
+/// All sizes are in metres (RealityKit units).
 struct TangleConfig {
-    /// Numero di nodi (vertebre) del corpo. Con un modello riggato deve coincidere con il numero di joint della spina dorsale.
+    /// Number of nodes (vertebrae) of the body. With a rigged model it must match the number of spine joints.
     var nodeCount = 48
-    /// Distanza a riposo tra due nodi consecutivi.
+    /// Rest distance between two consecutive nodes.
     var segmentLength: Float = 0.05
-    /// Raggio del corpo usato per le collisioni con se stesso.
+    /// Body radius used for self-collisions.
     var radius: Float = 0.03
-    /// Iterazioni del solver per sotto-passo: più sono, più il corpo è "rigido".
+    /// Solver iterations per sub-step: the more, the "stiffer" the body.
     var solverIterations = 10
-    /// Sotto-passi per frame: evitano che un segmento ne attraversi un altro.
+    /// Sub-steps per frame: they keep a segment from passing through another.
     var substeps = 4
-    /// 1 = nessun attrito, 0 = si ferma subito.
+    /// 1 = no friction, 0 = stops at once.
     var damping: Float = 0.9
-    /// Attrito tra tratti del corpo che si toccano (0...1).
+    /// Friction between parts of the body that touch (0...1).
     var selfFriction: Float = 0.3
-    /// Attrito con il terreno: senza, il groviglio tende a sciogliersi da solo scivolando.
+    /// Friction with the ground: without it the tangle tends to slide loose by itself.
     var groundFriction: Float = 0.6
-    /// La testa resta ferma (il drago "tiene" la testa a terra). Senza un punto fisso,
-    /// tirare la coda trascina via tutto il corpo e il nodo si scioglie da solo.
+    /// The head stays still (the dragon "holds" its head on the ground). Without a fixed point,
+    /// pulling the tail drags the whole body away and the knot comes undone by itself.
     var anchorHead = true
-    /// Forza che tira il corpo verso il piano y = 0 (il drago "giace" a terra).
+    /// Force pulling the body towards the plane y = 0 (the dragon "lies" on the ground).
     var flattenStrength: Float = 0.04
-    /// Rigidità alla piegatura (0...1): impedisce pieghe a gomito troppo strette.
+    /// Bending stiffness (0...1): prevents elbows that are too sharp.
     var bendStiffness: Float = 0.25
-    /// Altezza a cui il drago solleva la coda quando si dimena: passa SOPRA il proprio corpo.
+    /// Height at which the dragon lifts its tail when it thrashes: it passes OVER its own body.
     var grabLift: Float = 0.08
-    /// Allungamento oltre il quale i nodi afferrati smettono di seguire le mani (1.05 = +5%).
+    /// Stretch beyond which grabbed nodes stop following the hands (1.05 = +5%).
     var maxTension: Float = 1.04
-    /// Massimo spostamento di un nodo afferrato per sotto-passo (anti-tunneling).
+    /// Maximum movement of a grabbed node per sub-step (anti-tunnelling).
     var maxGrabSpeed: Float = 0.015
 }
 
-/// Corpo del drago simulato come una corda di nodi (Position Based Dynamics / Verlet).
-/// Nessuna dipendenza da RealityKit: si può testare da sola e riusare con qualsiasi renderer.
+/// The dragon's body simulated as a rope of nodes (Position Based Dynamics / Verlet).
+/// No dependency on RealityKit: it can be tested on its own and reused with any renderer.
 final class TangleSimulation {
     let config: TangleConfig
     private(set) var positions: [SIMD3<Float>]
     private var previous: [SIMD3<Float>]
-    /// Nodi afferrati (anche più di uno: una mano ciascuno) e punto in cui portarli.
+    /// Grabbed nodes (even more than one: one per hand) and where to bring them.
     private var grabTargets: [Int: SIMD3<Float>] = [:]
 
     init(config: TangleConfig = TangleConfig(), positions: [SIMD3<Float>]) {
@@ -50,14 +50,14 @@ final class TangleSimulation {
         self.previous = positions
     }
 
-    // MARK: - Interazione
+    // MARK: - Interaction
 
     var grabbedIndices: Dictionary<Int, SIMD3<Float>>.Keys { grabTargets.keys }
     var hasGrabs: Bool { !grabTargets.isEmpty }
 
     func isGrabbed(_ index: Int) -> Bool { grabTargets[index] != nil }
 
-    /// Restituisce `false` se il nodo non si può afferrare (la testa ancorata).
+    /// Returns `false` if the node cannot be grabbed (the anchored head).
     @discardableResult
     func grab(_ index: Int) -> Bool {
         guard positions.indices.contains(index), !(config.anchorHead && index == 0) else { return false }
@@ -65,8 +65,8 @@ final class TangleSimulation {
         return true
     }
 
-    /// `point` in 3D: l'altezza decide se il tratto passa sopra o sotto gli altri.
-    /// Non scende sotto il piano.
+    /// `point` in 3D: the height decides whether the part passes over or under the others.
+    /// It never goes below the plane.
     func drag(_ index: Int, to point: SIMD3<Float>) {
         guard grabTargets[index] != nil else { return }
         grabTargets[index] = SIMD3(point.x, max(point.y, config.radius), point.z)
@@ -80,8 +80,8 @@ final class TangleSimulation {
         grabTargets.removeAll()
     }
 
-    /// Ruota rigidamente tutto il corpo attorno a un asse verticale (il drago si gira su se stesso).
-    /// Una rotazione rigida non cambia gli incroci: è un movimento spettacolare ma "onesto" per il puzzle.
+    /// Rotates the whole body rigidly around a vertical axis (the dragon turns around).
+    /// A rigid rotation does not change the crossings: a spectacular move, but "fair" for the puzzle.
     func rotateBody(by angle: Float, around center: SIMD3<Float>) {
         let cosine = cos(angle), sine = sin(angle)
         func rotate(_ point: SIMD3<Float>) -> SIMD3<Float> {
@@ -97,9 +97,9 @@ final class TangleSimulation {
         positions.reduce(SIMD3<Float>.zero, +) / Float(positions.count)
     }
 
-    // MARK: - Simulazione
+    // MARK: - Simulation
 
-    /// Avanza la simulazione a passo fisso (60 Hz), indipendente dal frame rate.
+    /// Advances the simulation at a fixed step (60 Hz), independent of the frame rate.
     func step(deltaTime: Float) {
         accumulator = min(accumulator + deltaTime, 0.1)
         while accumulator >= Self.tick {
@@ -129,14 +129,14 @@ final class TangleSimulation {
             }
             previous[i] = positions[i]
             positions[i] += velocity
-            // Molla morbida verso il piano: il corpo si "adagia" ma le collisioni mantengono sopra/sotto.
+            // Soft spring towards the plane: the body "settles" but the collisions keep over/under.
             positions[i].y -= positions[i].y * config.flattenStrength
         }
     }
 
-    /// Allungamento massimo del corpo (1 = a riposo). Quando il corpo è teso i vincoli non si possono
-    /// soddisfare tutti e un tratto finirebbe per attraversarne un altro: in quel caso il nodo afferrato
-    /// smette di avanzare. Utile anche come feedback (il drago "soffre" se tirato troppo).
+    /// Maximum stretch of the body (1 = at rest). When the body is taut the constraints cannot all be
+    /// satisfied and one part would end up passing through another: in that case the grabbed node
+    /// stops advancing. Also useful as feedback (the dragon "suffers" when pulled too hard).
     private(set) var tension: Float = 1
 
     private func measureTension() {
@@ -151,8 +151,8 @@ final class TangleSimulation {
         for (node, target) in grabTargets {
             previous[node] = positions[node]
             if tension > config.maxTension {
-                // Troppo teso (es. due mani che tirano in direzioni opposte):
-                // il nodo cede un po' verso i vicini invece di strappare il corpo.
+                // Too taut (e.g. two hands pulling in opposite directions):
+                // the node gives way a little towards its neighbours instead of tearing the body.
                 let before = positions[max(node - 1, 0)]
                 let after = positions[min(node + 1, positions.count - 1)]
                 positions[node] += ((before + after) / 2 - positions[node]) * 0.05
@@ -164,7 +164,7 @@ final class TangleSimulation {
         }
     }
 
-    /// Peso inverso: i nodi afferrati hanno massa infinita (non vengono spostati dai vincoli).
+    /// Inverse mass: grabbed nodes have infinite mass (the constraints do not move them).
     private func inverseMass(_ i: Int) -> Float {
         if grabTargets[i] != nil || (config.anchorHead && i == 0) { return 0 }
         return 1
@@ -189,7 +189,7 @@ final class TangleSimulation {
     }
 
     private func solveBending() {
-        // Tiene i nodi i e i+2 a distanza minima: angolo di piegatura massimo ~ 110°.
+        // Keeps nodes i and i+2 at a minimum distance: maximum bend angle ~110°.
         let minimum = config.segmentLength * 1.15
         for i in 0..<(positions.count - 2) {
             satisfy(i, i + 2, restLength: minimum, stiffness: config.bendStiffness, onlyIfShorter: true)
@@ -210,8 +210,8 @@ final class TangleSimulation {
         }
     }
 
-    /// Attrito tra due tratti del corpo a contatto: senza, un nodo stretto scivola via da solo
-    /// quando si tira un'estremità e il puzzle si risolve "per caso".
+    /// Friction between two parts of the body in contact: without it a tight node slips away by itself
+    /// when an end is pulled, and the puzzle gets solved "by chance".
     private func applyFriction(_ i: Int, _ j: Int, normal: SIMD3<Float>) {
         let wi = inverseMass(i), wj = inverseMass(j)
         guard wi + wj > 0, config.selfFriction > 0 else { return }
@@ -222,10 +222,10 @@ final class TangleSimulation {
         positions[j] += correction * wj
     }
 
-    // MARK: - Groviglio
+    // MARK: - Tangle
 
-    /// Incroci del corpo visto dall'alto (proiezione sul piano XZ).
-    /// Il drago è libero quando non ci sono più incroci.
+    /// Crossings of the body seen from above (projection on the XZ plane).
+    /// The dragon is free when there are no crossings left.
     func crossings() -> [Crossing] {
         var result: [Crossing] = []
         let count = positions.count
@@ -260,10 +260,10 @@ final class TangleSimulation {
 }
 
 struct Crossing {
-    /// Il segmento `segmentA` va dal nodo `segmentA` al nodo `segmentA + 1`.
+    /// Segment `segmentA` goes from node `segmentA` to node `segmentA + 1`.
     let segmentA: Int
     let segmentB: Int
     let aIsOver: Bool
-    /// Punto dell'incrocio (a metà altezza tra i due tratti).
+    /// Point of the crossing (half-way in height between the two parts).
     let position: SIMD3<Float>
 }

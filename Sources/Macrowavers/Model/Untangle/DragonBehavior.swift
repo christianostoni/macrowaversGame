@@ -1,29 +1,29 @@
 import Foundation
 import simd
 
-/// Stato d'animo del drago: guida sia la difficoltà sia le animazioni.
+/// The dragon's mood: drives both the difficulty and the animations.
 enum DragonMood: Equatable {
-    /// Tranquillo, respira e tiene d'occhio il cavaliere.
+    /// Calm, breathing and keeping an eye on the knight.
     case calm
-    /// L'utente lo sta tirando.
+    /// The player is pulling it.
     case annoyed
-    /// Nessun progresso da troppo tempo: sta per scatenarsi.
+    /// No progress for too long: it is about to lose its temper.
     case restless
-    /// Attacco d'ira: esegue una sequenza di `DragonAction`.
+    /// Fit of anger: plays a sequence of `DragonAction`.
     case wriggling
-    /// Libero!
+    /// Free!
     case free
 }
 
-/// Movimenti del repertorio del drago durante un attacco d'ira.
+/// Moves in the dragon's repertoire during a fit of anger.
 enum DragonAction: Equatable {
-    /// Si impenna sul collo, spalanca le ali e ruggisce verso il cavaliere. Intimidisce, non tocca il groviglio.
+    /// Rears up on its neck, spreads its wings and roars at the knight. Intimidates, does not touch the tangle.
     case rearUp
-    /// Si gira su se stesso (radianti, segno = verso). Rotazione rigida: il groviglio non cambia.
+    /// Turns around (radians, sign = direction). Rigid rotation: the tangle does not change.
     case turn(angle: Float)
-    /// Colpo di coda: la coda frusta sopra il corpo e crea nuovi incroci.
+    /// Tail lash: the tail whips over the body and creates new crossings.
     case tailLash
-    /// Si attorciglia: un tratto centrale del corpo si ripiega sopra il resto.
+    /// Coils up: a middle part of the body folds over the rest.
     case coil
 
     var duration: Float {
@@ -35,7 +35,7 @@ enum DragonAction: Equatable {
         }
     }
 
-    /// Le azioni che cambiano il groviglio prendono un nodo del corpo.
+    /// The actions that change the tangle take hold of a node of the body.
     var tanglesBody: Bool {
         switch self {
         case .tailLash, .coil: true
@@ -45,49 +45,49 @@ enum DragonAction: Equatable {
 }
 
 struct DifficultySettings {
-    /// Secondi senza progressi prima del primo attacco d'ira (avviso compreso).
+    /// Seconds without progress before the first fit of anger (warning included).
     var firstWriggleDelay: Float = 8
-    /// Ogni attacco accorcia l'attesa di questi secondi...
+    /// Every fit shortens the wait by these seconds...
     var delayReductionPerWriggle: Float = 1
-    /// ...fino a questo minimo.
+    /// ...down to this minimum.
     var minimumWriggleDelay: Float = 5
-    /// Per quanti secondi prima il drago "avvisa" (agitazione crescente).
+    /// For how many seconds before the fit the dragon "warns" (growing restlessness).
     var warningDuration: Float = 2
-    /// Tentativi extra (colpo di coda / attorcigliamento) se l'attacco non ha aggiunto incroci.
+    /// Extra attempts (tail lash / coil) if the fit did not add crossings.
     var maxExtraTangles = 8
-    /// Attesa dopo l'ultimo movimento prima di contare gli incroci (il corpo si assesta).
+    /// Wait after the last move before counting the crossings (the body settles).
     var settleTime: Float = 0.35
-    /// Raggio entro cui il drago resta sulla piattaforma.
+    /// Radius within which the dragon stays in the play area.
     var platformRadius: Float = 0.3
 }
 
-/// Comportamento autonomo del drago. Se l'utente non fa progressi, il drago ha un attacco d'ira:
-/// una coreografia di movimenti realistici (si impenna, si gira, frusta la coda, si attorciglia)
-/// che diventa più lunga e cattiva a ogni attacco.
-/// Usa la stessa fisica dell'utente, quindi il nuovo groviglio è sempre risolvibile.
+/// The dragon's own behaviour. If the player makes no progress the dragon has a fit of anger:
+/// a choreography of realistic moves (rears up, turns around, lashes its tail, coils up)
+/// that gets longer and nastier with every fit.
+/// It uses the same physics as the player, so the new tangle can always be solved.
 final class DragonBehavior {
     let settings: DifficultySettings
-    /// Attacchi d'ira completati: fa salire la difficoltà.
+    /// Completed fits of anger: they raise the difficulty.
     private(set) var fitCount = 0
-    /// 0...1: quanto manca al prossimo attacco (1 = sta per farlo).
+    /// 0...1: how close the next fit is (1 = about to happen).
     private(set) var restlessness: Float = 0
-    /// Azione in corso e suo avanzamento (0...1), per le animazioni.
+    /// Current action and its progress (0...1), for the animations.
     private(set) var currentAction: DragonAction?
     private(set) var actionProgress: Float = 0
 
     var isWriggling: Bool { currentAction != nil || settleRemaining != nil }
 
     private var queue: [DragonAction] = []
-    /// Incroci all'inizio dell'attacco: alla fine devono essere di più.
+    /// Crossings at the start of the fit: at the end there must be more.
     private var crossingsAtFitStart = 0
     private var latestCrossings = 0
     private var extraTangles = 0
-    /// Countdown di assestamento prima del controllo finale (nil = non in controllo).
+    /// Settling countdown before the final check (nil = not checking).
     private var settleRemaining: Float?
     private var actionElapsed: Float = 0
     private var timeWithoutProgress: Float = 0
     private var bestCrossings = Int.max
-    // Stato dell'azione in corso.
+    // State of the current action.
     private var grabbedNode: Int?
     private var from = SIMD3<Float>.zero
     private var to = SIMD3<Float>.zero
@@ -116,7 +116,7 @@ final class DragonBehavior {
         extraTangles = 0
     }
 
-    /// L'utente afferra il drago durante l'attacco: il drago si ferma e lascia la presa.
+    /// The player grabs the dragon during the fit: the dragon stops and lets go.
     func interrupt(_ simulation: TangleSimulation) {
         guard isWriggling else { return }
         if let grabbedNode { simulation.release(grabbedNode) }
@@ -137,7 +137,7 @@ final class DragonBehavior {
             return
         }
 
-        // Progresso = nuovo record di incroci più basso.
+        // Progress = a new lowest crossing count.
         if crossings < bestCrossings {
             bestCrossings = crossings
             timeWithoutProgress = 0
@@ -148,7 +148,7 @@ final class DragonBehavior {
         let warningStart = currentDelay - settings.warningDuration
         restlessness = max(0, min(1, (timeWithoutProgress - warningStart) / settings.warningDuration))
 
-        // Non strappa il drago dalle mani dell'utente: aspetta che lasci la presa.
+        // It never tears the dragon out of the player's hands: it waits until they let go.
         if timeWithoutProgress >= currentDelay && !userIsGrabbing {
             queue = choreography()
             crossingsAtFitStart = crossings
@@ -158,7 +158,7 @@ final class DragonBehavior {
         }
     }
 
-    /// L'attacco deve lasciare il drago più aggrovigliato di prima: se non è così, riprova.
+    /// The fit must leave the dragon more tangled than before: if not, it tries again.
     private func checkFitResult(_ simulation: TangleSimulation) {
         settleRemaining = nil
         if latestCrossings > crossingsAtFitStart || extraTangles >= settings.maxExtraTangles {
@@ -166,15 +166,15 @@ final class DragonBehavior {
             return
         }
         extraTangles += 1
-        // Alterna i due movimenti, così il tentativo successivo parte da un tratto diverso.
+        // Alternates the two moves, so the next attempt starts from a different part.
         queue = [extraTangles.isMultiple(of: 2) ? .coil : .tailLash]
         startNextAction(simulation)
     }
 
-    // MARK: - Coreografia
+    // MARK: - Choreography
 
-    /// Sequenza dell'attacco: più attacchi ha già fatto, più è lunga.
-    /// Comincia sempre girandosi su se stesso (reazione immediata), poi intimidisce e aggroviglia.
+    /// Sequence of the fit: the more fits it has had, the longer it is.
+    /// It always starts by turning around (immediate reaction), then intimidates and tangles.
     private func choreography() -> [DragonAction] {
         let direction: Float = Bool.random(using: &random) ? 1 : -1
         let turn = DragonAction.turn(angle: direction * Float.random(in: (.pi * 0.5)...(.pi * 0.9), using: &random))
@@ -191,7 +191,7 @@ final class DragonBehavior {
 
     private func startNextAction(_ simulation: TangleSimulation) {
         guard !queue.isEmpty else {
-            // Fine coreografia: lascia assestare il corpo, poi controlla che ci siano più incroci.
+            // End of the choreography: let the body settle, then check that there are more crossings.
             currentAction = nil
             actionProgress = 0
             settleRemaining = settings.settleTime
@@ -212,16 +212,16 @@ final class DragonBehavior {
         case .tailLash:
             beginCrossing(node: simulation.positions.count - 1, simulation: simulation)
         case .coil:
-            // Un tratto tra metà corpo e coda, diverso a ogni tentativo.
+            // A part between the middle of the body and the tail, different at every attempt.
             let count = Float(simulation.positions.count)
             beginCrossing(node: Int(count * Float.random(in: 0.55...0.8, using: &random)), simulation: simulation)
         }
-        // Se non riesce ad afferrare il nodo, passa oltre.
+        // If it cannot grab the node, it moves on.
         if action.tanglesBody && grabbedNode == nil { startNextAction(simulation) }
     }
 
-    /// Prepara un tratto del corpo a scavalcare un altro tratto preciso e ad atterrare subito oltre:
-    /// così il tratto trascinato ci passa sopra e nasce un incrocio nuovo.
+    /// Prepares a part of the body to step over another specific part and land just past it:
+    /// the dragged part passes over it and a new crossing is born.
     private func beginCrossing(node: Int, simulation: TangleSimulation) {
         let positions = simulation.positions
         let start = positions[node]
@@ -229,7 +229,7 @@ final class DragonBehavior {
         let reach: ClosedRange<Float> = 0.06...0.28
         let beyond = simulation.config.radius * 3
 
-        // Tratti lontani lungo il corpo ma raggiungibili, con il punto d'arrivo sulla piattaforma.
+        // Parts far along the body but within reach, with the landing point inside the play area.
         var candidates: [SIMD2<Float>] = []
         for segment in 0..<(positions.count - 1) where abs(segment - node) > 6 {
             let middle = (positions[segment] + positions[segment + 1]) / 2
@@ -244,7 +244,7 @@ final class DragonBehavior {
         if let landing = candidates.randomElement(using: &random) {
             target = landing
         } else {
-            // Nessun tratto adatto: passa "dall'altra parte" rispetto al centro del corpo.
+            // No suitable part: goes "to the other side" of the body's centre.
             let center = simulation.centroid
             target = SIMD2(2 * center.x - start.x, 2 * center.z - start.z)
             if simd_length(target) > settings.platformRadius {
@@ -268,13 +268,13 @@ final class DragonBehavior {
         case .rearUp:
             break
         case .turn(let angle):
-            // Rotazione progressiva: parte lento, accelera, frena (come un corpo pesante).
+            // Progressive rotation: starts slowly, speeds up, slows down (like a heavy body).
             let target = angle * eased
             simulation.rotateBody(by: target - appliedTurn, around: pivot)
             appliedTurn = target
         case .tailLash, .coil:
             guard let node = grabbedNode else { break }
-            // Arco con un'ondulazione laterale: sembra un colpo di frusta.
+            // Arc with a sideways wave: it looks like the crack of a whip.
             let side = SIMD3(-(to.z - from.z), 0, to.x - from.x)
             var point = simd_mix(from, to, SIMD3(repeating: eased)) + side * (0.25 * sin(progress * .pi * 2))
             point.y = simulation.config.grabLift
@@ -294,7 +294,7 @@ final class DragonBehavior {
         grabbedNode = nil
         fitCount += 1
         timeWithoutProgress = 0
-        // Il nuovo groviglio diventa il riferimento: sciogliere quanto ha appena fatto è progresso.
+        // The new tangle becomes the reference: undoing what it just did counts as progress.
         bestCrossings = .max
     }
 }

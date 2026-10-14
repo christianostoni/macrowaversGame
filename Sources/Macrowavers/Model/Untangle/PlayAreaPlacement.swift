@@ -1,16 +1,16 @@
 import Foundation
 import simd
 
-/// Posizione della piattaforma su cui giace il drago, nello spazio immersivo
-/// (origine ai piedi dell'utente, -Z davanti).
+/// Placement of the play area where the tangled dragon lies, in the immersive space
+/// (origin at the player's feet, -Z in front).
 struct PlayAreaPlacement: Equatable {
     var position: SIMD3<Float>
-    /// Rotazione attorno all'asse verticale (radianti).
+    /// Rotation around the vertical axis (radians).
     var yaw: Float
-    /// Inclinazione verso l'utente (radianti): il bordo lontano si alza.
+    /// Tilt towards the player (radians): the far edge rises.
     var tilt: Float
 
-    /// Pensata per un utente seduto: all'altezza delle ginocchia/tavolino, leggermente inclinata.
+    /// Tuned for a seated player: at knee/coffee-table height, slightly tilted.
     static let seated = PlayAreaPlacement(position: SIMD3(0, 0.75, -0.6), yaw: 0, tilt: 15 * .pi / 180)
 
     static let tiltRange: ClosedRange<Float> = 0...(45 * .pi / 180)

@@ -5,12 +5,12 @@ import simd
 import ARKit
 #endif
 
-/// Dove si trovano gli occhi dell'utente (il "cavaliere"), così il drago può guardarlo in faccia.
-/// Su visionOS usa il tracciamento del dispositivo di ARKit (nessun permesso richiesto);
-/// se non è disponibile (es. simulatore) usa l'altezza tipica degli occhi di una persona seduta.
+/// Where the player's eyes are (the "knight"), so the dragon can look them in the face.
+/// On visionOS it uses ARKit's device tracking (no permission needed);
+/// when it is not available (e.g. simulator) it uses the typical eye height of a seated person.
 @MainActor
 final class ViewerTracker {
-    /// Occhi di una persona seduta, all'origine dello spazio immersivo.
+    /// Eyes of a seated person, at the origin of the immersive space.
     static let fallbackPosition = SIMD3<Float>(0, 1.15, 0)
 
     #if os(visionOS)
@@ -38,7 +38,7 @@ final class ViewerTracker {
         #endif
     }
 
-    /// Posizione degli occhi nello spazio della scena immersiva.
+    /// Position of the eyes in the immersive scene's space.
     func viewerPosition() -> SIMD3<Float> {
         #if os(visionOS)
         guard isRunning, worldTracking.state == .running,

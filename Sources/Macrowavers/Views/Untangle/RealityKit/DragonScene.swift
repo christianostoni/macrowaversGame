@@ -6,19 +6,19 @@ import UIKit
 import AppKit
 #endif
 
-/// Indice del nodo (vertebra) del corpo: serve a sapere quale punto è stato afferrato.
+/// Index of the body's node (vertebra): tells which point was grabbed.
 struct DragonNodeComponent: Component {
     let index: Int
 }
 
-/// Collega il drago al ViewModel. Ogni frame il `DragonBodySystem` legge dove le mani hanno portato
-/// i collider afferrati, fa avanzare il gioco, riallinea gli altri collider e aggiorna il rig (grafica).
+/// Connects the dragon to the view model. Every frame the `DragonBodySystem` reads where the hands moved
+/// the grabbed colliders, advances the game, realigns the other colliders and updates the rig (visuals).
 struct DragonBodyComponent: Component {
     let viewModel: UntangleViewModel
     let rig: DragonRig
     let colliders: [Entity]
     let markers: CrossingMarkers
-    /// Dove si trova l'utente: il drago lo guarda.
+    /// Where the player is: the dragon looks at them.
     let viewer: ViewerTracker
 }
 
@@ -27,7 +27,7 @@ struct DragonBodySystem: System {
 
     init(scene: RealityKit.Scene) {}
 
-    /// Da chiamare una volta all'avvio dell'app, prima di creare il drago.
+    /// To call once at app launch, before creating the dragon.
     @MainActor
     static func registerAll() {
         DragonNodeComponent.registerComponent()
@@ -50,7 +50,7 @@ struct DragonBodySystem: System {
             let viewModel = body.viewModel
             let viewerInScene = body.viewer.viewerPosition()
 
-            // I collider afferrati li muove il ManipulationComponent (la mano): sono il bersaglio dei nodi.
+            // The grabbed colliders are moved by the ManipulationComponent (the hand): they are the nodes' targets.
             let grabbed = viewModel.userGrabbedNodes
             for index in grabbed {
                 viewModel.drag(node: index, to: body.colliders[index].position)
@@ -60,15 +60,15 @@ struct DragonBodySystem: System {
                              worldFromLocal: entity.transformMatrix(relativeTo: nil),
                              orbit: entity.components[OrbitComponent.self]?.anchoredOrbit())
 
-            // Capitolo della storia: tocco sull'isola, presa nel minigioco, niente in volo; il drago appare
-            // e sparisce con dissolvenza.
+            // Story chapter: tap on the island, grab in the mini-game, nothing while flying; the dragon fades
+            // in and out.
             if var state = entity.components[DetanglingStateComponent.self] {
                 state.apply(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config)
                 state.fade(dragonOpacity: viewModel.dragonOpacity, dragon: entity, deltaTime: deltaTime)
                 entity.components.set(state)
             }
 
-            // Gli altri seguono il drago (simulazione o volo).
+            // The others follow the dragon (simulation or flight).
             let positions = viewModel.displayPositions
             for (index, collider) in body.colliders.enumerated() where !grabbed.contains(index) {
                 collider.position = positions[index]
@@ -92,13 +92,13 @@ struct DragonBodySystem: System {
     }
 }
 
-/// Costruisce la scena: area di gioco (senza grafica: il drago giace nell'aria davanti all'utente)
-/// + drago (rig grafico + collider invisibili + indicatori).
+/// Builds the scene: the play area (no visuals: the dragon lies in the air in front of the player)
+/// + the dragon (visual rig + invisible colliders + markers).
 enum DragonSceneBuilder {
     static let playAreaName = "PlayArea"
     static let hoverColor = PlatformColor(red: 1, green: 0.85, blue: 0.4, alpha: 1)
 
-    /// `orbitAnchor`: l'albero attorno a cui il drago gira finché l'utente non lo tocca.
+    /// `orbitAnchor`: the tree the dragon circles until it is soothed.
     @MainActor
     static func makePlayArea(viewModel: UntangleViewModel, viewer: ViewerTracker, orbitAnchor: Entity) async -> Entity {
         let playArea = Entity()
@@ -107,7 +107,7 @@ enum DragonSceneBuilder {
         playArea.orientation = viewModel.placement.rotation
 
         let dragon = await makeDragon(viewModel: viewModel, viewer: viewer)
-        // Invisibile finché non è al suo posto attorno all'albero.
+        // Invisible until it is in place around the tree.
         dragon.components.set(OpacityComponent(opacity: 0))
         dragon.components.set(OrbitComponent(anchor: orbitAnchor, path: .aroundTree))
         dragon.components.set(DetanglingStateComponent())
@@ -124,8 +124,8 @@ enum DragonSceneBuilder {
         let rig = await DragonRigLoader.load(config: config)
         dragon.addChild(rig.entity)
 
-        // Collider invisibili, uno per nodo: indipendenti dalla grafica, funzionano con qualsiasi asset.
-        // Toccabili o afferrabili secondo la fase: li configura `DetanglingStateComponent`.
+        // Invisible colliders, one per node: independent from the visuals, they work with any asset.
+        // Tappable or grabbable depending on the chapter: `DetanglingStateComponent` configures them.
         let colliders: [Entity] = (0..<config.nodeCount).map { index in
             let collider = Entity()
             collider.name = "DragonNode\(index)"
@@ -134,7 +134,7 @@ enum DragonSceneBuilder {
             dragon.addChild(collider)
             return collider
         }
-        // Hover: il rig mette la sua grafica sotto i collider, così si illumina la parte guardata.
+        // Hover: the rig puts its visuals under the colliders, so the part being looked at lights up.
         rig.attach(to: colliders)
 
         let markers = CrossingMarkers(radius: config.radius * 0.8)
@@ -145,11 +145,11 @@ enum DragonSceneBuilder {
         return dragon
     }
 
-    /// Ogni nodo si afferra con una mano: con due mani si tengono due nodi insieme.
-    /// `ManipulationComponent` gestisce una presa per mano; il gesto SwiftUI ne gestirebbe una sola.
+    /// Each node is grabbed with one hand: with two hands two nodes are held together.
+    /// `ManipulationComponent` handles one grab per hand; the SwiftUI gesture would handle only one.
     @MainActor
     static func makeGrabbable(_ collider: Entity, radius: Float) {
-        // Un po' più grande del corpo: più facile da guardare e afferrare.
+        // A bit larger than the body: easier to look at and grab.
         let shape = ShapeResource.generateSphere(radius: radius * 1.5)
         #if os(visionOS)
         ManipulationComponent.configureEntity(
@@ -172,8 +172,8 @@ enum DragonSceneBuilder {
     }
 }
 
-/// Sfere rosse pulsanti sugli incroci: mostrano dove il drago è ancora aggrovigliato.
-/// Indipendenti dal rig, quindi funzionano anche con la mesh skinnata dell'asset vero.
+/// Red pulsing spheres on the crossings: they show where the dragon is still tangled.
+/// Independent from the rig, so they also work with the real asset's skinned mesh.
 @MainActor
 final class CrossingMarkers {
     let entity = Entity()
