@@ -5,17 +5,41 @@ import simd
 /// L'origine dell'asset è la base del tronco, sul terreno: `position` è il punto in cui sta l'albero.
 struct IslandPlacement: Equatable {
     var position: SIMD3<Float>
-    /// Rotazione attorno all'asse verticale (radianti).
+    /// Rotazione attorno all'asse verticale (radianti): l'utente fa girare l'isola come un giradischi.
     var yaw: Float
     /// L'asset è in metri "veri" (isola larga ~2,5 m, albero alto ~1,4 m): ridotto per la stanza.
     var scale: Float
 
-    /// Oltre la piattaforma, con il tronco all'altezza degli occhi di chi è seduto: il drago che gli gira
-    /// attorno si vede bene e la roccia sotto resta sollevata da terra (~17 cm).
-    static let standard = IslandPlacement(position: SIMD3(0, 1.0, -2.2), yaw: 0, scale: 0.6)
+    /// Isola larga ~2 m a 2,8 m dall'utente, terreno all'altezza degli occhi di chi è seduto: la punta della
+    /// roccia resta appena sopra il pavimento (~5 cm), la cima dell'albero sotto i 2,3 m.
+    static let standard = IslandPlacement(position: SIMD3(0, 1.12, -2.8), yaw: 0, scale: 0.8)
+    /// Scatto dei pulsanti di rotazione.
+    static let yawStep: Float = .pi / 8
 
     var rotation: simd_quatf {
         simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
+    }
+
+    /// Dallo spazio dell'isola (metri dell'asset, origine alla base del tronco) a quello della scena.
+    var transform: float4x4 {
+        var matrix = float4x4(rotation) * float4x4(diagonal: SIMD4(scale, scale, scale, 1))
+        matrix.columns.3 = SIMD4(position, 1)
+        return matrix
+    }
+}
+
+/// Il percorso attorno all'albero più la posizione dell'albero nella scena (rotazione, scala e fluttuazione
+/// dell'isola comprese). Il drago prigioniero vola nello spazio dell'ancora: quando l'isola gira, gira con lei,
+/// senza una scia rimasta indietro nello spazio della scena.
+struct AnchoredOrbit {
+    /// Percorso nello spazio dell'ancora (metri dell'asset, centro nell'origine).
+    var path: OrbitPath
+    var worldFromAnchor: float4x4
+
+    /// Scala uniforme dell'ancora nella scena.
+    var scale: Float {
+        let column = worldFromAnchor.columns.0
+        return simd_length(SIMD3(column.x, column.y, column.z))
     }
 }
 

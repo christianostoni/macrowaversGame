@@ -7,16 +7,17 @@ import AppKit
 #endif
 
 /// Il drago gira attorno a un'entità (la base del tronco dell'albero).
-/// Il percorso è nello spazio dell'ancora, quindi segue l'isola se si sposta, scala o fluttua:
-/// ogni frame il `DragonBodySystem` lo porta nello spazio della scena e lo passa al ViewModel.
+/// Il percorso è nello spazio dell'ancora; ogni frame il `DragonBodySystem` passa al ViewModel anche la
+/// trasformazione dell'ancora nella scena: il drago prigioniero vola nello spazio dell'albero, quindi segue
+/// l'isola se ruota, si sposta, scala o fluttua.
 struct OrbitComponent: Component {
     let anchor: Entity
     /// Percorso nello spazio dell'ancora (metri dell'asset dell'isola).
     var path: OrbitPath
 
     @MainActor
-    func scenePath() -> OrbitPath {
-        path.placed(at: anchor.position(relativeTo: nil), scale: anchor.scale(relativeTo: nil).x)
+    func anchoredOrbit() -> AnchoredOrbit {
+        AnchoredOrbit(path: path, worldFromAnchor: anchor.transformMatrix(relativeTo: nil))
     }
 }
 

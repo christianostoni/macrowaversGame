@@ -304,6 +304,13 @@ struct DragonLifeAnimator {
         let time = frame.time
         let progress = flight.progress
         switch flight.maneuver {
+        case .orbit where frame.mood == .restless:
+            // Disturbato: gira più in fretta senza staccare gli occhi dal cavaliere, ringhia e sbuffa fumo.
+            look = toward(frame.viewer)
+            target.wingFlare = 1
+            target.wingFlap = 0.6 * sin(time * 8)
+            target.jawOpen = 0.3 + 0.15 * sin(time * 5)
+            target.smoke = 0.9
         case .orbit:
             // Prigioniero: plana attorno all'albero; ogni tanto lancia un'occhiata al cavaliere e sbuffa.
             target.wingFlap = 0.35 * sin(time * 4)

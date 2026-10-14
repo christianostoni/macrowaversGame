@@ -74,7 +74,7 @@ final class DragonFlight {
     }
 
     let settings: Settings
-    let segmentLength: Float
+    private(set) var segmentLength: Float
     private(set) var positions: [SIMD3<Float>]
     private(set) var velocity: SIMD3<Float>
     private(set) var maneuver = Maneuver.takeoff
@@ -132,6 +132,23 @@ final class DragonFlight {
         let bodyAngle = segmentLength * Float(nodeCount + 4) / max(orbit.radius - orbit.radialSwing, 0.05)
         flight.trail = stride(from: -bodyAngle, to: 0, by: 0.01).map(orbit.point(at:)) + [start[0]]
         return flight
+    }
+
+    /// Porta il volo in un altro spazio (es. dall'isola alla scena quando il drago la lascia).
+    /// `matrix` deve avere scala uniforme: le distanze, compresa quella tra le vertebre, si scalano con lei.
+    func transform(by matrix: float4x4) {
+        let column = matrix.columns.0
+        let scale = simd_length(SIMD3(column.x, column.y, column.z))
+        let point = { (value: SIMD3<Float>) -> SIMD3<Float> in
+            let result = matrix * SIMD4(value, 1)
+            return SIMD3(result.x, result.y, result.z)
+        }
+        positions = positions.map(point)
+        trail = trail.map(point)
+        let direction = matrix * SIMD4(velocity, 0)
+        velocity = SIMD3(direction.x, direction.y, direction.z)
+        segmentLength *= scale
+        orbit = nil
     }
 
     /// Sostituisce il copione: la prima manovra parte subito, dalla posizione e velocità attuali.

@@ -178,28 +178,61 @@ struct UntangleViewModelTests {
         #expect(viewModel.placement.tilt == PlayAreaPlacement.tiltRange.upperBound)
     }
 
+    /// L'isola nella posizione standard, eventualmente ruotata.
+    private func islandOrbit(yaw: Float = 0) -> AnchoredOrbit {
+        var island = IslandPlacement.standard
+        island.yaw = yaw
+        return AnchoredOrbit(path: .aroundTree, worldFromAnchor: island.transform)
+    }
+
     @Test func storyStartsWithTheDragonBoundToTheTree() {
         let viewModel = UntangleViewModel(shape: .trefoil)
-        let orbit = OrbitPath.aroundTree.placed(at: IslandPlacement.standard.position, scale: IslandPlacement.standard.scale)
-        // Sull'isola il drago non si afferra: solo il tocco lo chiama.
+        // Sull'isola il drago non si afferra: il tocco lo fa solo arrabbiare.
         viewModel.grab(node: viewModel.config.nodeCount - 1)
-        viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: matrix_identity_float4x4, orbit: orbit)
+        viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: matrix_identity_float4x4,
+                         orbit: islandOrbit())
 
         #expect(viewModel.phase == .captive)
         #expect(viewModel.userGrabbedNodes.isEmpty)
         #expect(viewModel.crossingPoints.isEmpty)
         #expect(viewModel.dragonOpacity == 1)
+
+        viewModel.tapDragon()
+        #expect(viewModel.phase == .alerted)
+        #expect(viewModel.mood == .restless)
     }
 
-    @Test func tapBringsTheDragonToThePuzzle() {
+    @Test func captiveDragonTurnsWithTheIsland() {
         let viewModel = UntangleViewModel(shape: .trefoil)
-        let orbit = OrbitPath.aroundTree.placed(at: IslandPlacement.standard.position, scale: IslandPlacement.standard.scale)
+        let frame = { (yaw: Float, deltaTime: Float) in
+            viewModel.update(deltaTime: deltaTime, viewer: SIMD3(0, 1.15, 0), worldFromLocal: matrix_identity_float4x4,
+                             orbit: self.islandOrbit(yaw: yaw))
+        }
+        for _ in 0..<120 { frame(0, 1.0 / 60.0) }
+        let before = viewModel.displayPositions
+        // L'isola gira di 90° in un istante (nessun tempo che passa): il drago deve girare rigidamente con lei.
+        frame(.pi / 2, 0)
+        let turn = simd_quatf(angle: .pi / 2, axis: SIMD3(0, 1, 0))
+        let tree = IslandPlacement.standard.position
+        let expected = before.map { tree + turn.act($0 - tree) }
+
+        #expect(zip(viewModel.displayPositions, expected).allSatisfy { simd_distance($0, $1) < 0.001 })
+    }
+
+    @Test func callingTheDragonBringsItToThePuzzle() {
+        let viewModel = UntangleViewModel(shape: .trefoil)
         var transform = float4x4(PlayAreaPlacement.seated.rotation)
         transform.columns.3 = SIMD4(PlayAreaPlacement.seated.position, 1)
+        let orbit = islandOrbit(yaw: 0.7)
         let frame = { viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: transform, orbit: orbit) }
         frame()
         viewModel.tapDragon()
+        frame()
+        let beforeCall = viewModel.displayPositions
+        viewModel.callDragon()
         #expect(viewModel.phase == .approaching)
+        // Lasciare l'isola non fa scattare il corpo (cambia solo lo spazio in cui vola).
+        #expect(zip(viewModel.displayPositions, beforeCall).allSatisfy { simd_distance($0, $1) < 0.001 })
 
         var frames = 0
         while viewModel.phase != .untangling && frames < 60 * 30 {
@@ -213,13 +246,12 @@ struct UntangleViewModelTests {
         #expect(zip(viewModel.displayPositions, viewModel.nodePositions).allSatisfy { simd_distance($0, $1) < 0.03 })
     }
 
-    @Test func restartAndPlayAgainResetTheDragon() {
+    @Test func restartsResetTheDragonAndTheGame() {
         let viewModel = UntangleViewModel(shape: .trefoil)
-        let orbit = OrbitPath.aroundTree.placed(at: IslandPlacement.standard.position, scale: IslandPlacement.standard.scale)
         let frame = { viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0),
-                                       worldFromLocal: matrix_identity_float4x4, orbit: orbit) }
+                                       worldFromLocal: matrix_identity_float4x4, orbit: self.islandOrbit()) }
         frame()
-        viewModel.tapDragon()
+        viewModel.callDragon()
         while viewModel.phase != .untangling { frame() }
 
         viewModel.grab(node: viewModel.config.nodeCount - 1)
@@ -228,8 +260,14 @@ struct UntangleViewModelTests {
         #expect(viewModel.crossingCount == 3)
         #expect(viewModel.userGrabbedNodes.isEmpty)
 
-        viewModel.playAgain()
+        viewModel.rotateIsland(by: IslandPlacement.yawStep)
+        viewModel.restartScene()
         #expect(viewModel.phase == .captive)
         #expect(!viewModel.isSolved && !viewModel.isFlying)
+        #expect(viewModel.islandPlacement.yaw == IslandPlacement.yawStep)
+
+        viewModel.resetGame()
+        #expect(viewModel.islandPlacement == .standard)
+        #expect(viewModel.placement == .seated)
     }
 }

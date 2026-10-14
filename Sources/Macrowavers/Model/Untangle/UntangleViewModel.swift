@@ -30,7 +30,8 @@ final class UntangleViewModel {
     private(set) var action: DragonAction?
     /// Sgrovigliato, il drago ha preso il volo.
     private(set) var isFlying = false
-    let islandPlacement = IslandPlacement.standard
+    /// Posizione e rotazione dell'isola (l'utente la fa girare).
+    private(set) var islandPlacement = IslandPlacement.standard
 
     // MARK: - Model
 
@@ -66,6 +67,11 @@ final class UntangleViewModel {
     @ObservationIgnored private var worldFromLocal = matrix_identity_float4x4
     /// Ultima posizione nota degli occhi dell'utente (spazio della scena).
     @ObservationIgnored private var viewer = SIMD3<Float>(0, 1.15, 0)
+    /// Spazio in cui lavora `flight`, verso la scena: l'albero (ancora dell'isola) mentre il drago è
+    /// prigioniero, così gira e fluttua con l'isola; l'identità quando vola nella scena.
+    @ObservationIgnored private var worldFromFlight = matrix_identity_float4x4
+    /// Arrabbiato, gira attorno all'albero più veloce.
+    @ObservationIgnored private let alertedOrbitSpeed: Float = 1.6
 
     init(shape: TangleShape = .trefoil,
          config: TangleConfig = TangleConfig(),
@@ -86,13 +92,13 @@ final class UntangleViewModel {
             let blend = amount * amount * (3 - 2 * amount)
             return zip(settleFrom, simulation.positions).map { simd_mix($0, $1, SIMD3(repeating: blend)) }
         }
-        let localFromWorld = worldFromLocal.inverse
-        return flight.positions.map { Self.transform($0, by: localFromWorld) }
+        let localFromFlight = worldFromLocal.inverse * worldFromFlight
+        return flight.positions.map { Self.transform($0, by: localFromFlight) }
     }
     /// 0...1: si dissolve nel cielo andandosene (e resta invisibile finché non ha un posto dove stare).
     var dragonOpacity: Float {
         if phase == .gone { return 0 }
-        guard let flight else { return phase == .captive ? 0 : 1 }
+        guard let flight else { return phase == .captive || phase == .alerted ? 0 : 1 }
         guard flight.maneuver == .depart else { return 1 }
         // Svanisce mentre si allontana, prima di arrivare al soffitto della stanza reale.
         let amount = max(0, min(1, (flight.maneuverProgress - 0.3) / 0.55))
@@ -103,8 +109,7 @@ final class UntangleViewModel {
     /// Velocità della testa in volo, nello spazio del drago.
     var flightVelocity: SIMD3<Float> {
         guard let flight else { return .zero }
-        let localFromWorld = worldFromLocal.inverse
-        let direction = localFromWorld * SIMD4(flight.velocity, 0)
+        let direction = worldFromLocal.inverse * worldFromFlight * SIMD4(flight.velocity, 0)
         return SIMD3(direction.x, direction.y, direction.z)
     }
     /// Nodo trascinato dall'utente (non dal drago) che la testa guarda.
@@ -112,11 +117,22 @@ final class UntangleViewModel {
 
     // MARK: - Azioni sul drago
 
-    /// L'utente tocca il drago che gira attorno all'albero: il drago vola verso di lui, si ferma a guardarlo
-    /// e poi si posa sulla piattaforma, aggrovigliandosi. (Simula l'artefatto che lo calmerà.)
+    /// L'utente tocca il drago che gira attorno all'albero: il drago si arrabbia (ti fissa, ringhia, sbuffa
+    /// fumo) e continua a girare. Il pannello del drago mostra lo stato e da lì lo si chiama (`callDragon`).
     func tapDragon() {
-        guard phase == .captive, let flight else { return }
+        guard phase == .captive else { return }
+        phase = .alerted
+        refreshMood()
+    }
+
+    /// Il drago lascia l'albero: vola verso l'utente, si ferma a guardarlo e poi si posa davanti a lui,
+    /// aggrovigliandosi. (Simula l'artefatto che lo calmerà.)
+    func callDragon() {
+        guard phase == .captive || phase == .alerted, let flight else { return }
         resetPuzzle()
+        // Dallo spazio dell'isola a quello della scena: da qui in poi vola libero dall'isola.
+        flight.transform(by: worldFromFlight)
+        worldFromFlight = matrix_identity_float4x4
         flight.landingKnot = simulation.positions.map { Self.transform($0, by: worldFromLocal) }
         flight.perform([.approach, .land], viewer: viewer)
         phase = .approaching
@@ -131,16 +147,24 @@ final class UntangleViewModel {
         refreshMood()
     }
 
-    /// Ricomincia la storia: il drago torna prigioniero attorno all'albero.
-    func playAgain() {
+    /// Ricomincia la scena del drago: torna prigioniero attorno all'albero (l'isola resta com'è).
+    func restartScene() {
         resetPuzzle()
         phase = .captive
         flight = nil
+        worldFromFlight = matrix_identity_float4x4
         isFlying = false
         freeTime = 0
         crossingPoints = []
         if crossingCount != 0 { crossingCount = 0 }
         refreshMood()
+    }
+
+    /// Ricomincia tutto il gioco: scena del drago, isola e area di gioco tornano come all'avvio.
+    func resetGame() {
+        restartScene()
+        islandPlacement = .standard
+        placement = .seated
     }
 
     private func resetPuzzle() {
@@ -175,6 +199,22 @@ final class UntangleViewModel {
         grabOrder.removeAll { $0 == index }
     }
 
+    // MARK: - Azioni sull'isola
+
+    /// L'isola gira attorno al tronco; il drago prigioniero gira con lei.
+    func rotateIsland(by angle: Float) {
+        setIslandYaw(islandPlacement.yaw + angle)
+    }
+
+    func setIslandYaw(_ yaw: Float) {
+        // Resta tra -π e π: la View interpola verso l'angolo più vicino.
+        islandPlacement.yaw = atan2(sin(yaw), cos(yaw))
+    }
+
+    func resetIslandRotation() {
+        islandPlacement.yaw = IslandPlacement.standard.yaw
+    }
+
     // MARK: - Azioni sulla piattaforma
 
     func rotatePlayArea(yaw: Float) {
@@ -195,14 +235,14 @@ final class UntangleViewModel {
     /// - Parameters:
     ///   - viewer: occhi dell'utente nello spazio della scena (il drago in volo gli gira attorno).
     ///   - worldFromLocal: trasformazione dallo spazio del drago a quello della scena.
-    ///   - orbit: percorso attorno all'albero dell'isola, nello spazio della scena (nil = isola assente).
-    func update(deltaTime: Float, viewer: SIMD3<Float>, worldFromLocal: float4x4, orbit: OrbitPath?) {
+    ///   - orbit: percorso attorno all'albero e posizione dell'albero nella scena (nil = isola assente).
+    func update(deltaTime: Float, viewer: SIMD3<Float>, worldFromLocal: float4x4, orbit: AnchoredOrbit?) {
         time += deltaTime
         self.worldFromLocal = worldFromLocal
         self.viewer = viewer
 
         switch phase {
-        case .captive, .approaching, .landing:
+        case .captive, .alerted, .approaching, .landing:
             updateJourney(deltaTime: deltaTime, orbit: orbit)
         case .untangling:
             updatePuzzle(deltaTime: deltaTime)
@@ -211,16 +251,22 @@ final class UntangleViewModel {
         }
     }
 
-    /// Dall'albero alla piattaforma: il volo segue il copione deciso al tocco (`tapDragon`).
-    private func updateJourney(deltaTime: Float, orbit: OrbitPath?) {
+    /// Dall'albero alla piattaforma: il volo segue il copione deciso quando l'utente chiama il drago.
+    private func updateJourney(deltaTime: Float, orbit: AnchoredOrbit?) {
+        let onIsland = phase == .captive || phase == .alerted
         if flight == nil {
-            // Il drago nasce attorno all'albero, appena si sa dov'è l'isola.
+            // Il drago nasce attorno all'albero, appena si sa dov'è l'isola. Vola nello spazio dell'albero,
+            // dove il corpo (lungo uguale nella scena) misura 1/scala.
             guard let orbit else { return }
-            flight = DragonFlight.captive(on: orbit, nodeCount: config.nodeCount, segmentLength: config.segmentLength)
+            flight = DragonFlight.captive(on: anchorPath(orbit), nodeCount: config.nodeCount,
+                                          segmentLength: config.segmentLength / orbit.scale)
         }
         guard let flight else { return }
-        if let orbit { flight.orbit = orbit }
-        flight.update(deltaTime: deltaTime, viewer: viewer)
+        if onIsland, let orbit {
+            worldFromFlight = orbit.worldFromAnchor
+            flight.orbit = anchorPath(orbit)
+        }
+        flight.update(deltaTime: deltaTime, viewer: Self.transform(viewer, by: worldFromFlight.inverse))
 
         if phase == .approaching && flight.maneuver == .land { phase = .landing }
         if flight.isFinished {
@@ -263,6 +309,13 @@ final class UntangleViewModel {
         refreshMood()
     }
 
+    /// Percorso nello spazio dell'albero; la velocità è in m/s nella scena, quindi si divide per la scala.
+    private func anchorPath(_ orbit: AnchoredOrbit) -> OrbitPath {
+        var path = orbit.path
+        path.speed = path.speed / orbit.scale * (phase == .alerted ? alertedOrbitSpeed : 1)
+        return path
+    }
+
     /// Dopo la vittoria: breve festa sulla piattaforma, poi decollo, saluto e partenza nel cielo.
     private func updateFreedom(deltaTime: Float) {
         freeTime += deltaTime
@@ -287,6 +340,8 @@ final class UntangleViewModel {
     private func refreshMood() {
         let newMood: DragonMood = if isSolved {
             .free
+        } else if phase == .alerted {
+            .restless
         } else if phase != .untangling {
             .calm
         } else if behavior.isWriggling {

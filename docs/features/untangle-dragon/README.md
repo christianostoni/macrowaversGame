@@ -12,10 +12,13 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
 
 1. Open `Macrowavers.xcodeproj` and run on the visionOS simulator or on a Vision Pro. Run `git lfs pull`
    first if the `.usdz` files under `Sources/Macrowavers/Resources/` are only LFS pointers.
-2. In the main window tap **Untangle the Dragon**: a control panel opens.
-3. Tap **Start**: an `ImmersiveSpace` in `.mixed` style opens, with the floating island ~2.2 m in front of you
-   and the dragon circling its tree.
-4. Look at the dragon and pinch (tap): it flies to you, stops to look at you, then settles tangled in front of you.
+2. The main window (the island window) asks you to **Open the Island**: an `ImmersiveSpace` in `.mixed` style
+   opens, with the floating island ~2.8 m in front of you and the dragon circling its tree.
+3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island window): the
+   dragon turns with it.
+4. Look at the dragon and pinch (tap): it gets angry and the **dragon panel** opens next to the main window,
+   with its state and debug info. Tap **Call the Dragon** there: it flies to you, stops to look at you, then
+   settles tangled in front of you.
 5. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
@@ -25,12 +28,13 @@ uses a seated eye height of 1.15 m.
 
 | Moment | Behaviour |
 |---|---|
-| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. Looking at the dragon highlights it |
-| Tap the dragon | It flies to ~1 m from your eyes and hovers looking at you (the future artifact mechanic goes here), then settles in the air in front of you (no visible platform), tracing the knot with its body |
+| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
+| Tap the dragon | It gets angry: circles faster, glares at you, growls and snorts smoke. The dragon panel opens with "The dragon is getting angry!" and debug info (phase, mood, action, crossings, restlessness, strain) |
+| Call the dragon (panel button, stands in for the future artifact) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel |
 | Grab | The part you look at glows; pinch to grab, up to two parts at once; the dragon turns to your hand and growls if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Turns gold, celebrates for 1.5 s, then **takes off**, circles you once, hovers in front of you roaring its thanks and **flies away into the sky**, fading out before it reaches the real ceiling. **Play Again** puts it back on the island |
+| Solved (0 crossings, body released for 0.6 s) | Turns gold, celebrates for 1.5 s, then **takes off**, circles you once, hovers in front of you roaring its thanks and **flies away into the sky**, fading out before it reaches the real ceiling. **Restart Scene** puts it back on the island |
 | Play area | Invisible: the knot floats at knee/table height in front of the player. Rotate it with the panel buttons, tilt it with the slider, reset it. Default is tuned for a seated player |
 
 All user-facing text is in English. Code comments are in Italian.
@@ -39,8 +43,8 @@ All user-facing text is in English. Code comments are in Italian.
 
 ```
 Sources/Macrowavers/
-├── App/MacrowaversApp.swift          + control panel window and the ImmersiveSpace (.mixed)
-├── Views/ContentView.swift           + "Untangle the Dragon" button
+├── App/MacrowaversApp.swift          Scenes: island window, dragon panel (single Window), ImmersiveSpace (.mixed)
+├── Views/ContentView.swift           Island window: launch, island rotation, Restart Game
 ├── Model/Untangle/                   Pure game logic: Foundation + simd only, unit-tested
 │   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet) and crossing count
 │   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight)
@@ -51,7 +55,7 @@ Sources/Macrowavers/
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
 │   └── UntangleViewModel.swift         @Observable @MainActor view model shared by panel and immersive space
 └── Views/Untangle/
-    ├── ControlPanelView.swift          Panel: state, Start/Close, play area controls
+    ├── DragonPanelView.swift           Dragon panel: state, debug info, Call the Dragon, puzzle controls, Restart Scene
     ├── DragonImmersiveView.swift       RealityView, island, grab events, tap on the dragon
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers
@@ -75,7 +79,7 @@ SwiftUI views and the RealityKit layer only read state and forward user actions.
 
 `DragonBodySystem.update` (RealityKit, every frame):
 1. reads where the hands moved the grabbed colliders and passes them to the view model as targets;
-2. `viewModel.update(...)` gets the orbit from `OrbitComponent` (in scene space) and, depending on the chapter,
+2. `viewModel.update(...)` gets the orbit and the tree's transform from `OrbitComponent` and, depending on the chapter,
    runs the flight or the dragon's behaviour, the physics step, crossings, mood and win;
 3. `DetanglingStateComponent` applies the chapter to the entities (only when it changes) and fades the dragon;
 4. moves the other colliders to the simulated (or flying) positions;
@@ -84,6 +88,27 @@ SwiftUI views and the RealityKit layer only read state and forward user actions.
 Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, subscribed in `DragonImmersiveView`.
 
 ## Design decisions (and why)
+
+- **Windows: one main window, one dragon panel, one immersive space.** Before, the main window opened a control
+  panel `WindowGroup` (a new instance on every open) that also owned Start/Close of the immersive space, next to an
+  unrelated Start/Pause in the main window: several windows drove the same state and got out of sync. Now:
+  - the **island window** (`ContentView`, main `WindowGroup`) is the only owner of the immersive space: it opens
+    the island at launch, spins it, and **Restart Game** closes the dragon panel and the immersive space and resets
+    everything to the launch screen;
+  - the **dragon panel** (`DragonPanelView`) is a single-instance `Window` (`openWindow` brings it to the front
+    instead of duplicating it), opened only by tapping the dragon, never at launch or restored from a previous
+    session (`.defaultLaunchBehavior(.suppressed)`, `.restorationBehavior(.disabled)`), placed next to the main
+    window. It shows the dragon's state and debug info and **Restart Scene** puts the dragon back on the island;
+  - closing the immersive space in any way (button or Digital Crown) also closes the dragon panel and resets the
+    game, so no orphan window survives.
+- **The captive dragon flies in the tree's space (`AnchoredOrbit`).** `OrbitComponent` passes the tree anchor's
+  full transform (position, rotation, scale, bobbing); while the dragon is on the island its flight runs in that
+  space (body length divided by the island scale), so when the island turns the whole dragon turns rigidly with it,
+  with no trail left behind in scene space (test: 90° turn, error < 1 mm). When the player calls it, the flight is
+  converted once to scene space (`DragonFlight.transform(by:)`), with no visible jump.
+- **The island spins like a turntable** (`TurntableComponent`/`TurntableSystem`): the view model holds the target
+  yaw, the system eases towards it along the shortest arc, so drags, two-handed rotation and the ±22.5° buttons all
+  look smooth. The rock collider sits below the ground, so the dragon circling above stays tappable.
 
 - **Story chapters (`DragonPhase`) drive the entities through `DetanglingStateComponent`.** RealityKit does not
   observe the view model, so the system compares the chapter with the one already applied and reconfigures
@@ -96,8 +121,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
 - **Orbit = a two-turn torus curve around the trunk (`OrbitPath`).** After one turn radius and height swap, so
   the 2.35 m body (more than one turn) wraps the tree without crossing itself (headless: closest gap 14 cm,
   6 cm needed). The head advances at a fixed speed per second (frame-rate independent) and the body follows its
-  trail. `OrbitComponent` keeps the path in the tree anchor's space, so it follows the island's position,
-  scale and bobbing for free.
+  trail, in the tree anchor's space (see `AnchoredOrbit` above).
 - **Landing traces the knot.** After the approach a Bézier takes the head to the knot's tail tip, then the head
   runs along the knot from tail to head; with "follow the leader" the body ends exactly in the puzzle's shape
   (max error ~1 cm, blended into the simulation in 0.5 s). The dragon tangles itself up believably with no
@@ -147,7 +171,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
   entity's transform).
 - 3 meshes / 3 materials (3 draw calls), ~24k triangles, no collision (it is not interactive).
 - Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.4 m, canopy from 0.5 m above the ground. In the
-  scene it is scaled 0.6 (`IslandPlacement.standard`). If it is missing, the dragon circles an empty spot.
+  scene it is scaled 0.8 (`IslandPlacement.standard`), 2.8 m away, ground at 1.12 m. If it is missing, the dragon circles an empty spot.
 
 ## Asset specification (for the design team)
 
@@ -235,7 +259,7 @@ flow (tap → puzzle), tilt clamping, restart and play again.
 - Pulling very hard can make one part clip through another for a moment (see `maxTension`).
 - While rearing up the neck is raised only visually; colliders stay on the play area plane for ~1 s.
 - Smoke and fire sizes are eyeballed and need tuning on device.
-- The island (2.2 m away, ~1.5 m wide in the scene, floating rocks ~2.2 m) does not know the room: reduce
+- The island (2.8 m away, ~2 m wide in the scene, floating rocks ~2.9 m) does not know the room: reduce
   `IslandPlacement.standard` in small spaces.
 - Tapping a moving dragon 2 m away needs testing on device (raise `DetanglingStateComponent.tapRadius` if hard).
 - Flight does not know the real walls: in small rooms reduce `DragonFlight.Settings.orbitRadius`

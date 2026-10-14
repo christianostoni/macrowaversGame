@@ -33,6 +33,38 @@ struct FloatingSystem: System {
     }
 }
 
+/// Segna la roccia dell'isola: trascinandola (o ruotandola con due mani) l'isola gira come un giradischi.
+struct IslandHandleComponent: Component {}
+
+/// Rotazione dell'isola attorno al tronco, con inerzia: l'angolo segue `targetYaw` (deciso dal ViewModel)
+/// senza scatti, anche quando arriva a passi dai pulsanti del pannello.
+struct TurntableComponent: Component {
+    var targetYaw: Float
+    var yaw: Float
+    /// Quanto in fretta raggiunge l'angolo voluto (1/s).
+    var responsiveness: Float = 6
+}
+
+struct TurntableSystem: System {
+    static let query = EntityQuery(where: .has(TurntableComponent.self))
+
+    init(scene: RealityKit.Scene) {}
+
+    func update(context: SceneUpdateContext) {
+        let deltaTime = Float(context.deltaTime)
+        for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
+            guard var turntable = entity.components[TurntableComponent.self] else { continue }
+            // Differenza sull'arco più corto (da 170° a -170° sono 20°, non 340°).
+            let difference = turntable.targetYaw - turntable.yaw
+            let shortest = atan2(sin(difference), cos(difference))
+            guard abs(shortest) > 1e-4 else { continue }
+            turntable.yaw += shortest * (1 - exp(-deltaTime * turntable.responsiveness))
+            entity.orientation = simd_quatf(angle: turntable.yaw, axis: SIMD3(0, 1, 0))
+            entity.components.set(turntable)
+        }
+    }
+}
+
 /// Costruisce l'isola volante con l'albero al centro: il drago prigioniero gli gira attorno.
 enum IslandSceneBuilder {
     static let islandName = "FloatingIsland"
@@ -48,10 +80,16 @@ enum IslandSceneBuilder {
         root.orientation = placement.rotation
         root.scale = SIMD3(repeating: placement.scale)
         root.components.set(FloatingComponent(base: placement.position, amplitude: 0.02, period: 7))
+        root.components.set(TurntableComponent(targetYaw: placement.yaw, yaw: placement.yaw))
 
+        // Collider solo sotto il terreno (la roccia): il drago che gira sopra resta toccabile.
+        var rock = BoundingBox(min: SIMD3(-1.25, -1.3, -1.25), max: SIMD3(1.25, 0, 1.25))
         do {
             let model = try await Entity(named: islandName, in: .main)
             root.addChild(model)
+            if let island = model.findEntity(named: "Island") {
+                rock = island.visualBounds(relativeTo: root)
+            }
             // Le rocce sospese fluttuano per conto loro, più veloci dell'isola.
             if let rocks = model.findEntity(named: "FloatingRocks"), let parent = rocks.parent {
                 let up = parent.convert(direction: SIMD3(0, 1, 0), from: root)
@@ -61,6 +99,15 @@ enum IslandSceneBuilder {
         } catch {
             print("⚠️ \(islandName).usdz not found: the dragon circles an empty spot (\(error))")
         }
+
+        let top: Float = -0.02
+        let size = SIMD3(rock.extents.x, max(top - rock.min.y, 0.1), rock.extents.z)
+        let shape = ShapeResource.generateBox(size: size)
+            .offsetBy(translation: SIMD3(rock.center.x, top - size.y / 2, rock.center.z))
+        root.components.set(CollisionComponent(shapes: [shape]))
+        root.components.set(InputTargetComponent())
+        root.components.set(HoverEffectComponent())
+        root.components.set(IslandHandleComponent())
 
         let treeAnchor = Entity()
         treeAnchor.name = treeAnchorName

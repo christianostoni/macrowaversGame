@@ -37,6 +37,9 @@ struct DragonBodySystem: System {
         DetanglingStateComponent.registerComponent()
         FloatingComponent.registerComponent()
         FloatingSystem.registerSystem()
+        IslandHandleComponent.registerComponent()
+        TurntableComponent.registerComponent()
+        TurntableSystem.registerSystem()
         registerSystem()
     }
 
@@ -55,7 +58,7 @@ struct DragonBodySystem: System {
 
             viewModel.update(deltaTime: deltaTime, viewer: viewerInScene,
                              worldFromLocal: entity.transformMatrix(relativeTo: nil),
-                             orbit: entity.components[OrbitComponent.self]?.scenePath())
+                             orbit: entity.components[OrbitComponent.self]?.anchoredOrbit())
 
             // Capitolo della storia: tocco sull'isola, presa nel minigioco, niente in volo; il drago appare
             // e sparisce con dissolvenza.

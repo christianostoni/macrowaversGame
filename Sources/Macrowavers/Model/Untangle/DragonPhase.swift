@@ -4,6 +4,9 @@ import Foundation
 enum DragonPhase: Equatable {
     /// Prigioniero dell'isola: gira attorno all'albero e aspetta che l'utente lo tocchi.
     case captive
+    /// Toccato mentre è sull'isola: si arrabbia (ti fissa, ringhia, fumo) e continua a girare più veloce.
+    /// Il pannello del drago mostra lo stato e permette di chiamarlo (in futuro: l'artefatto lo calma).
+    case alerted
     /// Toccato: vola verso l'utente e si ferma davanti a lui (in futuro lo calmerà l'artefatto).
     case approaching
     /// Si posa sulla piattaforma tracciando il groviglio con il proprio corpo.
@@ -26,7 +29,7 @@ enum DragonPhase: Equatable {
 
     var interaction: Interaction {
         switch self {
-        case .captive: .tap
+        case .captive, .alerted: .tap
         case .untangling: .grab
         case .approaching, .landing, .free, .gone: .none
         }
