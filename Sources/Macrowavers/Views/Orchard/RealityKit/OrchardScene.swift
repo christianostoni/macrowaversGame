@@ -150,11 +150,14 @@ struct OrchardSystem: System {
                 let isFocused = fruit.fruit.id == viewModel.focusedFruitID
                 switch fruit.rig {
                 case .apple(let rig):
-                    rig.apply(opening: isFocused ? viewModel.appleOpening : 0)
-                    if isFocused { rig.apply(worms: viewModel.worms, opening: viewModel.appleOpening, time: orchard.time) }
+                    // Sent back to the tree, the apple closes gently on its way (it never snaps or vanishes).
+                    rig.ease(towards: isFocused ? viewModel.appleOpening : 0, deltaTime: deltaTime)
+                    if isFocused {
+                        rig.apply(worms: viewModel.worms, opening: rig.displayedOpening, time: orchard.time)
+                    }
                 case .pomegranate(let rig):
-                    rig.apply(opening: isFocused ? viewModel.pomegranateOpening : 0,
-                              burst: isFocused && viewModel.pomegranateBurst)
+                    rig.ease(towards: isFocused ? viewModel.pomegranateOpening : 0,
+                             burst: isFocused && viewModel.pomegranateBurst, deltaTime: deltaTime)
                 }
             }
             Self.updateArtifact(orchard: orchard, root: entity, deltaTime: deltaTime)

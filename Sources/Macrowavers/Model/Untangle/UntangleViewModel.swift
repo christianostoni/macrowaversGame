@@ -16,6 +16,8 @@ final class UntangleViewModel {
     // MARK: - State for the views
 
     var immersiveSpaceState = ImmersiveSpaceState.closed
+    /// The dragon panel is shown in the immersive space (it opens when the dragon is tapped).
+    var isDragonPanelVisible = false
     /// Current chapter of the story.
     private(set) var phase = DragonPhase.captive
     private(set) var crossingCount = 0
@@ -168,6 +170,7 @@ final class UntangleViewModel {
     /// Restarts the whole game: dragon scene, island and play area back as at launch.
     func resetGame() {
         restartScene()
+        isDragonPanelVisible = false
         islandPlacement = .standard
         placement = .seated
     }

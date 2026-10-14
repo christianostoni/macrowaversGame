@@ -70,6 +70,8 @@ final class AppleRig {
     private let paramsBuffer: MTLBuffer?
     private var worms: [Entity] = []
     private var appliedOpening: Float = -1
+    /// Opening currently drawn: it eases towards the requested one, so the apple never snaps shut.
+    private(set) var displayedOpening: Float = 0
     /// Worms already caught (to play the catch animation once).
     private var caughtShown: Set<Int> = []
 
@@ -107,6 +109,14 @@ final class AppleRig {
     }
 
     // MARK: - Updates from the view model
+
+    /// Moves the drawn opening towards `target` (quick while pulling, gentle when the apple closes again).
+    func ease(towards target: Float, deltaTime: Float) {
+        let rate: Float = target < displayedOpening ? 4 : 14
+        displayedOpening += (target - displayedOpening) * (1 - exp(-deltaTime * rate))
+        if abs(target - displayedOpening) < 0.002 { displayedOpening = target }
+        apply(opening: displayedOpening)
+    }
 
     /// Deforms the mesh (only when the opening changes) and moves the stem with the top slice.
     func apply(opening: Float) {

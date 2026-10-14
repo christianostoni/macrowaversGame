@@ -12,12 +12,13 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
 
 1. Open `Macrowavers.xcodeproj` and run on the visionOS simulator or on a Vision Pro. Run `git lfs pull`
    first if the `.usdz` files under `Sources/Macrowavers/Resources/` are only LFS pointers.
-2. The main window (the island window) asks you to **Open the Island**: an `ImmersiveSpace` in `.mixed` style
-   opens, with the floating island ~2.8 m in front of you and the dragon circling its tree.
-3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island window): the
+2. The launch window asks you to **Open the Island**: an `ImmersiveSpace` in `.mixed` style opens, with the
+   floating island ~2.8 m in front of you and the dragon circling its tree. The launch window closes; the island
+   panel is on your left.
+3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island panel): the
    dragon turns with it.
-4. Look at the dragon and pinch (tap): it gets angry for ~3 s and the **dragon panel** opens next to the main
-   window, with its state and debug info. It won't come near you until it is soothed.
+4. Look at the dragon and pinch (tap): it gets angry for ~3 s and the **dragon panel** appears on your right,
+   with its state and debug info. It won't come near you until it is soothed.
 5. Pick a fruit on the tree, open an apple and catch its worms to free the **artifact** (see
    [The tree's fruit](../apple-artifact/README.md)). Tap the artifact: it flies to the dragon, which flies to
    you, stops to look at you and settles tangled in front of you. (**Call It Now** in the dragon panel skips
@@ -46,7 +47,8 @@ Everything is in English: user-facing text, code comments and tooling.
 
 ```
 Sources/Macrowavers/
-├── App/MacrowaversApp.swift          Scenes: island window, dragon panel (single Window), ImmersiveSpace (.mixed)
+├── App/MacrowaversApp.swift          Scenes: launch window, ImmersiveSpace (.mixed)
+├── Views/IslandControlsView.swift    Island panel (attachment): status, rotation, Restart Game
 ├── Views/ContentView.swift           Island window: launch, island rotation, Restart Game
 ├── Model/Untangle/                   Pure game logic: Foundation + simd only, unit-tested
 │   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet) and crossing count
@@ -92,18 +94,19 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
 
 ## Design decisions (and why)
 
-- **Windows: one main window, one dragon panel, one immersive space.** Before, the main window opened a control
-  panel `WindowGroup` (a new instance on every open) that also owned Start/Close of the immersive space, next to an
-  unrelated Start/Pause in the main window: several windows drove the same state and got out of sync. Now:
-  - the **island window** (`ContentView`, main `WindowGroup`) is the only owner of the immersive space: it opens
-    the island at launch, spins it, and **Restart Game** closes the dragon panel and the immersive space and resets
-    everything to the launch screen;
-  - the **dragon panel** (`DragonPanelView`) is a single-instance `Window` (`openWindow` brings it to the front
-    instead of duplicating it), opened only by tapping the dragon, never at launch or restored from a previous
-    session (`.defaultLaunchBehavior(.suppressed)`, `.restorationBehavior(.disabled)`), placed next to the main
-    window. It shows the dragon's state and debug info and **Restart Scene** puts the dragon back on the island;
-  - closing the immersive space in any way (button or Digital Crown) also closes the dragon panel and resets the
-    game, so no orphan window survives.
+- **One launch window, then panels inside the space.** A window opened over an immersive space sits ~1 m in
+  front of the player at eye height: exactly where the island is seen, where the dragon stops to look at the
+  player and where the fruit comes close. The 3D content clipped through it and its colliders stole the pinch from
+  the window, which became hard to grab. Now:
+  - the **launch window** (`ContentView`) only opens the island and then dismisses itself;
+  - inside the space the controls are **RealityView attachments**, placed where nothing moves: the **island
+    panel** (`IslandControlsView`: status, island rotation, dragon panel toggle, **Restart Game**) 50° to the left
+    and the **dragon panel** (`DragonPanelView`: state, debug info, puzzle controls, **Restart Scene**) 50° to the
+    right, 0.9 m away, turned towards the player (`BillboardComponent`). The island spans ±20°, the dragon's
+    approach and the knot are straight ahead, the farewell circles stay beyond 1.1 m;
+  - the dragon panel appears when the dragon is tapped and can be closed or reopened from the island panel;
+  - closing the space in any way (Restart Game or Digital Crown) resets the game and reopens the launch window,
+    so there is never more than one window and never a window over the game.
 - **The captive dragon flies in the tree's space (`AnchoredOrbit`).** `OrbitComponent` passes the tree anchor's
   full transform (position, rotation, scale, bobbing); while the dragon is on the island its flight runs in that
   space (body length divided by the island scale), so when the island turns the whole dragon turns rigidly with it,
