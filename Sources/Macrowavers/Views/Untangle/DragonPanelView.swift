@@ -10,6 +10,11 @@ struct DragonPanelView: View {
     @Environment(OrchardViewModel.self) private var orchard
 
     var body: some View {
+        // Hidden in SwiftUI, not by disabling its entity (see DragonImmersiveView).
+        if viewModel.isDragonPanelVisible { panel }
+    }
+
+    private var panel: some View {
         VStack(spacing: 16) {
             HStack {
                 Spacer()

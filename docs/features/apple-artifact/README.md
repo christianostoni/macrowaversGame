@@ -91,6 +91,10 @@ The fruit hangs from the island's root at the points `fruit_01` … `fruit_06` s
   zoom-in always comes towards the player.
 - **Worms: moving targets, but forgiving.** Slow crawl (≈ 4 cm/s on the focused apple), short burrows, large tap
   areas (5 cm), only 3 worms. The difficulty comes from timing, not precision.
+- **While a fruit is close, nothing behind it takes the pinch.** The island's rock and the dragon's colliders are
+  switched off (`OrchardComponent.background`), so a pinch that just misses the stem, a worm or a pomegranate half
+  does not spin the island or make the dragon angry. Targets are generous: stem 6 cm, worms 3.5 cm (apple
+  units), the pomegranate's collider covers both halves even fully open.
 - **A wrong fruit is dismissed by the player, never automatically.** Only two things send a fruit back to the
   tree: **Back to the Tree**, and delivering the artifact (the right apple). The return is eased
   (`FocusComponent`) and the fruit closes gently on the way (`AppleRig.ease`, `PomegranateRig.ease`, seeds flying

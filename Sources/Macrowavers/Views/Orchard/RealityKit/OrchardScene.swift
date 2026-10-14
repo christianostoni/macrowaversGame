@@ -105,6 +105,9 @@ struct OrchardComponent: Component {
     let artifact: Entity
     /// Where the artifact flies when used: the dragon's head.
     let deliveryTarget: Entity
+    /// Interactive things behind the fruit (island rock, dragon colliders): switched off while a fruit is close,
+    /// so a pinch that just misses the stem, a worm or the pomegranate never lands on them.
+    let background: [Entity]
     /// Focus already applied to the entities (`.some(nil)` = all on the tree).
     var appliedFocus: Int??
     var time: Float = 0
@@ -183,6 +186,7 @@ struct OrchardSystem: System {
                                                        responsiveness: 3.5))
             setInteractive(fruit, true)
         }
+        suspendBackground(orchard.background, newID != nil)
         // Fruits on the tree can be picked only while none is close.
         for fruit in orchard.fruits where fruit.fruit.id != newID {
             setTappable(fruit.holder, newID == nil)
@@ -208,6 +212,16 @@ struct OrchardSystem: System {
         switch fruit.rig {
         case .apple(let rig): rig.setInteractive(isInteractive)
         case .pomegranate(let rig): rig.setInteractive(isInteractive)
+        }
+    }
+
+    /// Off while a fruit is close. Back on only where it belongs: the island's rock always, the dragon's
+    /// colliders only while they are tap targets (the dragon still on the island).
+    @MainActor
+    private static func suspendBackground(_ background: [Entity], _ isSuspended: Bool) {
+        for entity in background {
+            let isActive = entity.components.has(IslandHandleComponent.self) || entity.components.has(DragonTapTargetComponent.self)
+            entity.components[InputTargetComponent.self]?.isEnabled = !isSuspended && isActive
         }
     }
 
@@ -303,9 +317,10 @@ enum OrchardSceneBuilder {
     /// - Parameters:
     ///   - island: the fruit hangs from its root at its hang points (it turns and bobs with the island).
     ///   - deliveryTarget: where the artifact flies (the dragon's head).
+    ///   - background: interactive entities behind the fruit, switched off while a fruit is close.
     @MainActor
     static func makeOrchard(viewModel: OrchardViewModel, viewer: ViewerTracker, island: IslandSceneBuilder.Island,
-                            deliveryTarget: Entity) async -> Entity {
+                            deliveryTarget: Entity, background: [Entity]) async -> Entity {
         let hangPoints = island.fruitHangPoints
         let islandScale = island.root.scale.x
         let root = Entity()
@@ -329,7 +344,8 @@ enum OrchardSceneBuilder {
         root.addChild(artifact)
 
         root.components.set(OrchardComponent(viewModel: viewModel, viewer: viewer, island: island.root, stage: stage,
-                                             fruits: fruits, artifact: artifact, deliveryTarget: deliveryTarget))
+                                             fruits: fruits, artifact: artifact, deliveryTarget: deliveryTarget,
+                                             background: background))
         return root
     }
 

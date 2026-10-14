@@ -105,6 +105,9 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
     right, 0.9 m away, turned towards the player (`BillboardComponent`). The island spans ±20°, the dragon's
     approach and the knot are straight ahead, the farewell circles stay beyond 1.1 m;
   - the dragon panel appears when the dragon is tapped and can be closed or reopened from the island panel;
+  - panels hide themselves in SwiftUI; their attachment entities are **never disabled** (`isEnabled = false`):
+    deactivating an entity that hosts SwiftUI while its content changes makes RealityKit abort with "the new
+    parent is currently being removed" (it crashed the app when the artifact reached the dragon);
   - closing the space in any way (Restart Game or Digital Crown) resets the game and reopens the launch window,
     so there is never more than one window and never a window over the game.
 - **The captive dragon flies in the tree's space (`AnchoredOrbit`).** `OrbitComponent` passes the tree anchor's

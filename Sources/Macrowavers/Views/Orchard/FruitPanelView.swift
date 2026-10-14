@@ -8,6 +8,11 @@ struct FruitPanelView: View {
     @Environment(OrchardViewModel.self) private var orchard
 
     var body: some View {
+        // Hidden in SwiftUI, not by disabling its entity (see DragonImmersiveView).
+        if orchard.focusedFruitID != nil { panel }
+    }
+
+    private var panel: some View {
         VStack(spacing: 10) {
             Text(orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored ? "No artifact in this one" : title)
                 .font(.headline)

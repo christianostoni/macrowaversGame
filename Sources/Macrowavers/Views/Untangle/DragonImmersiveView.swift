@@ -37,28 +37,31 @@ struct DragonImmersiveView: View {
             content.add(playArea)
             // The artifact flies to the dragon's head (node 0).
             let dragonHead = playArea.findEntity(named: "DragonNode0") ?? playArea
+            // While a fruit is close, what is behind it (island rock, dragon) must not take the pinch.
+            let background = [island.root.findEntity(named: IslandSceneBuilder.rockName)].compactMap { $0 }
+                + Self.descendants(of: playArea).filter { $0.components.has(DragonNodeComponent.self) }
             let orchardRoot = await OrchardSceneBuilder.makeOrchard(
-                viewModel: orchard, viewer: viewer, island: island, deliveryTarget: dragonHead)
+                viewModel: orchard, viewer: viewer, island: island, deliveryTarget: dragonHead,
+                background: background)
             content.add(orchardRoot)
             // Island panel on the left, dragon panel on the right.
             if let islandPanel = attachments.entity(for: IslandControlsView.attachmentID) {
                 content.add(Self.placeSidePanel(islandPanel, angle: -Self.panelAngle))
             }
             if let dragonPanel = attachments.entity(for: DragonPanelView.attachmentID) {
-                dragonPanel.isEnabled = viewModel.isDragonPanelVisible
                 content.add(Self.placeSidePanel(dragonPanel, angle: Self.panelAngle))
             }
             // Instructions under the fruit in front of the player.
+            // Attachments are never disabled (`isEnabled`): deactivating a SwiftUI-hosting entity while its
+            // content changes makes RealityKit abort ("new parent is currently being removed"). The panels hide
+            // themselves in SwiftUI instead.
             if let panel = attachments.entity(for: FruitPanelView.attachmentID),
                let stage = orchardRoot.findEntity(named: OrchardSceneBuilder.stageName) {
                 panel.position = SIMD3(0, -0.2, 0.02)
-                panel.isEnabled = false
                 stage.addChild(panel)
             }
             subscriptions = subscribeToDragonGrabs(content)
-        } update: { content, attachments in
-            attachments.entity(for: FruitPanelView.attachmentID)?.isEnabled = orchard.focusedFruitID != nil
-            attachments.entity(for: DragonPanelView.attachmentID)?.isEnabled = viewModel.isDragonPanelVisible
+        } update: { content, _ in
             // Reading `placement`/`islandPlacement` here re-runs this block on every change.
             if let island = content.entities.first(where: { $0.name == IslandSceneBuilder.islandName }),
                var turntable = island.components[TurntableComponent.self] {
@@ -113,6 +116,10 @@ struct DragonImmersiveView: View {
                 viewModel.tapDragon()
                 viewModel.isDragonPanelVisible = true
             }
+    }
+
+    private static func descendants(of entity: Entity) -> [Entity] {
+        entity.children.flatMap { [$0] + descendants(of: $0) }
     }
 
     /// Puts a panel to the side of the player, turned towards them (it keeps facing them as they move).
