@@ -16,9 +16,9 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
    opens, with the floating island ~2.8 m in front of you and the dragon circling its tree.
 3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island window): the
    dragon turns with it.
-4. Look at the dragon and pinch (tap): it gets angry and the **dragon panel** opens next to the main window,
-   with its state and debug info. Tap **Call the Dragon** there: it flies to you, stops to look at you, then
-   settles tangled in front of you.
+4. Look at the dragon and pinch (tap): it gets angry for ~3 s and the **dragon panel** opens next to the main
+   window, with its state and debug info. Then it flies to you on its own (or tap **Call It Now** in the panel),
+   stops to look at you, and settles tangled in front of you.
 5. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
@@ -30,7 +30,7 @@ uses a seated eye height of 1.15 m.
 |---|---|
 | Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
 | Tap the dragon | It gets angry: circles faster, glares at you, growls and snorts smoke. The dragon panel opens with "The dragon is getting angry!" and debug info (phase, mood, action, crossings, restlessness, strain) |
-| Call the dragon (panel button, stands in for the future artifact) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
+| After ~3 s of anger (or **Call It Now** in the panel; the future artifact goes here) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel |
 | Grab | The part you look at glows; pinch to grab, up to two parts at once; the dragon turns to your hand and growls if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |

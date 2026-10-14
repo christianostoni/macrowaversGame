@@ -90,7 +90,7 @@ struct ContentView: View {
     private var storyStatus: String {
         switch viewModel.phase {
         case .captive: "The dragon is circling the tree. Tap it."
-        case .alerted: "The dragon is angry. Check the dragon panel."
+        case .alerted: "The dragon is angry… it's coming down to you."
         case .approaching, .landing: "The dragon is coming to you."
         case .untangling: "Untangle the dragon: \(viewModel.crossingCount) crossings left."
         case .free: "The dragon is free!"

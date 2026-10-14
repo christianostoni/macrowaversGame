@@ -72,6 +72,9 @@ final class UntangleViewModel {
     @ObservationIgnored private var worldFromFlight = matrix_identity_float4x4
     /// Arrabbiato, gira attorno all'albero più veloce.
     @ObservationIgnored private let alertedOrbitSpeed: Float = 1.6
+    /// Quanto dura la rabbia dopo il tocco prima che il drago scenda dall'utente.
+    @ObservationIgnored let alertDuration: Float = 3
+    @ObservationIgnored private var alertedTime: Float = 0
 
     init(shape: TangleShape = .trefoil,
          config: TangleConfig = TangleConfig(),
@@ -118,10 +121,12 @@ final class UntangleViewModel {
     // MARK: - Azioni sul drago
 
     /// L'utente tocca il drago che gira attorno all'albero: il drago si arrabbia (ti fissa, ringhia, sbuffa
-    /// fumo) e continua a girare. Il pannello del drago mostra lo stato e da lì lo si chiama (`callDragon`).
+    /// fumo) per `alertDuration` secondi, poi scende da solo verso l'utente (`callDragon`).
+    /// Il pannello del drago mostra lo stato e permette di chiamarlo subito.
     func tapDragon() {
         guard phase == .captive else { return }
         phase = .alerted
+        alertedTime = 0
         refreshMood()
     }
 
@@ -267,6 +272,11 @@ final class UntangleViewModel {
             flight.orbit = anchorPath(orbit)
         }
         flight.update(deltaTime: deltaTime, viewer: Self.transform(viewer, by: worldFromFlight.inverse))
+
+        if phase == .alerted {
+            alertedTime += deltaTime
+            if alertedTime >= alertDuration { callDragon() }
+        }
 
         if phase == .approaching && flight.maneuver == .land { phase = .landing }
         if flight.isFinished {

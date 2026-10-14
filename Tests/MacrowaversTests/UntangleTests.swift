@@ -200,6 +200,16 @@ struct UntangleViewModelTests {
         viewModel.tapDragon()
         #expect(viewModel.phase == .alerted)
         #expect(viewModel.mood == .restless)
+
+        // Dopo la rabbia scende da solo verso l'utente.
+        var elapsed: Float = 0
+        while viewModel.phase == .alerted && elapsed < viewModel.alertDuration + 1 {
+            viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: matrix_identity_float4x4,
+                             orbit: islandOrbit())
+            elapsed += 1.0 / 60.0
+        }
+        #expect(viewModel.phase == .approaching)
+        #expect(elapsed >= viewModel.alertDuration - 0.05)
     }
 
     @Test func captiveDragonTurnsWithTheIsland() {

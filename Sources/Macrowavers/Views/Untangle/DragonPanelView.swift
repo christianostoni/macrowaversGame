@@ -33,12 +33,11 @@ struct DragonPanelView: View {
             headline("The dragon is circling the tree", detail: "Look at it and tap it to disturb it.")
         case .alerted:
             headline("The dragon is getting angry!",
-                     detail: "It's glaring at you, growling and snorting smoke. Call it down when you're ready.")
-            Button("Call the Dragon", systemImage: "hand.wave") {
+                     detail: "It's glaring at you, growling and snorting smoke. It's about to come down to you…")
+            Button("Call It Now", systemImage: "hand.wave") {
                 viewModel.callDragon()
             }
-            .buttonStyle(.borderedProminent)
-            Text("Debug: the artifact that calms the dragon will replace this button.")
+            Text("Debug: the artifact that calms the dragon will go here.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         case .approaching:
