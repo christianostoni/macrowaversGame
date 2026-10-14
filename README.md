@@ -24,8 +24,9 @@ of them with its long body tied in a knot. The player has to set it free:
   and coils. Every fit adds at least one new crossing, and fits come sooner each time.
 - **Set it free.** At zero crossings the dragon turns gold, celebrates, circles you, roars its thanks and flies
   away into the sky.
-- **Two windows only.** The main window opens the island, spins it and restarts the whole game; the dragon panel
-  (opened by tapping the dragon) shows its state and debug info and restarts the dragon's scene.
+- **No window over the game.** The launch window opens the island and steps aside; inside the space an island
+  panel (left) spins the island and restarts the game, and a dragon panel (right, opened by tapping the dragon)
+  shows its state and debug info.
 
 ### The Tree's Fruit
 
@@ -34,7 +35,7 @@ pomegranate hang on the island's tree. Pick one and it comes close: pull the app
 (a Metal shader), catch the worms that crawl and burrow between the slices, and the artifact rises out. Tapped,
 it flies to the dragon and soothes it. The pomegranate bursts into seeds you can play with.
 
-Open it from the main window with **Open the Island**. It uses a placeholder dragon built in code until the
+Open it from the launch window with **Open the Island**. It uses a placeholder dragon built in code until the
 design team's asset (`DragonBody` / `DragonHead`) is added; the asset specification is in the feature docs.
 
 ## Requirements

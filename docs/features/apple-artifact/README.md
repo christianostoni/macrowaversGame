@@ -32,7 +32,8 @@ arrives.
 | Last worm caught | The artifact, sealed in the core so far, **rises out of the apple**, glowing and pulsing. Tap it |
 | Artifact used | It flies to the dragon's head; the fruit goes back to its branch; the dragon is soothed and comes to the player |
 | Pomegranate | Halves open like a book; fully open, 40 seeds burst into a floating cloud you can drag. Hint: "No artifact in here: try an apple" |
-| Back to the Tree / Close It Again | Puts the fruit back on its branch / closes it again with the worms inside |
+| Wrong fruit (pomegranate, or an apple when the artifact is already out of another one) | Once opened, the panel says "No artifact in this one" and **Back to the Tree** becomes the prominent button. The fruit never leaves by itself: the player sends it back |
+| Back to the Tree / Close It Again | The fruit flies back to its branch, closing gently on the way (the apple's slices settle, the pomegranate's seeds fly back inside) / closes it again with the worms inside |
 
 Kept easy on purpose: there is a **single artifact** and it is always in the **first apple whose worms are
 cleared**, so no choice is wrong and the number of apples does not matter. If the player leaves an apple before
@@ -75,7 +76,7 @@ The fruit hangs from the island's root at the points `fruit_01` … `fruit_06` s
 
 - **No new window.** The prototype was a separate volumetric window; here everything lives in the existing
   immersive space and the instructions are a RealityView attachment under the fruit. The window architecture
-  stays: one island window, one dragon panel, one immersive space.
+  stays: one launch window, then panels inside the immersive space.
 - **Every gesture targets its own component** (`FruitTapTargetComponent`, `AppleStemComponent`, `WormComponent`,
   `PomegranateBodyComponent`, `SeedComponent`, `ArtifactComponent`). The prototype used `.targetedToAnyEntity()`,
   which would have stolen the pinch from the dragon's tap and grabs and from spinning the island.
@@ -90,6 +91,11 @@ The fruit hangs from the island's root at the points `fruit_01` … `fruit_06` s
   zoom-in always comes towards the player.
 - **Worms: moving targets, but forgiving.** Slow crawl (≈ 4 cm/s on the focused apple), short burrows, large tap
   areas (5 cm), only 3 worms. The difficulty comes from timing, not precision.
+- **A wrong fruit is dismissed by the player, never automatically.** Only two things send a fruit back to the
+  tree: **Back to the Tree**, and delivering the artifact (the right apple). The return is eased
+  (`FocusComponent`) and the fruit closes gently on the way (`AppleRig.ease`, `PomegranateRig.ease`, seeds flying
+  back in) instead of snapping shut or vanishing. `OrchardViewModel.isFocusedFruitEmpty` tells the panel when the
+  fruit cannot hold the artifact.
 - **Pomegranate kept as a bonus.** Same interactions as the prototype; it shares `FloatingComponent` with the
   island instead of its own float system.
 
@@ -113,7 +119,7 @@ The fruit hangs from the island's root at the points `fruit_01` … `fruit_06` s
 
 `Tests/MacrowaversTests/OrchardTests.swift`: apple maths and profile, Swift/Metal struct layouts, worms hiding,
 crawling, burrowing and speeding up, the artifact in the first cleared apple, leaving an apple early, the
-artifact's flight and reset, the pomegranate burst.
+artifact's flight and reset, a wrong fruit staying until sent back, the pomegranate burst.
 
 ## Known limits
 
