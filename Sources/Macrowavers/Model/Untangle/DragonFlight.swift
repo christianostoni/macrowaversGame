@@ -1,7 +1,8 @@
 import Foundation
 import simd
 
-/// Volo libero del drago dopo essere stato sgrovigliato.
+/// Il drago in volo: prigioniero attorno all'albero, in arrivo verso l'utente, mentre si posa sulla
+/// piattaforma e, libero, prima di volare via.
 /// Lavora nello spazio della scena immersiva (metri, origine ai piedi dell'utente, y in alto).
 ///
 /// Il corpo usa il "follow the leader": la testa vola e lascia una scia, ogni vertebra si trova sulla scia
@@ -19,6 +20,15 @@ final class DragonFlight {
         case hover
         /// Giro della morte verticale.
         case loop
+        /// Prigioniero: gira attorno all'albero dell'isola lungo `OrbitPath`, finché non viene chiamato.
+        case orbit
+        /// Chiamato: vola verso l'utente e si ferma davanti a lui, guardandolo.
+        case approach
+        /// Si posa sulla piattaforma: la testa ripercorre il groviglio dalla coda, il corpo la segue
+        /// e alla fine giace esattamente nella forma di `landingKnot`.
+        case land
+        /// Se ne va: sale e si allontana nel cielo, sempre più veloce.
+        case depart
 
         var duration: Float {
             switch self {
@@ -27,6 +37,22 @@ final class DragonFlight {
             case .swoop: 3
             case .hover: 3.2
             case .loop: 3
+            case .orbit: .infinity
+            case .approach: 5
+            // Dipende dalla lunghezza del percorso: vedi `landingProgress`.
+            case .land: .infinity
+            case .depart: 6
+            }
+        }
+
+        /// Alla fine il volo si ferma (il drago è a terra o è sparito) invece di scegliere un'altra manovra.
+        var isFinal: Bool { self == .land || self == .depart }
+
+        /// Manovre "nella stanza": rispettano quota e distanza massima dall'utente.
+        var staysInRoom: Bool {
+            switch self {
+            case .takeoff, .cruise, .swoop, .hover, .loop: true
+            case .orbit, .approach, .land, .depart: false
             }
         }
     }
@@ -41,6 +67,10 @@ final class DragonFlight {
         var altitude: ClosedRange<Float> = 0.9...2.1
         /// Il drago non si avvicina mai più di così alla testa dell'utente (comfort).
         var personalSpace: Float = 0.7
+        /// A che distanza dagli occhi dell'utente si ferma quando arriva (oltre lo spazio personale).
+        var approachDistance: Float = 1.0
+        /// Velocità della testa mentre traccia il groviglio posandosi.
+        var landingSpeed: Float = 0.65
     }
 
     let settings: Settings
@@ -49,6 +79,12 @@ final class DragonFlight {
     private(set) var velocity: SIMD3<Float>
     private(set) var maneuver = Maneuver.takeoff
     private(set) var maneuverProgress: Float = 0
+    /// Ha finito l'ultima manovra (`Maneuver.isFinal`): il corpo resta fermo.
+    private(set) var isFinished = false
+    /// Percorso attorno all'albero, aggiornato ogni frame (l'isola fluttua).
+    var orbit: OrbitPath?
+    /// Dove si poserà (indice 0 = testa), nello spazio della scena: da impostare prima di `.land`.
+    var landingKnot: [SIMD3<Float>] = []
 
     /// Scia della testa: dal punto più vecchio (indice 0) alla testa attuale (ultimo).
     private var trail: [SIMD3<Float>]
@@ -58,29 +94,82 @@ final class DragonFlight {
     private var maneuverOrigin = SIMD3<Float>.zero
     private var maneuverForward = SIMD3<Float>(0, 0, -1)
     private var random = SystemRandomNumberGenerator()
+    /// Manovre già decise (copione): finite queste, il drago sceglie da solo.
+    private var plan: [Maneuver] = []
+    /// Angolo della testa su `orbit`.
+    private var pathAngle: Float = 0
+    private var approachSpot = SIMD3<Float>.zero
+    private var departDirection = SIMD3<Float>(0, 0, -1)
+    /// Percorso della testa mentre si posa e quanto ne ha già fatto.
+    private var landingPath: [SIMD3<Float>] = []
+    private var landingLength: Float = 0
+    private var landingTraveled: Float = 0
+    private var landingSegment = 0
+    private var landingSegmentStart: Float = 0
 
     /// `start`: posizioni attuali del corpo (indice 0 = testa) nello spazio della scena.
-    init(start: [SIMD3<Float>], segmentLength: Float, settings: Settings = Settings()) {
+    /// `plan`: manovre da eseguire in ordine (la prima parte subito).
+    init(start: [SIMD3<Float>], segmentLength: Float, settings: Settings = Settings(),
+         plan: [Maneuver] = [.takeoff], orbit: OrbitPath? = nil) {
         self.settings = settings
         self.segmentLength = segmentLength
+        self.orbit = orbit
         positions = start
         // La scia iniziale è il corpo stesso, dalla coda alla testa: al decollo il corpo si "srotola".
         trail = start.reversed()
         let forward = simd_normalize(start[0] - start[1])
         velocity = SIMD3(forward.x, 0.6, forward.z) * 0.3
         orbitDirection = Bool.random(using: &random) ? 1 : -1
-        begin(.takeoff, viewer: start[0])
+        perform(plan.isEmpty ? [.takeoff] : plan, viewer: start[0])
+    }
+
+    /// Prigioniero dell'isola: il corpo è già avvolto all'albero lungo il percorso.
+    static func captive(on orbit: OrbitPath, nodeCount: Int, segmentLength: Float,
+                        settings: Settings = Settings()) -> DragonFlight {
+        let start = orbit.body(headAngle: 0, count: nodeCount, segmentLength: segmentLength)
+        let flight = DragonFlight(start: start, segmentLength: segmentLength, settings: settings, plan: [.orbit], orbit: orbit)
+        // Scia fitta lungo la curva (non le corde tra i nodi): il corpo non scatta al primo frame.
+        let bodyAngle = segmentLength * Float(nodeCount + 4) / max(orbit.radius - orbit.radialSwing, 0.05)
+        flight.trail = stride(from: -bodyAngle, to: 0, by: 0.01).map(orbit.point(at:)) + [start[0]]
+        return flight
+    }
+
+    /// Sostituisce il copione: la prima manovra parte subito, dalla posizione e velocità attuali.
+    func perform(_ maneuvers: [Maneuver], viewer: SIMD3<Float>) {
+        guard let first = maneuvers.first else { return }
+        plan = Array(maneuvers.dropFirst())
+        isFinished = false
+        begin(first, viewer: viewer)
     }
 
     func update(deltaTime: Float, viewer: SIMD3<Float>) {
+        guard !isFinished else { return }
         let dt = min(deltaTime, 1.0 / 30.0)
+        guard dt > 0 else { return }
         elapsed += dt
-        maneuverProgress = min(elapsed / maneuver.duration, 1)
-        if maneuverProgress >= 1 { begin(nextManeuver(), viewer: viewer) }
+        maneuverProgress = maneuver == .land ? landingProgress : min(elapsed / maneuver.duration, 1)
+        if maneuverProgress >= 1 {
+            if maneuver.isFinal && plan.isEmpty {
+                isFinished = true
+                return
+            }
+            begin(plan.isEmpty ? nextManeuver() : plan.removeFirst(), viewer: viewer)
+        }
 
-        steer(toward: target(viewer: viewer), viewer: viewer, dt: dt)
+        let head: SIMD3<Float>
+        switch maneuver {
+        case .orbit:
+            // Percorso fisso: la velocità è quella che ne risulta (serve al rig e alla manovra successiva).
+            head = advanceOnOrbit(dt: dt)
+            velocity = (head - positions[0]) / dt
+        case .land:
+            head = advanceOnLandingPath(dt: dt)
+            velocity = (head - positions[0]) / dt
+        default:
+            steer(toward: target(viewer: viewer), viewer: viewer, dt: dt)
+            head = positions[0] + velocity * dt
+        }
 
-        let head = positions[0] + velocity * dt
         if simd_distance(head, trail.last!) > segmentLength * 0.1 { trail.append(head) }
         positions = bodyAlongTrail(head: head)
         trimTrail()
@@ -99,6 +188,25 @@ final class DragonFlight {
         let offset = positions[0] - viewer
         orbitAngle = atan2(offset.z, offset.x)
         if next == .cruise && Float.random(in: 0...1, using: &random) < 0.3 { orbitDirection *= -1 }
+
+        switch next {
+        case .orbit:
+            if let orbit { pathAngle = orbit.angle(closestTo: positions[0]) }
+        case .approach:
+            // Davanti all'utente, sulla linea tra lui e il drago (cioè dove sta guardando quando lo tocca).
+            let toDragon = SIMD3(offset.x, 0, offset.z)
+            let direction = simd_length(toDragon) > 1e-4 ? simd_normalize(toDragon) : SIMD3(0, 0, -1)
+            approachSpot = viewer + direction * settings.approachDistance
+            approachSpot.y = viewer.y - 0.05
+        case .land:
+            beginLanding()
+        case .depart:
+            // Via dall'utente, oltre il punto in cui si trova.
+            departDirection = simd_length(SIMD3(offset.x, 0, offset.z)) > 1e-4
+                ? simd_normalize(SIMD3(offset.x, 0, offset.z)) : SIMD3(0, 0, -1)
+        default:
+            break
+        }
     }
 
     /// "Vita propria": sceglie la prossima manovra a caso, con pesi, senza ripetere picchiate o ruggiti di fila.
@@ -106,7 +214,8 @@ final class DragonFlight {
         let options: [(Maneuver, Float)] = switch maneuver {
         case .takeoff: [(.cruise, 1)]
         case .cruise: [(.swoop, 0.35), (.hover, 0.3), (.loop, 0.2), (.cruise, 0.15)]
-        case .swoop, .hover, .loop: [(.cruise, 1)]
+        case .swoop, .hover, .loop, .approach, .land, .depart: [(.cruise, 1)]
+        case .orbit: [(.orbit, 1)]
         }
         var roll = Float.random(in: 0..<options.reduce(0) { $0 + $1.1 }, using: &random)
         for (option, weight) in options {
@@ -153,6 +262,15 @@ final class DragonFlight {
             let radius: Float = 0.45
             let center = maneuverOrigin + maneuverForward * 0.6 + SIMD3(0, radius, 0)
             return center + maneuverForward * (radius * sin(angle) + 0.5) - SIMD3(0, radius * cos(angle), 0)
+        case .approach:
+            // Arriva e resta sospeso con un leggero ondeggiare.
+            return approachSpot + SIMD3(0.06 * sin(elapsed * 1.7), 0.04 * sin(elapsed * 2.3), 0)
+        case .depart:
+            // Bersaglio che scappa avanti e in alto: traiettoria che sale verso il cielo.
+            return positions[0] + (departDirection + SIMD3(0, 0.5, 0)) * 2
+        case .orbit, .land:
+            // Seguono un percorso, non sterzano.
+            return positions[0]
         }
     }
 
@@ -160,8 +278,13 @@ final class DragonFlight {
         let head = positions[0]
         var desired = target - head
         let distance = simd_length(desired)
+        let speed: Float = switch maneuver {
         // In sospensione rallenta fino quasi a fermarsi.
-        let speed = maneuver == .hover ? min(settings.speed, distance * 1.5) + 0.08 : settings.speed
+        case .hover, .approach: min(settings.speed, distance * 1.5) + 0.08
+        // Andandosene accelera.
+        case .depart: settings.speed * (1 + 2.5 * maneuverProgress)
+        default: settings.speed
+        }
         desired = distance > 1e-4 ? desired / distance * speed : .zero
 
         // Spazio personale: spinta via dalla testa dell'utente.
@@ -170,18 +293,86 @@ final class DragonFlight {
         if viewerDistance < settings.personalSpace + 0.2, viewerDistance > 1e-4 {
             desired += fromViewer / viewerDistance * settings.speed * 2
         }
-        // Resta tra pavimento e soffitto.
-        if head.y < settings.altitude.lowerBound - 0.1 { desired.y += settings.speed }
-        if head.y > settings.altitude.upperBound + 0.2 { desired.y -= settings.speed }
-        // Non si allontana troppo (pareti della stanza).
-        let horizontal = SIMD3(fromViewer.x, 0, fromViewer.z)
-        if simd_length(horizontal) > settings.orbitRadius.upperBound + 0.4 {
-            desired -= simd_normalize(horizontal) * settings.speed
+        if maneuver.staysInRoom {
+            // Resta tra pavimento e soffitto.
+            if head.y < settings.altitude.lowerBound - 0.1 { desired.y += settings.speed }
+            if head.y > settings.altitude.upperBound + 0.2 { desired.y -= settings.speed }
+            // Non si allontana troppo (pareti della stanza).
+            let horizontal = SIMD3(fromViewer.x, 0, fromViewer.z)
+            if simd_length(horizontal) > settings.orbitRadius.upperBound + 0.4 {
+                desired -= simd_normalize(horizontal) * settings.speed
+            }
         }
 
         velocity += (desired - velocity) * min(1, dt * settings.steering)
     }
+}
 
+// MARK: - Percorsi (albero, atterraggio)
+
+extension DragonFlight {
+    private func advanceOnOrbit(dt: Float) -> SIMD3<Float> {
+        guard let orbit else { return positions[0] }
+        pathAngle += orbit.speed / orbit.radius * dt
+        // La curva si chiude ogni due giri: l'angolo resta piccolo (precisione dei Float).
+        if pathAngle > 4 * .pi { pathAngle -= 4 * .pi }
+        return orbit.point(at: pathAngle)
+    }
+
+    /// Curva morbida dalla testa (nella direzione in cui vola) alla punta della coda del groviglio,
+    /// arrivando già orientata lungo il groviglio; poi il groviglio stesso, dalla coda alla testa.
+    private func beginLanding() {
+        landingPath = []
+        landingTraveled = 0
+        landingSegment = 0
+        landingSegmentStart = 0
+        guard landingKnot.count > 1 else {
+            landingLength = 0
+            return
+        }
+        let start = positions[0]
+        let tail = landingKnot[landingKnot.count - 1]
+        let along = simd_normalize(landingKnot[landingKnot.count - 2] - tail)
+        let speed = simd_length(velocity)
+        let forward = speed > 1e-4 ? velocity / speed : along
+        let handle = max(0.15, simd_distance(start, tail) * 0.4)
+        let control1 = start + forward * handle
+        let control2 = tail - along * handle
+        let samples = 24
+        for step in 0...samples {
+            // Bézier cubica.
+            let along = Float(step) / Float(samples)
+            let rest = 1 - along
+            landingPath.append(rest * rest * rest * start + 3 * rest * rest * along * control1
+                               + 3 * rest * along * along * control2 + along * along * along * tail)
+        }
+        landingPath += landingKnot.reversed().dropFirst()
+        landingLength = zip(landingPath, landingPath.dropFirst()).reduce(0) { $0 + simd_distance($1.0, $1.1) }
+    }
+
+    private var landingProgress: Float {
+        landingLength > 0 ? min(landingTraveled / landingLength, 1) : 1
+    }
+
+    private func advanceOnLandingPath(dt: Float) -> SIMD3<Float> {
+        guard landingPath.count > 1 else { return positions[0] }
+        landingTraveled = min(landingTraveled + settings.landingSpeed * dt, landingLength)
+        // Avanza segmento per segmento (il cursore non torna mai indietro).
+        while landingSegment < landingPath.count - 2 {
+            let length = simd_distance(landingPath[landingSegment], landingPath[landingSegment + 1])
+            if landingSegmentStart + length >= landingTraveled { break }
+            landingSegmentStart += length
+            landingSegment += 1
+        }
+        let from = landingPath[landingSegment]
+        let to = landingPath[landingSegment + 1]
+        let length = simd_distance(from, to)
+        let fraction = length > 1e-6 ? min((landingTraveled - landingSegmentStart) / length, 1) : 1
+        return simd_mix(from, to, SIMD3(repeating: fraction))
+    }
+}
+
+extension DragonFlight {
     // MARK: - Corpo lungo la scia
 
     private func bodyAlongTrail(head: SIMD3<Float>) -> [SIMD3<Float>] {

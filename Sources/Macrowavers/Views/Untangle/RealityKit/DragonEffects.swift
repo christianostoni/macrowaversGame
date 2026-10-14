@@ -86,8 +86,8 @@ final class DragonEffects {
 
     private static func sound(for maneuver: DragonFlight.Maneuver?) -> String? {
         switch maneuver {
-        case .takeoff, .swoop: "DragonWhoosh"
-        case .hover: "DragonRoar"
+        case .takeoff, .swoop, .approach: "DragonWhoosh"
+        case .hover, .depart: "DragonRoar"
         default: nil
         }
     }

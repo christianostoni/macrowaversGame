@@ -2,8 +2,9 @@
 import RealityKit
 import SwiftUI
 
-/// Spazio immersivo in mixed reality: il drago aggrovigliato appare davanti all'utente,
-/// che continua a vedere l'ambiente reale intorno.
+/// Spazio immersivo in mixed reality: un'isola volante con il drago prigioniero attorno all'albero.
+/// Toccato, il drago vola dall'utente e si posa aggrovigliato sulla piattaforma davanti a lui;
+/// sgrovigliato, vola via nel cielo. L'utente continua a vedere l'ambiente reale intorno.
 struct DragonImmersiveView: View {
     static let spaceID = "DragonSpace"
 
@@ -18,7 +19,11 @@ struct DragonImmersiveView: View {
 
     var body: some View {
         RealityView { content in
-            content.add(await DragonSceneBuilder.makePlayArea(viewModel: viewModel, viewer: viewer))
+            // Prima l'isola: il drago nasce già attorno al suo albero.
+            let island = await IslandSceneBuilder.makeIsland(placement: viewModel.islandPlacement)
+            content.add(island.root)
+            content.add(await DragonSceneBuilder.makePlayArea(viewModel: viewModel, viewer: viewer,
+                                                              orbitAnchor: island.treeAnchor))
             subscriptions = subscribeToDragonGrabs(content)
         } update: { content in
             // Leggere `placement` qui fa ri-eseguire questo blocco a ogni cambio.
@@ -29,6 +34,7 @@ struct DragonImmersiveView: View {
         }
         .gesture(moveGesture)
         .simultaneousGesture(rotateGesture)
+        .simultaneousGesture(tapDragonGesture)
         .task { await viewer.start() }
         .onAppear { viewModel.immersiveSpaceState = .open }
         .onDisappear {
@@ -38,6 +44,16 @@ struct DragonImmersiveView: View {
     }
 
     // MARK: - Drago
+
+    /// Guarda il drago che gira attorno all'albero e pizzica: vola verso di te.
+    /// Solo i collider con `DragonTapTargetComponent` rispondono (cioè solo mentre è sull'isola).
+    private var tapDragonGesture: some Gesture {
+        SpatialTapGesture()
+            .targetedToEntity(where: .has(DragonTapTargetComponent.self))
+            .onEnded { _ in
+                viewModel.tapDragon()
+            }
+    }
 
     /// Ogni nodo del drago ha un `ManipulationComponent`: ogni mano afferra e muove il proprio nodo,
     /// quindi si possono tenere due parti del corpo contemporaneamente.

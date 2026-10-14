@@ -108,6 +108,65 @@ struct DragonFlightTests {
         #expect(closest > flight.settings.personalSpace * 0.9)
         #expect(flight.positions.count == config.nodeCount)
     }
+
+    @Test func captiveDragonCoilsAroundTheTreeWithoutCrossingItself() {
+        let config = TangleConfig()
+        let island = IslandPlacement.standard
+        let orbit = OrbitPath.aroundTree.placed(at: island.position, scale: island.scale)
+        let flight = DragonFlight.captive(on: orbit, nodeCount: config.nodeCount, segmentLength: config.segmentLength)
+        var closestSelf = Float.infinity
+        var previous = flight.positions
+        var largestStep: Float = 0
+        for _ in 0..<(60 * 20) {
+            flight.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0))
+            let positions = flight.positions
+            for first in positions.indices {
+                for second in (first + 4)..<max(first + 4, positions.count) {
+                    closestSelf = min(closestSelf, simd_distance(positions[first], positions[second]))
+                }
+            }
+            largestStep = max(largestStep, zip(previous, positions).map { simd_distance($0, $1) }.max() ?? 0)
+            previous = positions
+        }
+
+        #expect(flight.maneuver == .orbit)
+        #expect(closestSelf > 2 * config.radius)
+        // Nessuno scatto: a 0,35 m/s un nodo si sposta di meno di 1 cm per frame.
+        #expect(largestStep < 0.01)
+    }
+
+    @Test func landingLaysTheBodyOnTheKnot() {
+        let config = TangleConfig()
+        let orbit = OrbitPath.aroundTree.placed(at: IslandPlacement.standard.position, scale: IslandPlacement.standard.scale)
+        let flight = DragonFlight.captive(on: orbit, nodeCount: config.nodeCount, segmentLength: config.segmentLength)
+        let knot = TangleShape.trefoil.positions(config: config).map { $0 + SIMD3<Float>(0, 0.75, -0.6) }
+        flight.landingKnot = knot
+        flight.perform([.approach, .land], viewer: SIMD3(0, 1.15, 0))
+        var elapsed: Float = 0
+        while !flight.isFinished && elapsed < 30 {
+            flight.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0))
+            elapsed += 1.0 / 60.0
+        }
+
+        #expect(flight.isFinished)
+        #expect(simd_distance(flight.positions[0], knot[0]) < 0.001)
+        #expect(zip(flight.positions, knot).allSatisfy { simd_distance($0, $1) < 0.03 })
+    }
+
+    @Test func farewellEndsWithTheDragonGone() {
+        let config = TangleConfig()
+        let start = TangleShape.trefoil.positions(config: config).map { $0 + SIMD3<Float>(0, 0.75, -0.6) }
+        let flight = DragonFlight(start: start, segmentLength: config.segmentLength,
+                                  plan: [.takeoff, .cruise, .hover, .depart])
+        var elapsed: Float = 0
+        while !flight.isFinished && elapsed < 60 {
+            flight.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0))
+            elapsed += 1.0 / 60.0
+        }
+
+        #expect(flight.isFinished)
+        #expect(flight.maneuver == .depart)
+    }
 }
 
 @MainActor
@@ -121,13 +180,58 @@ struct UntangleViewModelTests {
         #expect(viewModel.placement.position.y == PlayAreaPlacement.heightRange.upperBound)
     }
 
-    @Test func resetRestoresTheTangledDragon() {
+    @Test func storyStartsWithTheDragonBoundToTheTree() {
         let viewModel = UntangleViewModel(shape: .trefoil)
+        let orbit = OrbitPath.aroundTree.placed(at: IslandPlacement.standard.position, scale: IslandPlacement.standard.scale)
+        // Sull'isola il drago non si afferra: solo il tocco lo chiama.
         viewModel.grab(node: viewModel.config.nodeCount - 1)
-        viewModel.reset()
+        viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: matrix_identity_float4x4, orbit: orbit)
 
+        #expect(viewModel.phase == .captive)
+        #expect(viewModel.userGrabbedNodes.isEmpty)
+        #expect(viewModel.crossingPoints.isEmpty)
+        #expect(viewModel.dragonOpacity == 1)
+    }
+
+    @Test func tapBringsTheDragonToThePuzzle() {
+        let viewModel = UntangleViewModel(shape: .trefoil)
+        let orbit = OrbitPath.aroundTree.placed(at: IslandPlacement.standard.position, scale: IslandPlacement.standard.scale)
+        var transform = float4x4(PlayAreaPlacement.seated.rotation)
+        transform.columns.3 = SIMD4(PlayAreaPlacement.seated.position, 1)
+        let frame = { viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0), worldFromLocal: transform, orbit: orbit) }
+        frame()
+        viewModel.tapDragon()
+        #expect(viewModel.phase == .approaching)
+
+        var frames = 0
+        while viewModel.phase != .untangling && frames < 60 * 30 {
+            frame()
+            frames += 1
+        }
+
+        #expect(viewModel.phase == .untangling)
+        #expect(viewModel.crossingCount == 3)
+        // Tra la prima posa e il groviglio simulato non ci sono salti visibili.
+        #expect(zip(viewModel.displayPositions, viewModel.nodePositions).allSatisfy { simd_distance($0, $1) < 0.03 })
+    }
+
+    @Test func restartAndPlayAgainResetTheDragon() {
+        let viewModel = UntangleViewModel(shape: .trefoil)
+        let orbit = OrbitPath.aroundTree.placed(at: IslandPlacement.standard.position, scale: IslandPlacement.standard.scale)
+        let frame = { viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0),
+                                       worldFromLocal: matrix_identity_float4x4, orbit: orbit) }
+        frame()
+        viewModel.tapDragon()
+        while viewModel.phase != .untangling { frame() }
+
+        viewModel.grab(node: viewModel.config.nodeCount - 1)
+        viewModel.restartPuzzle()
+        #expect(viewModel.phase == .untangling)
         #expect(viewModel.crossingCount == 3)
         #expect(viewModel.userGrabbedNodes.isEmpty)
+
+        viewModel.playAgain()
+        #expect(viewModel.phase == .captive)
         #expect(!viewModel.isSolved && !viewModel.isFlying)
     }
 }

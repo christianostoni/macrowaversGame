@@ -14,7 +14,7 @@ struct ControlPanelView: View {
             } else {
                 Text("Untangle the Dragon")
                     .font(.extraLargeTitle2)
-                Text("The dragon will appear in front of you, right in your room.")
+                Text("A floating island will appear in your room, with a dragon bound to its tree.")
                     .foregroundStyle(.secondary)
             }
             ImmersiveSpaceToggle()
@@ -26,30 +26,62 @@ struct ControlPanelView: View {
         .padding(32)
     }
 
+    @ViewBuilder
     private var status: some View {
         VStack(spacing: 12) {
-            if viewModel.isSolved {
+            switch viewModel.phase {
+            case .captive:
+                Text("The Bound Dragon")
+                    .font(.extraLargeTitle2)
+                Text("A dragon is circling the tree on the floating island. Look at it and tap to call it to you.")
+                    .foregroundStyle(.secondary)
+            case .approaching:
+                Text("The dragon is coming…")
+                    .font(.extraLargeTitle2)
+                Text("Stay still: it wants to look at you.")
+                    .foregroundStyle(.secondary)
+            case .landing:
+                Text("The dragon is landing")
+                    .font(.extraLargeTitle2)
+                Text("Careful, it's getting all tangled up!")
+                    .foregroundStyle(.secondary)
+            case .untangling:
+                puzzleStatus
+            case .free, .gone:
                 Text("The dragon is free! 🐉")
                     .font(.extraLargeTitle2)
-                Text(viewModel.isFlying ? "Look around: it's flying all over the room!" : "It's spreading its wings…")
+                Text(freedomMessage)
                     .foregroundStyle(.secondary)
-            } else {
-                Text("Crossings left: \(viewModel.crossingCount)")
-                    .font(.title)
-                    .contentTransition(.numericText())
-                    .animation(.default, value: viewModel.crossingCount)
-                Text(moodMessage)
-                    .foregroundStyle(.secondary)
-                ProgressView(value: Double(viewModel.restlessness))
-                    .tint(.orange)
-                    .opacity(viewModel.restlessness > 0 ? 1 : 0)
+                Button("Play Again", systemImage: "arrow.counterclockwise") {
+                    viewModel.playAgain()
+                }
             }
-            Button(viewModel.isSolved ? "Play Again" : "Restart", systemImage: "arrow.counterclockwise") {
-                viewModel.reset()
+        }
+        .animation(.default, value: viewModel.phase)
+    }
+
+    private var puzzleStatus: some View {
+        VStack(spacing: 12) {
+            Text("Crossings left: \(viewModel.crossingCount)")
+                .font(.title)
+                .contentTransition(.numericText())
+                .animation(.default, value: viewModel.crossingCount)
+            Text(moodMessage)
+                .foregroundStyle(.secondary)
+            ProgressView(value: Double(viewModel.restlessness))
+                .tint(.orange)
+                .opacity(viewModel.restlessness > 0 ? 1 : 0)
+            Button("Restart", systemImage: "arrow.counterclockwise") {
+                viewModel.restartPuzzle()
             }
             Divider()
             placementControls
         }
+    }
+
+    private var freedomMessage: String {
+        if viewModel.phase == .gone { return "It flew back to the sky. Thank you, knight!" }
+        return viewModel.isFlying ? "It's thanking you before flying home…" : "It's spreading its wings…"
     }
 
     private var moodMessage: String {

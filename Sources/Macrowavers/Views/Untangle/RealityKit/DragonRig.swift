@@ -23,7 +23,7 @@ struct DragonFrame {
     var lookTarget: SIMD3<Float>?
     /// Occhi dell'utente (il cavaliere) nello spazio del drago.
     var viewer: SIMD3<Float>
-    /// Presente quando il drago, libero, vola nella stanza.
+    /// Presente quando il drago vola (attorno all'albero, verso l'utente, mentre si posa, libero).
     var flight: FlightFrame?
 }
 
@@ -155,37 +155,37 @@ struct DragonLifeAnimator {
             return simd_length(direction) > 0.01 ? simd_normalize(direction) : bodyForward
         }
 
-        switch frame.mood {
-        case .calm:
-            // Si guarda intorno, ma ogni tanto fissa il cavaliere.
-            if time.truncatingRemainder(dividingBy: 9) < 3.5 {
+        if let flight = frame.flight {
+            responsiveness = 6
+            animateFlight(flight, frame: frame, target: &target, look: &look, toward: toward)
+        } else {
+            switch frame.mood {
+            case .calm:
+                // Si guarda intorno, ma ogni tanto fissa il cavaliere.
+                if time.truncatingRemainder(dividingBy: 9) < 3.5 {
+                    look = toward(frame.viewer)
+                } else {
+                    yawOffset = 0.4 * sin(time * 0.6)
+                    pitchOffset = 0.1 * sin(time * 0.9)
+                }
+            case .annoyed:
+                if let hand = frame.lookTarget { look = toward(hand) }
+                target.neckLift = 0.05
+                target.jawOpen = 0.5 * frame.strain
+                yawOffset = 0.08 * sin(time * 25) * frame.strain
+                responsiveness = 9
+            case .restless:
+                // Avviso: fissa il cavaliere, scuote la testa, fumo dalle narici, bocca che ringhia.
                 look = toward(frame.viewer)
-            } else {
-                yawOffset = 0.4 * sin(time * 0.6)
-                pitchOffset = 0.1 * sin(time * 0.9)
-            }
-        case .annoyed:
-            if let hand = frame.lookTarget { look = toward(hand) }
-            target.neckLift = 0.05
-            target.jawOpen = 0.5 * frame.strain
-            yawOffset = 0.08 * sin(time * 25) * frame.strain
-            responsiveness = 9
-        case .restless:
-            // Avviso: fissa il cavaliere, scuote la testa, fumo dalle narici, bocca che ringhia.
-            look = toward(frame.viewer)
-            yawOffset = 0.3 * sin(time * (6 + 8 * frame.restlessness)) * frame.restlessness
-            target.neckLift = 0.04 + 0.05 * frame.restlessness
-            target.smoke = 0.3 + 0.7 * frame.restlessness
-            target.jawOpen = 0.25 * frame.restlessness
-            target.wingFlare = 0.3 * frame.restlessness
-        case .wriggling:
-            responsiveness = 8
-            animateAction(frame, target: &target, look: &look, pitch: &pitchOffset, toward: toward)
-        case .free:
-            if let flight = frame.flight {
-                responsiveness = 6
-                animateFlight(flight, frame: frame, target: &target, look: &look, toward: toward)
-            } else {
+                yawOffset = 0.3 * sin(time * (6 + 8 * frame.restlessness)) * frame.restlessness
+                target.neckLift = 0.04 + 0.05 * frame.restlessness
+                target.smoke = 0.3 + 0.7 * frame.restlessness
+                target.jawOpen = 0.25 * frame.restlessness
+                target.wingFlare = 0.3 * frame.restlessness
+            case .wriggling:
+                responsiveness = 8
+                animateAction(frame, target: &target, look: &look, pitch: &pitchOffset, toward: toward)
+            case .free:
                 // Gratitudine: testa alta verso il cavaliere, ali spiegate che battono piano.
                 look = toward(frame.viewer)
                 target.neckLift = 0.12 + 0.02 * sin(time * 4)
@@ -293,6 +293,42 @@ struct DragonLifeAnimator {
             look = simd_normalize(look + SIMD3(0, 1.2 * roar, 0))
         case .loop:
             target.wingFlap = 0.4 * sin(time * 7)
+        case .orbit, .approach, .land, .depart:
+            animateJourney(flight, frame: frame, target: &target, look: &look, toward: toward)
+        }
+    }
+
+    /// Posa dall'isola alla piattaforma e nell'addio: prigioniero, chiamato, mentre si posa, mentre se ne va.
+    private func animateJourney(_ flight: FlightFrame, frame: DragonFrame, target: inout DragonPose,
+                                look: inout SIMD3<Float>, toward: (SIMD3<Float>) -> SIMD3<Float>) {
+        let time = frame.time
+        let progress = flight.progress
+        switch flight.maneuver {
+        case .orbit:
+            // Prigioniero: plana attorno all'albero; ogni tanto lancia un'occhiata al cavaliere e sbuffa.
+            target.wingFlap = 0.35 * sin(time * 4)
+            if time.truncatingRemainder(dividingBy: 10) < 2.5 {
+                let glance = look + toward(frame.viewer)
+                if simd_length(glance) > 0.01 { look = simd_normalize(glance) }
+            }
+            target.smoke = 0.3 * max(0, sin(time * 0.7))
+        case .approach:
+            // Vola verso il cavaliere, poi si ferma a guardarlo: si sta calmando.
+            let arrived = smoothstep(0.4, 0.6, progress)
+            target.wingFlap = (0.65 - 0.3 * arrived) * sin(time * 7)
+            if arrived > 0 { look = toward(frame.viewer) }
+        case .land:
+            // Si posa: le ali si richiudono mentre il corpo si adagia nel groviglio.
+            let settle = smoothstep(0.2, 1, progress)
+            target.wingFlare = 1 - 0.85 * settle
+            target.wingFlap = 0.5 * (1 - settle) * sin(time * 6)
+        case .depart:
+            // Ruggito d'addio, poi battiti forti verso il cielo.
+            let roar = smoothstep(0, 0.08, progress) * (1 - smoothstep(0.2, 0.3, progress))
+            target.jawOpen = roar
+            target.wingFlap = 0.8 * sin(time * 9)
+        default:
+            break
         }
     }
 

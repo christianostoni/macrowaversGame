@@ -23,8 +23,6 @@ struct DragonBodyComponent: Component {
     let markers: CrossingMarkers
     /// Dove si trova l'utente: il drago lo guarda.
     let viewer: ViewerTracker
-    /// I collider sono afferrabili (falso mentre il drago vola).
-    var isInteractive = true
 }
 
 struct DragonBodySystem: System {
@@ -33,17 +31,23 @@ struct DragonBodySystem: System {
     init(scene: RealityKit.Scene) {}
 
     /// Da chiamare una volta all'avvio dell'app, prima di creare il drago.
+    @MainActor
     static func registerAll() {
         DragonNodeComponent.registerComponent()
         PlayAreaHandleComponent.registerComponent()
         DragonBodyComponent.registerComponent()
+        OrbitComponent.registerComponent()
+        DragonTapTargetComponent.registerComponent()
+        DetanglingStateComponent.registerComponent()
+        FloatingComponent.registerComponent()
+        FloatingSystem.registerSystem()
         registerSystem()
     }
 
     func update(context: SceneUpdateContext) {
         let deltaTime = Float(context.deltaTime)
         for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
-            guard var body = entity.components[DragonBodyComponent.self] else { continue }
+            guard let body = entity.components[DragonBodyComponent.self] else { continue }
             let viewModel = body.viewModel
             let viewerInScene = body.viewer.viewerPosition()
 
@@ -54,15 +58,16 @@ struct DragonBodySystem: System {
             }
 
             viewModel.update(deltaTime: deltaTime, viewer: viewerInScene,
-                             worldFromLocal: entity.transformMatrix(relativeTo: nil))
+                             worldFromLocal: entity.transformMatrix(relativeTo: nil),
+                             orbit: entity.components[OrbitComponent.self]?.scenePath())
 
-            // In volo il drago non si afferra.
-            if body.isInteractive == viewModel.isFlying {
-                body.isInteractive = !viewModel.isFlying
-                for collider in body.colliders {
-                    collider.components[InputTargetComponent.self]?.isEnabled = body.isInteractive
-                }
-                entity.components.set(body)
+            // Capitolo della storia: tocco sull'isola, presa nel minigioco, niente in volo; piattaforma e
+            // drago appaiono e spariscono con dissolvenza.
+            if var state = entity.components[DetanglingStateComponent.self] {
+                state.apply(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config)
+                state.fade(phase: viewModel.phase, dragonOpacity: viewModel.dragonOpacity,
+                           dragon: entity, deltaTime: deltaTime)
+                entity.components.set(state)
             }
 
             // Gli altri seguono il drago (simulazione o volo).
@@ -93,17 +98,30 @@ struct DragonBodySystem: System {
 enum DragonSceneBuilder {
     static let playAreaName = "PlayArea"
     static let platformRadius: Float = 0.4
+    static let hoverColor = PlatformColor(red: 1, green: 0.85, blue: 0.4, alpha: 1)
 
+    /// `orbitAnchor`: l'albero attorno a cui il drago gira finché l'utente non lo tocca.
     @MainActor
-    static func makePlayArea(viewModel: UntangleViewModel, viewer: ViewerTracker) async -> Entity {
+    static func makePlayArea(viewModel: UntangleViewModel, viewer: ViewerTracker, orbitAnchor: Entity) async -> Entity {
         let playArea = Entity()
         playArea.name = playAreaName
         playArea.position = viewModel.placement.position
         playArea.orientation = viewModel.placement.rotation
 
-        playArea.addChild(makePlatform())
-        playArea.addChild(makeHandle())
-        playArea.addChild(await makeDragon(viewModel: viewModel, viewer: viewer))
+        // Piattaforma nascosta finché il drago non arriva (la fa apparire `DetanglingStateComponent`).
+        let platform = makePlatform()
+        let handle = makeHandle()
+        for part in [platform, handle] {
+            part.isEnabled = false
+            part.components.set(OpacityComponent(opacity: 0))
+            playArea.addChild(part)
+        }
+        let dragon = await makeDragon(viewModel: viewModel, viewer: viewer)
+        // Invisibile finché non è al suo posto attorno all'albero.
+        dragon.components.set(OpacityComponent(opacity: 0))
+        dragon.components.set(OrbitComponent(anchor: orbitAnchor, path: .aroundTree))
+        dragon.components.set(DetanglingStateComponent(playAreaParts: [platform, handle]))
+        playArea.addChild(dragon)
         return playArea
     }
 
@@ -117,15 +135,12 @@ enum DragonSceneBuilder {
         dragon.addChild(rig.entity)
 
         // Collider invisibili, uno per nodo: indipendenti dalla grafica, funzionano con qualsiasi asset.
+        // Toccabili o afferrabili secondo la fase: li configura `DetanglingStateComponent`.
         let colliders: [Entity] = (0..<config.nodeCount).map { index in
             let collider = Entity()
             collider.name = "DragonNode\(index)"
             collider.position = viewModel.nodePositions[index]
             collider.components.set(DragonNodeComponent(index: index))
-            // La testa ancorata non si può afferrare.
-            if !(config.anchorHead && index == 0) {
-                makeGrabbable(collider, radius: config.radius)
-            }
             dragon.addChild(collider)
             return collider
         }
@@ -143,13 +158,13 @@ enum DragonSceneBuilder {
     /// Ogni nodo si afferra con una mano: con due mani si tengono due nodi insieme.
     /// `ManipulationComponent` gestisce una presa per mano; il gesto SwiftUI ne gestirebbe una sola.
     @MainActor
-    private static func makeGrabbable(_ collider: Entity, radius: Float) {
+    static func makeGrabbable(_ collider: Entity, radius: Float) {
         // Un po' più grande del corpo: più facile da guardare e afferrare.
         let shape = ShapeResource.generateSphere(radius: radius * 1.5)
         #if os(visionOS)
         ManipulationComponent.configureEntity(
             collider,
-            hoverEffect: .highlight(.init(color: PlatformColor(red: 1, green: 0.85, blue: 0.4, alpha: 1), strength: 0.8)),
+            hoverEffect: .highlight(.init(color: hoverColor, strength: 0.8)),
             collisionShapes: [shape]
         )
         var manipulation = ManipulationComponent()

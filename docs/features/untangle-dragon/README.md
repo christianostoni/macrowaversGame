@@ -1,8 +1,9 @@
 # Untangle the Dragon (AR126-100)
 
-A mixed-reality mini-game: a dragon lies on a floating platform in front of the player with its body tied
-in a knot. The player grabs the body with their hands and untangles it. Once free, the dragon takes off and
-flies around the room.
+A mixed-reality chapter of the Persian fairy tale: a floating island with a tree at its centre appears in the
+room, and a dragon is coiled around the tree. The player taps the dragon, which flies to them and lands on a
+platform in front of them, tangled in a knot. The player grabs the body with their hands and untangles it.
+Once free, the dragon thanks the player and flies away into the sky.
 
 Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary Sketchfab dragon (see
 [Temporary asset](#temporary-asset)); the code-generated placeholder is used when the asset is not in the bundle.
@@ -12,8 +13,10 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
 1. Open `Macrowavers.xcodeproj` and run on the visionOS simulator or on a Vision Pro. Run `git lfs pull`
    first if the `.usdz` files under `Sources/Macrowavers/Resources/` are only LFS pointers.
 2. In the main window tap **Untangle the Dragon**: a control panel opens.
-3. Tap **Start**: an `ImmersiveSpace` in `.mixed` style opens, with the platform and the dragon in front of you.
-4. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
+3. Tap **Start**: an `ImmersiveSpace` in `.mixed` style opens, with the floating island ~2.2 m in front of you
+   and the dragon circling its tree.
+4. Look at the dragon and pinch (tap): it flies to you, stops to look at you, then lands tangled on the platform.
+5. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
 uses a seated eye height of 1.15 m.
@@ -22,10 +25,12 @@ uses a seated eye height of 1.15 m.
 
 | Moment | Behaviour |
 |---|---|
-| Start | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel |
+| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. Looking at the dragon highlights it |
+| Tap the dragon | It flies to ~1 m from your eyes and hovers looking at you (the future artifact mechanic goes here), then lands on the platform that fades in, tracing the knot with its body |
+| Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel |
 | Grab | The part you look at glows; pinch to grab, up to two parts at once; the dragon turns to your hand and growls if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Turns gold, celebrates for 1.5 s, then **takes off and flies around the room**: circles, dives past you, hovers in front of you roaring, loops |
+| Solved (0 crossings, body released for 0.6 s) | Turns gold, celebrates for 1.5 s, then **takes off**, circles you once, hovers in front of you roaring its thanks and **flies away into the sky**, fading out before it reaches the real ceiling. **Play Again** puts it back on the island |
 | Platform | Drag it (or its handle) to move it, also in height; rotate it with two hands or the panel buttons; tilt it with the slider. Default is tuned for a seated player |
 
 All user-facing text is in English. Code comments are in Italian.
@@ -40,7 +45,9 @@ Sources/Macrowavers/
 │   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet) and crossing count
 │   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight)
 │   ├── DragonBehavior.swift            Difficulty: idle timer → fit (choreography of DragonAction), DragonMood
-│   ├── DragonFlight.swift              Free flight after the win (manoeuvres + "follow the leader" body)
+│   ├── DragonFlight.swift              Flights (orbit, approach, landing, farewell) with a "follow the leader" body
+│   ├── DragonPhase.swift               Story chapters (captive → approaching → landing → untangling → free → gone)
+│   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Platform position, rotation, tilt
 │   └── UntangleViewModel.swift         @Observable @MainActor view model shared by panel and immersive space
 └── Views/Untangle/
@@ -48,13 +55,16 @@ Sources/Macrowavers/
     ├── DragonImmersiveView.swift       RealityView, grab events, platform gestures
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers
+        ├── DragonJourney.swift           Story ECS: OrbitComponent, DetanglingStateComponent, DragonTapTargetComponent
+        ├── IslandScene.swift             Floating island (asset), tree anchor, FloatingComponent/System
         ├── DragonRig.swift               DragonRig protocol, DragonFrame, DragonPose, DragonLifeAnimator
         ├── DragonEffects.swift           Smoke, fire, optional spatial audio, placeholder wings
         ├── ViewerTracker.swift           Player head position (ARKit world tracking, no permission needed)
         ├── ProceduralDragonRig.swift     Placeholder dragon built from primitives
         └── SkeletalDragonRig.swift       Rig for the real asset, picked automatically when it is in the bundle
 Sources/Macrowavers/Resources/DragonBody.usdz, DragonHead.usdz   Temporary dragon asset (Git LFS)
-Assets/Blender/untangle-dragon/       Blender scripts that generate the temporary asset (not in the app)
+Sources/Macrowavers/Resources/FloatingIsland.usdz                 Floating island with the tree (Git LFS)
+Assets/Blender/untangle-dragon/       Blender scripts that generate the assets (not in the app)
 Tests/MacrowaversTests/UntangleTests.swift
 ```
 
@@ -65,13 +75,32 @@ SwiftUI views and the RealityKit layer only read state and forward user actions.
 
 `DragonBodySystem.update` (RealityKit, every frame):
 1. reads where the hands moved the grabbed colliders and passes them to the view model as targets;
-2. `viewModel.update(...)` runs the dragon's behaviour, the physics step, crossings, mood, win and flight;
-3. moves the other colliders to the simulated (or flying) positions;
-4. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the red spheres.
+2. `viewModel.update(...)` gets the orbit from `OrbitComponent` (in scene space) and, depending on the chapter,
+   runs the flight or the dragon's behaviour, the physics step, crossings, mood and win;
+3. `DetanglingStateComponent` applies the chapter to the entities (only when it changes) and fades the
+   platform and the dragon;
+4. moves the other colliders to the simulated (or flying) positions;
+5. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the red spheres.
 
 Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, subscribed in `DragonImmersiveView`.
 
 ## Design decisions (and why)
+
+- **Story chapters (`DragonPhase`) drive the entities through `DetanglingStateComponent`.** RealityKit does not
+  observe the view model, so the system compares the chapter with the one already applied and reconfigures
+  only on change: *tap* (no `ManipulationComponent`, larger 9 cm colliders tagged `DragonTapTargetComponent`,
+  which is what the `SpatialTapGesture` targets, so it never steals the pinch from grabbing), *grab*
+  (`ManipulationComponent`, head excluded), *none* while flying. The platform is hidden on the island, fades in
+  when the dragon arrives and can be moved only during the puzzle (the knot it lands on must not move).
+- **Orbit = a two-turn torus curve around the trunk (`OrbitPath`).** After one turn radius and height swap, so
+  the 2.35 m body (more than one turn) wraps the tree without crossing itself (headless: closest gap 14 cm,
+  6 cm needed). The head advances at a fixed speed per second (frame-rate independent) and the body follows its
+  trail. `OrbitComponent` keeps the path in the tree anchor's space, so it follows the island's position,
+  scale and bobbing for free.
+- **Landing traces the knot.** After the approach a Bézier takes the head to the knot's tail tip, then the head
+  runs along the knot from tail to head; with "follow the leader" the body ends exactly in the puzzle's shape
+  (max error ~1 cm, blended into the simulation in 0.5 s). The dragon tangles itself up believably with no
+  hand-made animation, and the simulation restarts at the tap, so no fit timer runs before the puzzle.
 
 - **The body is a custom rope simulation, not RealityKit physics.** 48 nodes 5 cm apart, 3 cm radius;
   distance, bending, self-collision and friction constraints at a fixed 60 Hz with sub-steps. We need exact
@@ -97,6 +126,27 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
 - **Flight uses "follow the leader".** The head flies to a target that depends on the manoeuvre; each vertebra
   sits on the head's trail at a fixed distance, so the body snakes exactly along the path like an eastern
   dragon. Comfort: never closer than 0.7 m to the player's head, 0.9–2.1 m altitude, within ~2 m horizontally.
+
+## Floating island
+
+`Sources/Macrowavers/Resources/FloatingIsland.usdz` is generated from the design team's `FloatingIsland.usdc`:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+    -P Assets/Blender/untangle-dragon/crea_asset_isola.py -- <FloatingIsland.usdc> <output folder>
+```
+
+- The source file points to external textures (`./textures/*_BaseColor.png`) that were never exported; the
+  real colours are vertex colours (`Col`), which RealityKit does not draw. The script bakes them into textures
+  on the existing UVs (island 2048, tree 1024, rocks 512), rebuilds a PBR material (roughness 0.9) and drops the
+  vertex colours. Textures are embedded in the USDZ (5 MB), validated with `usdchecker --arkit`.
+- **Origin moved to the base of the trunk, on the ground** (it was the island centre, with the trunk sunk in):
+  the code uses the origin as the orbit centre with no offsets.
+- Y-up export with *Convert Orientation* (rotation on the file root, so the code never overwrites the loaded
+  entity's transform).
+- 3 meshes / 3 materials (3 draw calls), ~24k triangles, no collision (it is not interactive).
+- Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.4 m, canopy from 0.5 m above the ground. In the
+  scene it is scaled 0.6 (`IslandPlacement.standard`). If it is missing, the dragon circles an empty spot.
 
 ## Asset specification (for the design team)
 
@@ -166,13 +216,18 @@ rotation on the file's root, which is why the head is wrapped in a container.
 | `DifficultySettings` | delays, `maxExtraTangles` | how often and how hard the dragon fights back |
 | `DragonFlight.Settings` | `speed`, `orbitRadius`, `altitude`, `personalSpace` | flight feel and room size |
 | `PlayAreaPlacement.seated` | default placement | comfort for a seated player |
+| `IslandPlacement.standard` | island position, scale, yaw | island distance and size |
+| `OrbitPath.aroundTree` | radius, height, swings, speed (asset metres) | how the dragon wraps the tree |
+| `DragonFlight.Settings` | `approachDistance`, `landingSpeed` | where it stops in front of the player, landing duration |
+| `DetanglingStateComponent` | `tapRadius`, `fadeDuration` | how easy the dragon is to tap, fades |
 
 ## Tests
 
 `Tests/MacrowaversTests/UntangleTests.swift` (Swift Testing) covers the Model and the view model: initial
 crossings, the knot not untying by itself, rigid turns keeping crossings, the anchored head, two-handed grabs,
 the fit starting with a turn after the delay, the dragon waiting while held, flight keeping its distance from
-the player, platform clamping and reset.
+the player, the orbit never crossing itself, the landing matching the knot, the farewell ending, the story
+flow (tap → puzzle), platform clamping, restart and play again.
 
 ## Known limits
 
@@ -181,5 +236,8 @@ the player, platform clamping and reset.
   `DragonImmersiveView.rotateGesture` if needed).
 - While rearing up the neck is raised only visually; colliders stay on the platform for ~1 s.
 - Smoke and fire sizes are eyeballed and need tuning on device.
+- The island (2.2 m away, ~1.5 m wide in the scene, floating rocks ~2.2 m) does not know the room: reduce
+  `IslandPlacement.standard` in small spaces.
+- Tapping a moving dragon 2 m away needs testing on device (raise `DetanglingStateComponent.tapRadius` if hard).
 - Flight does not know the real walls: in small rooms reduce `DragonFlight.Settings.orbitRadius`
   (or use `SceneReconstructionProvider` later).
