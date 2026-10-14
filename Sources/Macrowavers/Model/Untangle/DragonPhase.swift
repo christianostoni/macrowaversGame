@@ -1,31 +1,34 @@
 import Foundation
 
-/// Capitoli della storia del drago: dall'isola volante, al groviglio, alla libertà.
+/// Chapters of the dragon's story: from the floating island, to the tangle, to freedom.
 enum DragonPhase: Equatable {
-    /// Prigioniero dell'isola: gira attorno all'albero e aspetta che l'utente lo tocchi.
+    /// Captive on the island: circles the tree and waits for the player to tap it.
     case captive
-    /// Toccato mentre è sull'isola: si arrabbia (ti fissa, ringhia, fumo) e continua a girare più veloce.
-    /// Il pannello del drago mostra lo stato e permette di chiamarlo (in futuro: l'artefatto lo calma).
+    /// Tapped while on the island: it gets angry (glares, growls, smoke) and circles faster for a while.
+    /// The dragon panel shows its state; the artifact from the tree's fruit is what calms it.
     case alerted
-    /// Toccato: vola verso l'utente e si ferma davanti a lui (in futuro lo calmerà l'artefatto).
+    /// Soothed: flies to the player and stops in front of them.
     case approaching
-    /// Si posa sulla piattaforma tracciando il groviglio con il proprio corpo.
+    /// Settles in front of the player, tracing the knot with its own body.
     case landing
-    /// Il minigioco: l'utente lo sgroviglia.
+    /// The mini-game: the player untangles it.
     case untangling
-    /// Sgrovigliato: festeggia, ringrazia l'utente e vola via nel cielo.
+    /// Untangled: celebrates, thanks the player and flies away into the sky.
     case free
-    /// Volato via: la storia è finita.
+    /// Flown away: the story is over.
     case gone
 
     enum Interaction {
-        /// Il corpo non risponde (il drago è in volo).
+        /// The body does not respond (the dragon is flying).
         case none
-        /// Toccare il drago lo chiama verso l'utente.
+        /// Tapping the dragon makes it angry.
         case tap
-        /// Ogni parte del corpo si afferra e si trascina (una per mano).
+        /// Every part of the body can be grabbed and dragged (one per hand).
         case grab
     }
+
+    /// Still on the island (circling the tree, calm or angry): the fruit can be picked and the artifact used.
+    var isOnIsland: Bool { self == .captive || self == .alerted }
 
     var interaction: Interaction {
         switch self {

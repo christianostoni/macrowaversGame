@@ -1,16 +1,20 @@
-import RealityKit
 import Metal
-import SwiftUI
+import RealityKit
+import simd
+import UIKit
 
-// MARK: - Structs compartilhadas com o shader (layout precisa bater com o .metal)
+// MARK: - Types shared with the shader (layout must match AppleSpiral.metal)
 
-struct VertexParams {
+/// Fixed parameters of one vertex, generated once on the CPU.
+struct AppleVertexParams {
     var theta: Float
-    var s: Float
-    var v: Float
-    var kind: UInt32
+    var radial: Float
+    var vertical: Float
+    /// `AppleShape.Surface` raw value.
+    var surface: UInt32
 }
 
+/// Vertex written by the shader (`float3` is 16 bytes in Metal, like `SIMD3<Float>`).
 struct AppleVertex {
     var position: SIMD3<Float>
     var normal: SIMD3<Float>
@@ -25,295 +29,318 @@ struct AppleUniforms {
     var vertexCount: UInt32
 }
 
-// MARK: - Forma da maçã (mesma matemática do shader, usada para posicionar minhocas e cabinho)
+/// Compute pipeline of the `deformApple` kernel, created once and shared by every apple.
+/// `nil` if Metal is not available: the apples are then deformed on the CPU (same maths, `AppleShape`).
+@MainActor
+final class AppleSpiralPipeline {
+    static let shared = AppleSpiralPipeline()
 
-struct AppleShape {
-    var height: Float = 0.24       // metros
-    var maxRadius: Float = 0.12
-    var turns: Float = 4           // voltas que se abrem
-    var gapPerTurn: Float = 0.05   // espaço entre voltas quando totalmente aberta
+    let device: MTLDevice
+    let queue: MTLCommandQueue
+    let pipeline: MTLComputePipelineState
 
-    var pitch: Float { height / (turns + 1) }
-    var thetaStart: Float { -2 * .pi }
-    var thetaEnd: Float { 2 * .pi * (turns + 1) }
-    var maxLift: Float { gapPerTurn * turns }
-
-    func radius(atHeight h: Float) -> Float {
-        let t = min(max(h / height, 0), 1)
-        return maxRadius * (0.12 + 0.88 * sqrt(max(sin(Float.pi * t), 0)))
-    }
-
-    func point(theta: Float, s: Float, v: Float, kind: UInt32, opening: Float) -> SIMD3<Float> {
-        let turn = theta / (2 * .pi)
-        let yb = min(max(turn * pitch, 0), height)
-        let yt = min(max((turn + 1) * pitch, 0), height)
-        let lift = opening * gapPerTurn * min(max(turn, 0), turns)
-
-        let h: Float
-        let r: Float
-        switch kind {
-        case 0:  h = yt; r = radius(atHeight: h) * s
-        case 1:  h = yb; r = radius(atHeight: h) * s
-        default: h = yb + (yt - yb) * v; r = radius(atHeight: h)
+    private init?() {
+        guard let device = MTLCreateSystemDefaultDevice(),
+              let queue = device.makeCommandQueue(),
+              let function = device.makeDefaultLibrary()?.makeFunction(name: "deformApple"),
+              let pipeline = try? device.makeComputePipelineState(function: function) else {
+            print("⚠️ Metal apple shader unavailable: apples are deformed on the CPU")
+            return nil
         }
-        return [r * cos(theta), h + lift, r * sin(theta)]
+        self.device = device
+        self.queue = queue
+        self.pipeline = pipeline
     }
 }
 
-// MARK: - Controlador
-
+/// The spiral-cut apple drawn in RealityKit: the mesh deformed by the Metal shader, the stem to pull and
+/// the worms. It draws and reports nothing: the opening and the worms come from `OrchardViewModel`.
+/// Origin at the centre of the apple.
 @MainActor
-@Observable
-final class AppleController {
-    let shape = AppleShape()
+final class AppleRig {
     let root = Entity()
-    let handle = Entity()
+    let stem = Entity()
+    /// Where the artifact sits while the apple guards it (centre of the core).
+    let core = Entity()
+    let shape: AppleShape
 
-    private(set) var opening: Float = 0
-    private(set) var collected = 0
-    let totalWorms = 3
+    private let body = Entity()
+    private let lowMesh: LowLevelMesh
+    private let params: [AppleVertexParams]
+    private let paramsBuffer: MTLBuffer?
+    private var worms: [Entity] = []
+    private var appliedOpening: Float = -1
+    /// Worms already caught (to play the catch animation once).
+    private var caughtShown: Set<Int> = []
 
-    @ObservationIgnored private var worms: [(entity: Entity, theta: Float, s: Float)] = []
+    private static let wormMaterial: PhysicallyBasedMaterial = {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(red: 0.45, green: 0.8, blue: 0.3, alpha: 1))
+        material.roughness = 0.6
+        return material
+    }()
 
-    // Metal
-    @ObservationIgnored private let device: MTLDevice
-    @ObservationIgnored private let queue: MTLCommandQueue
-    @ObservationIgnored private let pipeline: MTLComputePipelineState
-    @ObservationIgnored private var lowMesh: LowLevelMesh!
-    @ObservationIgnored private var paramsBuffer: MTLBuffer!
-    @ObservationIgnored private var vertexCount = 0
+    init?(shape: AppleShape, wormCount: Int) {
+        self.shape = shape
+        let params = Self.makeParams(shape: shape)
+        self.params = params
+        paramsBuffer = AppleSpiralPipeline.shared.flatMap { pipeline in
+            params.withUnsafeBytes { bytes in
+                guard let address = bytes.baseAddress else { return nil }
+                return pipeline.device.makeBuffer(bytes: address, length: bytes.count, options: .storageModeShared)
+            }
+        }
+        guard let mesh = try? Self.makeMesh(shape: shape, params: params),
+              let resource = try? MeshResource(from: mesh) else { return nil }
+        lowMesh = mesh
 
-    init() {
-        device = MTLCreateSystemDefaultDevice()!
-        queue = device.makeCommandQueue()!
-        let function = device.makeDefaultLibrary()!.makeFunction(name: "deformApple")!
-        pipeline = try! device.makeComputePipelineState(function: function)
-
-        lowMesh = try! buildMesh()
-        setOpening(0)   // preenche os vértices pela primeira vez
-
-        let resource = try! MeshResource(from: lowMesh)
         let apple = ModelEntity(mesh: resource, materials: [Self.fleshMaterial(), Self.skinMaterial()])
-        root.addChild(apple)
+        body.addChild(apple)
+        body.position.y = -shape.height / 2
+        root.addChild(body)
 
-        buildHandle()
-        spawnWorms()
-        updateAttachments()
+        core.position = SIMD3(0, shape.height / 2, 0)
+        body.addChild(core)
+        buildStem()
+        buildWorms(count: wormCount)
+        apply(opening: 0)
     }
 
-    // MARK: Geometria
+    // MARK: - Updates from the view model
 
-    private func buildMesh() throws -> LowLevelMesh {
-        let segmentsPerTurn = 64
-        let nTheta = Int(shape.turns + 2) * segmentsPerTurn + 1
-        let nS = 10   // amostras do centro até a borda
-        let nV = 5    // amostras na altura da casca
-
-        var params: [VertexParams] = []
-        var fleshIdx: [UInt32] = []
-        var skinIdx: [UInt32] = []
-
-        func theta(_ i: Int) -> Float {
-            shape.thetaStart + (shape.thetaEnd - shape.thetaStart) * Float(i) / Float(nTheta - 1)
+    /// Deforms the mesh (only when the opening changes) and moves the stem with the top slice.
+    func apply(opening: Float) {
+        guard opening != appliedOpening else { return }
+        appliedOpening = opening
+        if let pipeline = AppleSpiralPipeline.shared, let paramsBuffer {
+            deformOnGPU(opening: opening, pipeline: pipeline, paramsBuffer: paramsBuffer)
+        } else {
+            deformOnCPU(opening: opening)
         }
+        stem.position = SIMD3(0, shape.height + opening * shape.maxLift, 0)
+    }
 
-        func addGrid(_ indices: inout [UInt32], base: UInt32, rows: Int, cols: Int) {
-            for i in 0..<(rows - 1) {
-                for j in 0..<(cols - 1) {
-                    let a = base + UInt32(i * cols + j)
-                    let b = a + 1
-                    let c = a + UInt32(cols)
-                    let d = c + 1
-                    indices += [a, c, b, b, c, d]
+    /// Places the worms on their slices; caught worms jump out and vanish.
+    func apply(worms swarm: WormSwarm, opening: Float, time: Float) {
+        for (index, worm) in worms.enumerated() where index < swarm.worms.count {
+            let state = swarm.worms[index]
+            if state.isCaught {
+                guard !caughtShown.contains(index) else { continue }
+                caughtShown.insert(index)
+                var jump = worm.transform
+                jump.translation += SIMD3(0, 0.06, 0)
+                jump.scale = .zero
+                worm.move(to: jump, relativeTo: worm.parent, duration: 0.35)
+                worm.components[InputTargetComponent.self]?.isEnabled = false
+                continue
+            }
+            caughtShown.remove(index)
+            worm.isEnabled = state.visibility > 0.01
+            worm.position = swarm.position(of: index, opening: opening) - SIMD3(0, 0.012 * (1 - state.visibility), 0)
+            worm.orientation = simd_quatf(angle: swarm.heading(of: index), axis: SIMD3(0, 1, 0))
+            worm.scale = SIMD3(repeating: max(state.visibility, 0.01))
+            worm.components[InputTargetComponent.self]?.isEnabled = swarm.isCatchable(index)
+            // Wriggle: the segments sway as it crawls.
+            for (segment, part) in worm.children.enumerated() {
+                part.position.z = 0.002 * sin(time * 12 + Float(segment) * 1.8)
+            }
+        }
+    }
+
+    /// The stem and the worms answer to gestures only while the apple is close to the player.
+    func setInteractive(_ isInteractive: Bool) {
+        stem.components[InputTargetComponent.self]?.isEnabled = isInteractive
+        if !isInteractive {
+            for worm in worms {
+                worm.isEnabled = false
+                worm.components[InputTargetComponent.self]?.isEnabled = false
+            }
+        }
+    }
+
+    /// Worms back inside, apple closed (after a restart or when it goes back to the tree).
+    func resetWorms() {
+        caughtShown = []
+        for worm in worms {
+            worm.isEnabled = false
+            worm.scale = SIMD3(repeating: 0.01)
+        }
+    }
+
+    // MARK: - Deformation
+
+    private func deformOnGPU(opening: Float, pipeline: AppleSpiralPipeline, paramsBuffer: MTLBuffer) {
+        guard let commandBuffer = pipeline.queue.makeCommandBuffer() else { return }
+        // RealityKit hands over the vertex buffer that the GPU will write.
+        let vertexBuffer = lowMesh.replace(bufferIndex: 0, using: commandBuffer)
+        guard let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
+        var uniforms = AppleUniforms(opening: opening, height: shape.height, maxRadius: shape.maxRadius,
+                                     turns: shape.turns, gapPerTurn: shape.gapPerTurn, vertexCount: UInt32(params.count))
+        encoder.setComputePipelineState(pipeline.pipeline)
+        encoder.setBuffer(paramsBuffer, offset: 0, index: 0)
+        encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
+        encoder.setBytes(&uniforms, length: MemoryLayout<AppleUniforms>.stride, index: 2)
+        encoder.dispatchThreads(MTLSize(width: params.count, height: 1, depth: 1),
+                                threadsPerThreadgroup: MTLSize(width: min(64, pipeline.pipeline.maxTotalThreadsPerThreadgroup),
+                                                               height: 1, depth: 1))
+        encoder.endEncoding()
+        commandBuffer.commit()
+    }
+
+    /// Same result as the shader, computed on the CPU (no Metal, e.g. some test environments).
+    private func deformOnCPU(opening: Float) {
+        let shape = shape
+        let params = params
+        lowMesh.withUnsafeMutableBytes(bufferIndex: 0) { raw in
+            let vertices = raw.bindMemory(to: AppleVertex.self)
+            for (index, param) in params.enumerated() where index < vertices.count {
+                let surface = AppleShape.Surface(rawValue: param.surface) ?? .skin
+                vertices[index] = AppleVertex(
+                    position: shape.point(theta: param.theta, radial: param.radial, vertical: param.vertical,
+                                          surface: surface, opening: opening),
+                    normal: shape.normal(theta: param.theta, radial: param.radial, vertical: param.vertical,
+                                         surface: surface, opening: opening))
+            }
+        }
+    }
+
+    // MARK: - Geometry
+
+    /// Parameters of every vertex: flesh top and bottom faces (radial grid) and skin (vertical grid).
+    private static func makeParams(shape: AppleShape) -> [AppleVertexParams] {
+        var params: [AppleVertexParams] = []
+        for surface in [AppleShape.Surface.top, .bottom] {
+            for thetaIndex in 0..<thetaSamples(shape) {
+                for radialIndex in 0..<radialSamples {
+                    params.append(AppleVertexParams(theta: theta(thetaIndex, shape: shape),
+                                                    radial: Float(radialIndex) / Float(radialSamples - 1),
+                                                    vertical: 0, surface: surface.rawValue))
                 }
             }
         }
-
-        // Faces de polpa: cima (kind 0) e baixo (kind 1)
-        for kind: UInt32 in [0, 1] {
-            let base = UInt32(params.count)
-            for i in 0..<nTheta {
-                for j in 0..<nS {
-                    params.append(.init(theta: theta(i), s: Float(j) / Float(nS - 1), v: 0, kind: kind))
-                }
-            }
-            addGrid(&fleshIdx, base: base, rows: nTheta, cols: nS)
-        }
-
-        // Casca (kind 2)
-        let base = UInt32(params.count)
-        for i in 0..<nTheta {
-            for j in 0..<nV {
-                params.append(.init(theta: theta(i), s: 1, v: Float(j) / Float(nV - 1), kind: 2))
+        for thetaIndex in 0..<thetaSamples(shape) {
+            for verticalIndex in 0..<verticalSamples {
+                params.append(AppleVertexParams(theta: theta(thetaIndex, shape: shape), radial: 1,
+                                                vertical: Float(verticalIndex) / Float(verticalSamples - 1),
+                                                surface: AppleShape.Surface.skin.rawValue))
             }
         }
-        addGrid(&skinIdx, base: base, rows: nTheta, cols: nV)
+        return params
+    }
 
-        vertexCount = params.count
-        paramsBuffer = device.makeBuffer(bytes: params,
-                                         length: params.count * MemoryLayout<VertexParams>.stride,
-                                         options: .storageModeShared)
+    private static let segmentsPerTurn = 64
+    /// Samples from the centre to the edge (flesh faces).
+    private static let radialSamples = 10
+    /// Samples along the height of the skin.
+    private static let verticalSamples = 5
 
-        var desc = LowLevelMesh.Descriptor()
-        desc.vertexAttributes = [
-            .init(semantic: .position, format: .float3,
-                  offset: MemoryLayout<AppleVertex>.offset(of: \.position)!),
-            .init(semantic: .normal, format: .float3,
-                  offset: MemoryLayout<AppleVertex>.offset(of: \.normal)!)
+    private static func thetaSamples(_ shape: AppleShape) -> Int {
+        Int(shape.turns + 2) * segmentsPerTurn + 1
+    }
+
+    private static func theta(_ index: Int, shape: AppleShape) -> Float {
+        shape.thetaStart + (shape.thetaEnd - shape.thetaStart) * Float(index) / Float(thetaSamples(shape) - 1)
+    }
+
+    private static func makeMesh(shape: AppleShape, params: [AppleVertexParams]) throws -> LowLevelMesh {
+        let rows = thetaSamples(shape)
+        let fleshFace = rows * radialSamples
+        var fleshIndices: [UInt32] = []
+        gridIndices(&fleshIndices, base: 0, rows: rows, columns: radialSamples)
+        gridIndices(&fleshIndices, base: UInt32(fleshFace), rows: rows, columns: radialSamples)
+        var skinIndices: [UInt32] = []
+        gridIndices(&skinIndices, base: UInt32(2 * fleshFace), rows: rows, columns: verticalSamples)
+
+        var descriptor = LowLevelMesh.Descriptor()
+        descriptor.vertexAttributes = [
+            .init(semantic: .position, format: .float3, offset: MemoryLayout<AppleVertex>.offset(of: \.position) ?? 0),
+            .init(semantic: .normal, format: .float3, offset: MemoryLayout<AppleVertex>.offset(of: \.normal) ?? 16),
         ]
-        desc.vertexLayouts = [.init(bufferIndex: 0, bufferStride: MemoryLayout<AppleVertex>.stride)]
-        desc.vertexCapacity = params.count
-        desc.indexCapacity = fleshIdx.count + skinIdx.count
-        desc.indexType = .uint32
+        descriptor.vertexLayouts = [.init(bufferIndex: 0, bufferStride: MemoryLayout<AppleVertex>.stride)]
+        descriptor.vertexCapacity = params.count
+        descriptor.indexCapacity = fleshIndices.count + skinIndices.count
+        descriptor.indexType = .uint32
 
-        let mesh = try LowLevelMesh(descriptor: desc)
-
-        let allIdx = fleshIdx + skinIdx
+        let mesh = try LowLevelMesh(descriptor: descriptor)
+        let allIndices = fleshIndices + skinIndices
         mesh.withUnsafeMutableIndices { raw in
-            let dst = raw.bindMemory(to: UInt32.self)
-            for k in allIdx.indices { dst[k] = allIdx[k] }
+            let destination = raw.bindMemory(to: UInt32.self)
+            for index in allIndices.indices { destination[index] = allIndices[index] }
         }
-
-        // Bounds generosos que cobrem a maçã totalmente aberta (evita culling errado).
-        let r = shape.maxRadius
-        let bounds = BoundingBox(min: [-r, 0, -r], max: [r, shape.height + shape.maxLift + 0.01, r])
-
+        // Generous bounds covering the fully open apple (avoids wrong culling).
+        let radius = shape.maxRadius
+        let bounds = BoundingBox(min: SIMD3(-radius, 0, -radius),
+                                 max: SIMD3(radius, shape.height + shape.maxLift + 0.01, radius))
         mesh.parts.replaceAll([
-            LowLevelMesh.Part(indexOffset: 0,
-                              indexCount: fleshIdx.count,
-                              topology: .triangle,
-                              materialIndex: 0,
-                              bounds: bounds),
-            LowLevelMesh.Part(indexOffset: fleshIdx.count * MemoryLayout<UInt32>.stride, // em bytes
-                              indexCount: skinIdx.count,
-                              topology: .triangle,
-                              materialIndex: 1,
-                              bounds: bounds)
+            LowLevelMesh.Part(indexOffset: 0, indexCount: fleshIndices.count, topology: .triangle,
+                              materialIndex: 0, bounds: bounds),
+            LowLevelMesh.Part(indexOffset: fleshIndices.count * MemoryLayout<UInt32>.stride, // bytes
+                              indexCount: skinIndices.count, topology: .triangle, materialIndex: 1, bounds: bounds),
         ])
         return mesh
     }
 
-    // MARK: Abertura (roda o compute shader)
-
-    func setOpening(_ value: Float) {
-        opening = min(max(value, 0), 1)
-
-        guard let commandBuffer = queue.makeCommandBuffer() else { return }
-        // Pede ao RealityKit o buffer de vértices que a GPU vai escrever.
-        let vertexBuffer = lowMesh.replace(bufferIndex: 0, using: commandBuffer)
-
-        guard let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
-        var uniforms = AppleUniforms(opening: opening,
-                                     height: shape.height,
-                                     maxRadius: shape.maxRadius,
-                                     turns: shape.turns,
-                                     gapPerTurn: shape.gapPerTurn,
-                                     vertexCount: UInt32(vertexCount))
-
-        encoder.setComputePipelineState(pipeline)
-        encoder.setBuffer(paramsBuffer, offset: 0, index: 0)
-        encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
-        encoder.setBytes(&uniforms, length: MemoryLayout<AppleUniforms>.stride, index: 2)
-        encoder.dispatchThreads(
-            MTLSize(width: vertexCount, height: 1, depth: 1),
-            threadsPerThreadgroup: MTLSize(width: min(64, pipeline.maxTotalThreadsPerThreadgroup), height: 1, depth: 1)
-        )
-        encoder.endEncoding()
-        commandBuffer.commit()
-
-        updateAttachments()
-    }
-
-    // MARK: Cabinho e minhocas
-
-    private func buildHandle() {
-        var stemMat = PhysicallyBasedMaterial()
-        stemMat.baseColor = .init(tint: UIColor(red: 0.35, green: 0.22, blue: 0.12, alpha: 1))
-        let stem = ModelEntity(mesh: .generateCylinder(height: 0.05, radius: 0.006), materials: [stemMat])
-        stem.position = [0, 0.025, 0]
-        handle.addChild(stem)
-
-        handle.components.set(CollisionComponent(shapes: [
-            ShapeResource.generateSphere(radius: 0.04).offsetBy(translation: [0, 0.025, 0])
-        ]))
-        handle.components.set(InputTargetComponent())
-        handle.components.set(HoverEffectComponent())
-        root.addChild(handle)
-    }
-
-    private func spawnWorms() {
-        worms.forEach { $0.entity.removeFromParent() }
-        worms = []
-
-        var mat = PhysicallyBasedMaterial()
-        mat.baseColor = .init(tint: UIColor(red: 0.45, green: 0.8, blue: 0.3, alpha: 1))
-        mat.roughness = 0.6
-
-        for k in 1...totalWorms {
-            let theta = 2 * Float.pi * (Float(k) + 0.3)
-            let worm = Entity()
-            for i in 0..<3 {
-                let segment = ModelEntity(mesh: .generateSphere(radius: 0.007), materials: [mat])
-                segment.position = [Float(i - 1) * 0.009, 0, 0]
-                worm.addChild(segment)
+    private static func gridIndices(_ indices: inout [UInt32], base: UInt32, rows: Int, columns: Int) {
+        for row in 0..<(rows - 1) {
+            for column in 0..<(columns - 1) {
+                let first = base + UInt32(row * columns + column)
+                let below = first + UInt32(columns)
+                indices += [first, below, first + 1, first + 1, below, below + 1]
             }
+        }
+    }
+
+    // MARK: - Stem and worms
+
+    private func buildStem() {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(red: 0.35, green: 0.22, blue: 0.12, alpha: 1))
+        let stick = ModelEntity(mesh: .generateCylinder(height: 0.05, radius: 0.006), materials: [material])
+        stick.position = SIMD3(0, 0.025, 0)
+        stem.addChild(stick)
+        stem.components.set(AppleStemComponent())
+        stem.components.set(CollisionComponent(shapes: [
+            ShapeResource.generateSphere(radius: 0.04).offsetBy(translation: SIMD3(0, 0.025, 0)),
+        ]))
+        stem.components.set(InputTargetComponent.disabled)
+        stem.components.set(HoverEffectComponent())
+        body.addChild(stem)
+    }
+
+    private func buildWorms(count: Int) {
+        for index in 0..<count {
+            let worm = Entity()
+            for segment in 0..<3 {
+                let part = ModelEntity(mesh: .generateSphere(radius: 0.007), materials: [Self.wormMaterial])
+                part.position = SIMD3(Float(segment - 1) * 0.009, 0, 0)
+                worm.addChild(part)
+            }
+            worm.components.set(WormComponent(index: index))
+            // Larger than the worm: easier to look at and tap while it crawls.
             worm.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.025)]))
-            worm.components.set(InputTargetComponent())
+            worm.components.set(InputTargetComponent.disabled)
             worm.components.set(HoverEffectComponent())
-            root.addChild(worm)
-            worms.append((worm, theta, 0.6))
+            worm.isEnabled = false
+            body.addChild(worm)
+            worms.append(worm)
         }
     }
 
-    private func updateAttachments() {
-        handle.position = [0, shape.height + opening * shape.maxLift, 0]
-
-        for worm in worms {
-            let p = shape.point(theta: worm.theta, s: worm.s, v: 0, kind: 0, opening: opening)
-            worm.entity.position = p + [0, 0.007, 0]
-            // Alinha a minhoca com a tangente da espiral.
-            worm.entity.orientation = simd_quatf(angle: -worm.theta - .pi / 2, axis: [0, 1, 0])
-        }
-    }
-
-    func tryCollect(_ entity: Entity) {
-        guard opening > 0.35,
-              let idx = worms.firstIndex(where: { $0.entity === entity }) else { return }
-
-        let worm = worms.remove(at: idx).entity
-        collected += 1
-
-        var t = worm.transform
-        t.translation += [0, 0.06, 0]
-        t.scale = .zero
-        worm.move(to: t, relativeTo: worm.parent, duration: 0.35)
-        Task {
-            try? await Task.sleep(for: .milliseconds(400))
-            worm.removeFromParent()
-        }
-    }
-
-    func reset() {
-        collected = 0
-        spawnWorms()
-        setOpening(0)
-    }
-
-    // MARK: Materiais
+    // MARK: - Materials
 
     private static func fleshMaterial() -> PhysicallyBasedMaterial {
-        var m = PhysicallyBasedMaterial()
-        m.baseColor = .init(tint: UIColor(red: 0.98, green: 0.95, blue: 0.84, alpha: 1))
-        m.roughness = 0.8
-        m.faceCulling = .none
-        return m
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(red: 0.98, green: 0.95, blue: 0.84, alpha: 1))
+        material.roughness = 0.8
+        material.faceCulling = .none
+        return material
     }
 
     private static func skinMaterial() -> PhysicallyBasedMaterial {
-        var m = PhysicallyBasedMaterial()
-        m.baseColor = .init(tint: UIColor(red: 0.78, green: 0.12, blue: 0.15, alpha: 1))
-        m.roughness = 0.35
-        m.faceCulling = .none
-        return m
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(red: 0.78, green: 0.12, blue: 0.15, alpha: 1))
+        material.roughness = 0.35
+        material.faceCulling = .none
+        return material
     }
 }

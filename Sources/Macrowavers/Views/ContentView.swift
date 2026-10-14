@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Finestra principale (isola). All'avvio chiede di aprire l'isola; una volta aperta gestisce l'ambiente
-/// (rotazione dell'isola) e il riavvio dell'intero gioco, che chiude anche il pannello del drago e lo spazio
-/// immersivo. È l'unica finestra sempre presente: il pannello del drago si apre solo quando lo tocchi.
+/// Main window (island). At launch it asks to open the island; once open it manages the environment
+/// (island rotation) and the restart of the whole game, which also closes the dragon panel and the immersive
+/// space. It is the only window always present: the dragon panel opens only when the dragon is tapped.
 struct ContentView: View {
     static let windowID = "IslandWindow"
 
     @Environment(UntangleViewModel.self) private var viewModel
+    @Environment(OrchardViewModel.self) private var orchard
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.openWindow) private var openWindow
@@ -28,7 +29,7 @@ struct ContentView: View {
         .frame(width: 520)
     }
 
-    // MARK: - Avvio
+    // MARK: - Launch
 
     private var launch: some View {
         VStack(spacing: 20) {
@@ -45,7 +46,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Gestione dell'isola
+    // MARK: - Island management
 
     private var islandControls: some View {
         VStack(spacing: 20) {
@@ -89,8 +90,11 @@ struct ContentView: View {
 
     private var storyStatus: String {
         switch viewModel.phase {
-        case .captive: "The dragon is circling the tree. Tap it."
-        case .alerted: "The dragon is angry… it's coming down to you."
+        case .captive:
+            orchard.artifact == .flying
+                ? "The artifact is flying to the dragon…"
+                : "The dragon is circling the tree. Pick a fruit: one apple hides what can calm it."
+        case .alerted: "The dragon is angry! Find the artifact in the tree's fruit to calm it."
         case .approaching, .landing: "The dragon is coming to you."
         case .untangling: "Untangle the dragon: \(viewModel.crossingCount) crossings left."
         case .free: "The dragon is free!"
@@ -98,14 +102,14 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Azioni (le azioni di finestre e spazi esistono solo nell'Environment: vivono nella View)
+    // MARK: - Actions (window and space actions exist only in the Environment: they live in the view)
 
     private func openIsland() async {
         guard viewModel.immersiveSpaceState == .closed else { return }
         viewModel.immersiveSpaceState = .inTransition
         switch await openImmersiveSpace(id: DragonImmersiveView.spaceID) {
         case .opened:
-            // Lo stato diventa `.open` nell'onAppear di DragonImmersiveView.
+            // The state becomes `.open` in DragonImmersiveView's onAppear.
             break
         case .userCancelled, .error:
             viewModel.immersiveSpaceState = .closed
@@ -114,18 +118,20 @@ struct ContentView: View {
         }
     }
 
-    /// Chiude pannello del drago e spazio immersivo e azzera tutto: si torna alla schermata d'avvio.
+    /// Closes the dragon panel and the immersive space and resets everything: back to the launch screen.
     private func restartGame() async {
         guard viewModel.immersiveSpaceState == .open else { return }
         viewModel.immersiveSpaceState = .inTransition
         dismissWindow(id: DragonPanelView.windowID)
-        // Lo stato torna `.closed` (e il gioco si azzera) nell'onDisappear di DragonImmersiveView.
+        // The state goes back to `.closed` (and the game resets) in DragonImmersiveView's onDisappear.
         await dismissImmersiveSpace()
         viewModel.resetGame()
+        orchard.reset()
     }
 }
 
 #Preview(windowStyle: .automatic) {
     ContentView()
         .environment(UntangleViewModel())
+        .environment(OrchardViewModel())
 }

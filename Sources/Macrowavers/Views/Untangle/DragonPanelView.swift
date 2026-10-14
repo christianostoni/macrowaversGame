@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Pannello del drago: finestra unica (`Window`, mai duplicata) che si apre quando l'utente tocca il drago.
-/// Mostra lo stato del drago, anche in forma di debug, i comandi del minigioco e il riavvio della scena.
-/// Lo spazio immersivo e l'isola li gestisce la finestra principale (`ContentView`).
+/// Dragon panel: a single window (`Window`, never duplicated) that opens when the player taps the dragon.
+/// Shows the dragon's state, also as debug info, the mini-game controls and the scene restart.
+/// The immersive space and the island are managed by the main window (`ContentView`).
 struct DragonPanelView: View {
     static let windowID = "DragonPanel"
 
     @Environment(UntangleViewModel.self) private var viewModel
+    @Environment(OrchardViewModel.self) private var orchard
 
     var body: some View {
         VStack(spacing: 16) {
@@ -15,8 +16,9 @@ struct DragonPanelView: View {
             debugInfo
             Button("Restart Scene", systemImage: "arrow.counterclockwise") {
                 viewModel.restartScene()
+                orchard.reset()
             }
-            Text("Puts the dragon back around the tree.")
+            Text("Puts the dragon back around the tree and the fruit back on its branches.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -30,14 +32,18 @@ struct DragonPanelView: View {
     private var status: some View {
         switch viewModel.phase {
         case .captive:
-            headline("The dragon is circling the tree", detail: "Look at it and tap it to disturb it.")
+            headline("The dragon is circling the tree",
+                     detail: orchard.artifact == .flying
+                        ? "The artifact is flying to the dragon…"
+                        : "Something hidden in the tree's fruit can calm it. Open an apple and catch its worms.")
         case .alerted:
             headline("The dragon is getting angry!",
-                     detail: "It's glaring at you, growling and snorting smoke. It's about to come down to you…")
+                     detail: "It's glaring at you, growling and snorting smoke. It won't come near you: "
+                        + "find the artifact in the tree's fruit to calm it.")
             Button("Call It Now", systemImage: "hand.wave") {
                 viewModel.callDragon()
             }
-            Text("Debug: the artifact that calms the dragon will go here.")
+            Text("Debug: skips the artifact.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         case .approaching:
@@ -100,7 +106,7 @@ struct DragonPanelView: View {
         }
     }
 
-    /// Stato interno del drago, utile per provare il flusso nel simulatore e sul dispositivo.
+    /// Internal state of the dragon and the fruit, handy to test the flow in the simulator and on device.
     private var debugInfo: some View {
         GroupBox("Debug") {
             VStack(alignment: .leading, spacing: 4) {
@@ -110,12 +116,16 @@ struct DragonPanelView: View {
                 LabeledContent("Crossings", value: "\(viewModel.crossingCount)")
                 LabeledContent("Restlessness", value: viewModel.restlessness.formatted(.percent.precision(.fractionLength(0))))
                 LabeledContent("Strain", value: viewModel.strain.formatted(.percent.precision(.fractionLength(0))))
+                LabeledContent("Fruit", value: orchard.focusedFruit.map { "\($0.kind) #\($0.id)" } ?? "on the tree")
+                LabeledContent("Apple opening", value: orchard.appleOpening.formatted(.percent.precision(.fractionLength(0))))
+                LabeledContent("Worms", value: "\(orchard.caughtWorms)/\(orchard.wormCount)")
+                LabeledContent("Artifact", value: String(describing: orchard.artifact))
             }
             .font(.footnote.monospaced())
         }
     }
 
-    /// Alternativa ai gesti per sistemare il groviglio (comoda anche nel simulatore).
+    /// Alternative to gestures to arrange the tangle (handy in the simulator too).
     private var placementControls: some View {
         VStack(spacing: 8) {
             HStack {
@@ -146,4 +156,5 @@ struct DragonPanelView: View {
 #Preview {
     DragonPanelView()
         .environment(UntangleViewModel())
+        .environment(OrchardViewModel())
 }

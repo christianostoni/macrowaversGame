@@ -1,18 +1,21 @@
 import SwiftUI
 
-/// Gerarchia delle scene:
-/// - finestra principale (isola): avvio, gestione dell'ambiente, riavvio di tutto il gioco;
-/// - pannello del drago: `Window` a istanza unica, aperto solo toccando il drago, mai ripristinato all'avvio;
-/// - spazio immersivo (.mixed) con l'isola e il drago.
-/// Tutte condividono un solo ViewModel; aprono e chiudono le altre solo la finestra principale e lo spazio.
+/// Scene hierarchy:
+/// - main window (island): launch, environment management, restart of the whole game;
+/// - dragon panel: single-instance `Window`, opened only by tapping the dragon, never restored at launch;
+/// - immersive space (.mixed) with the island, its fruit and the dragon.
+/// They all share the same view models; only the main window and the space open and close the others.
 @main
 struct MacrowaversApp: App {
     @State private var appModel = AppModel()
-    /// Feature "Untangle the Dragon" (AR126-100): un solo ViewModel condiviso da finestre e spazio immersivo.
+    /// "Untangle the Dragon" feature (AR126-100): one view model shared by the windows and the immersive space.
     @State private var untangleViewModel = UntangleViewModel()
+    /// The tree's fruit and the artifact that soothes the dragon.
+    @State private var orchardViewModel = OrchardViewModel()
 
     init() {
         DragonBodySystem.registerAll()
+        OrchardSystem.registerAll()
     }
 
     var body: some Scene {
@@ -20,15 +23,17 @@ struct MacrowaversApp: App {
             ContentView()
                 .environment(appModel)
                 .environment(untangleViewModel)
+                .environment(orchardViewModel)
         }
         .windowResizability(.contentSize)
 
         Window("Dragon", id: DragonPanelView.windowID) {
             DragonPanelView()
                 .environment(untangleViewModel)
+                .environment(orchardViewModel)
         }
         .windowResizability(.contentSize)
-        // Si apre solo dal gioco: non all'avvio dell'app e non ripristinato da una sessione precedente.
+        // Opens only from the game: not at app launch and never restored from a previous session.
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
         .defaultWindowPlacement { _, context in
@@ -41,6 +46,7 @@ struct MacrowaversApp: App {
         ImmersiveSpace(id: DragonImmersiveView.spaceID) {
             DragonImmersiveView()
                 .environment(untangleViewModel)
+                .environment(orchardViewModel)
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }

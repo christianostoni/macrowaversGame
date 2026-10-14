@@ -1,140 +1,167 @@
-"""Prepara l'isola volante per RealityKit, senza aprire Blender.
+"""Prepares the floating island for RealityKit, without opening Blender.
 
-Uso:
+Usage:
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-        -P Tools/Blender/crea_asset_isola.py -- <FloatingIsland.usdc> <cartella di uscita>
+        -P Assets/Blender/untangle-dragon/make_island_asset.py -- <FloatingIsland.usdc> <output folder>
 
-Cosa fa (e perché):
-- Il file originale punta a texture esterne (./textures/*_BaseColor.png) che non esistono: i colori veri
-  sono nei colori per vertice (primvar `Col`), che RealityKit non disegna. Lo script li "cuoce" in una
-  texture per mesh usando le UV già presenti e rifà il materiale PBR (base color + roughness).
-- Origine spostata alla base del tronco, all'altezza del terreno: in RealityKit l'albero è l'ancora
-  della scena e il drago gli gira attorno senza offset magici nel codice.
-- Esporta un USDZ Y-up con le texture dentro (nessun file esterno da dimenticare) e senza colori per
-  vertice (inutili dopo la cottura, solo peso).
+What it does (and why):
+- The source file points to external textures (./textures/*_BaseColor.png) that do not exist: the real
+  colours are vertex colours (primvar `Col`), which RealityKit does not draw. The script bakes them into one
+  texture per mesh using the existing UVs and rebuilds the PBR material (base colour + roughness).
+- Moves the origin to the base of the trunk, at ground level: in RealityKit the tree is the anchor of the
+  scene and the dragon circles it with no magic offsets in code.
+- Adds empty objects `fruit_01` ... `fruit_06` on the outside of the canopy, found by casting rays at the
+  foliage: the code hangs the apples and the pomegranate there (designers can move them in Blender).
+- Exports a Y-up USDZ with the textures inside (no external files to forget) and without vertex colours
+  (useless after baking, only weight).
 """
 import math
 import os
 import sys
 
 import bpy
+from mathutils import Vector
 
-argomenti = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-if len(argomenti) != 2:
+arguments = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+if len(arguments) != 2:
     raise SystemExit("Usage: ... -- <FloatingIsland.usdc> <output folder>")
-SORGENTE, USCITA = (os.path.abspath(a) for a in argomenti)
-os.makedirs(USCITA, exist_ok=True)
-CARTELLA_TEXTURE = os.path.join(USCITA, "textures_isola")
-os.makedirs(CARTELLA_TEXTURE, exist_ok=True)
+SOURCE, OUTPUT = (os.path.abspath(argument) for argument in arguments)
+os.makedirs(OUTPUT, exist_ok=True)
+TEXTURE_FOLDER = os.path.join(OUTPUT, "island_textures")
+os.makedirs(TEXTURE_FOLDER, exist_ok=True)
 
-# Risoluzione della texture cotta per mesh: l'isola ha molti più colori distinti di rocce e albero.
-RISOLUZIONE = {"Island": 2048, "Tree": 1024, "FloatingRocks": 512}
+# Baked texture resolution per mesh: the island has many more distinct colours than the rocks and the tree.
+RESOLUTION = {"Island": 2048, "Tree": 1024, "FloatingRocks": 512}
 
-# Scena vuota, poi import (Blender converte in Z-up).
+# Fruit hang points: (angle in degrees around the trunk, height above the ground in metres).
+FRUIT_SPOTS = [(20, 0.78), (95, 0.92), (160, 0.74), (230, 0.88), (290, 0.8), (340, 0.95)]
+# Distance of the fruit centre from the foliage surface (half a fruit on the tree, asset metres).
+FRUIT_OFFSET = 0.045
+
+# Empty scene, then import (Blender converts to Z-up).
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.wm.usd_import(filepath=SORGENTE, import_materials=False, read_mesh_colors=True)
+bpy.ops.wm.usd_import(filepath=SOURCE, import_materials=False, read_mesh_colors=True)
 
-mesh = {o.name: o for o in bpy.context.scene.objects if o.type == "MESH"}
-for nome in RISOLUZIONE:
-    if nome not in mesh:
-        raise SystemExit(f"Missing mesh '{nome}' in {SORGENTE}")
+meshes = {item.name: item for item in bpy.context.scene.objects if item.type == "MESH"}
+for name in RESOLUTION:
+    if name not in meshes:
+        raise SystemExit(f"Missing mesh '{name}' in {SOURCE}")
 
-# --- Trasformazioni applicate: ogni mesh in coordinate del mondo, senza genitori -------------------
-for oggetto in mesh.values():
-    matrice = oggetto.matrix_world.copy()
-    oggetto.parent = None
-    oggetto.matrix_world = matrice
-    bpy.context.view_layer.objects.active = oggetto
-    for o in bpy.context.scene.objects:
-        o.select_set(o == oggetto)
+# --- Applied transforms: every mesh in world coordinates, no parents -----------------------------------
+for item in meshes.values():
+    matrix = item.matrix_world.copy()
+    item.parent = None
+    item.matrix_world = matrix
+    bpy.context.view_layer.objects.active = item
+    for other in bpy.context.scene.objects:
+        other.select_set(other == item)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-for o in list(bpy.context.scene.objects):
-    if o.type != "MESH":
-        bpy.data.objects.remove(o)
+for item in list(bpy.context.scene.objects):
+    if item.type != "MESH":
+        bpy.data.objects.remove(item)
 
-# --- Origine alla base del tronco, sul terreno ------------------------------------------------------
-albero = [v.co.copy() for v in mesh["Tree"].data.vertices]
-z_minimo = min(p.z for p in albero)
-base = [p for p in albero if p.z < z_minimo + 0.04]
-cx = sum(p.x for p in base) / len(base)
-cy = sum(p.y for p in base) / len(base)
-# Il tronco affonda nel terreno: l'origine va sulla superficie dell'isola vicino al tronco.
-vicini = [v.co.z for v in mesh["Island"].data.vertices if math.hypot(v.co.x - cx, v.co.y - cy) < 0.2]
-terreno = max(vicini) if vicini else z_minimo
-for oggetto in mesh.values():
-    for v in oggetto.data.vertices:
-        v.co.x -= cx
-        v.co.y -= cy
-        v.co.z -= terreno
-print(f"Origin moved to the tree trunk: ({cx:.3f}, {cy:.3f}, {terreno:.3f}) in the source file")
+# --- Origin at the base of the trunk, on the ground ----------------------------------------------------
+tree_points = [vertex.co.copy() for vertex in meshes["Tree"].data.vertices]
+lowest = min(point.z for point in tree_points)
+base = [point for point in tree_points if point.z < lowest + 0.04]
+center_x = sum(point.x for point in base) / len(base)
+center_y = sum(point.y for point in base) / len(base)
+# The trunk sinks into the ground: the origin goes on the island's surface next to the trunk.
+nearby = [vertex.co.z for vertex in meshes["Island"].data.vertices
+          if math.hypot(vertex.co.x - center_x, vertex.co.y - center_y) < 0.2]
+ground = max(nearby) if nearby else lowest
+for item in meshes.values():
+    for vertex in item.data.vertices:
+        vertex.co.x -= center_x
+        vertex.co.y -= center_y
+        vertex.co.z -= ground
+print(f"Origin moved to the tree trunk: ({center_x:.3f}, {center_y:.3f}, {ground:.3f}) in the source file")
 
-# --- Cottura dei colori per vertice ------------------------------------------------------------------
-scena = bpy.context.scene
-scena.render.engine = "CYCLES"
-scena.cycles.device = "CPU"
-scena.cycles.samples = 1
-scena.render.bake.margin = 8
+# --- Fruit hang points on the outside of the canopy ----------------------------------------------------
+bpy.context.view_layer.update()
+tree = meshes["Tree"]
+fruit_names = []
+for index, (degrees, height) in enumerate(FRUIT_SPOTS, start=1):
+    angle = math.radians(degrees)
+    outward = Vector((math.cos(angle), math.sin(angle), 0))
+    # From outside the canopy towards the trunk: the first hit is the foliage surface.
+    hit, location, _, _ = tree.ray_cast(outward * 2 + Vector((0, 0, height)), -outward)
+    if not hit:
+        print(f"Warning: no foliage at {degrees}° / {height} m, fruit_{index:02d} skipped")
+        continue
+    empty = bpy.data.objects.new(f"fruit_{index:02d}", None)
+    empty.location = location + outward * FRUIT_OFFSET - Vector((0, 0, 0.02))
+    bpy.context.scene.collection.objects.link(empty)
+    fruit_names.append(empty.name)
+    print(f"Fruit {empty.name} at {tuple(round(value, 3) for value in empty.location)}")
 
-for nome, risoluzione in RISOLUZIONE.items():
-    oggetto = mesh[nome]
-    dati = oggetto.data
-    colore = dati.color_attributes.get("Col") or (dati.color_attributes[0] if dati.color_attributes else None)
-    if colore is None:
-        raise SystemExit(f"Mesh '{nome}' has no vertex colors to bake")
-    uv = dati.uv_layers.get("st") or dati.uv_layers.get("UVMap") or dati.uv_layers[0]
+# --- Baking the vertex colours ------------------------------------------------------------------------
+scene = bpy.context.scene
+scene.render.engine = "CYCLES"
+scene.cycles.device = "CPU"
+scene.cycles.samples = 1
+scene.render.bake.margin = 8
+
+for name, resolution in RESOLUTION.items():
+    item = meshes[name]
+    data = item.data
+    colour = data.color_attributes.get("Col") or (data.color_attributes[0] if data.color_attributes else None)
+    if colour is None:
+        raise SystemExit(f"Mesh '{name}' has no vertex colours to bake")
+    uv = data.uv_layers.get("st") or data.uv_layers.get("UVMap") or data.uv_layers[0]
     uv.name = "st"
-    dati.uv_layers.active = uv
+    data.uv_layers.active = uv
 
-    immagine = bpy.data.images.new(f"{nome}_BaseColor", risoluzione, risoluzione, alpha=False)
-    immagine.colorspace_settings.name = "sRGB"
+    image = bpy.data.images.new(f"{name}_BaseColor", resolution, resolution, alpha=False)
+    image.colorspace_settings.name = "sRGB"
 
-    # Materiale temporaneo: colore per vertice -> emissione, cotta nella texture attiva.
-    materiale = bpy.data.materials.new(f"{nome}_Mat")
-    materiale.use_nodes = True
-    nodi = materiale.node_tree.nodes
-    collegamenti = materiale.node_tree.links
-    nodi.clear()
-    uscita = nodi.new("ShaderNodeOutputMaterial")
-    emissione = nodi.new("ShaderNodeEmission")
-    attributo = nodi.new("ShaderNodeVertexColor")
-    attributo.layer_name = colore.name
-    collegamenti.new(attributo.outputs["Color"], emissione.inputs["Color"])
-    collegamenti.new(emissione.outputs["Emission"], uscita.inputs["Surface"])
-    texture = nodi.new("ShaderNodeTexImage")
-    texture.image = immagine
-    nodi.active = texture
-    dati.materials.clear()
-    dati.materials.append(materiale)
+    # Temporary material: vertex colour -> emission, baked into the active texture.
+    material = bpy.data.materials.new(f"{name}_Mat")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    nodes.clear()
+    output = nodes.new("ShaderNodeOutputMaterial")
+    emission = nodes.new("ShaderNodeEmission")
+    attribute = nodes.new("ShaderNodeVertexColor")
+    attribute.layer_name = colour.name
+    links.new(attribute.outputs["Color"], emission.inputs["Color"])
+    links.new(emission.outputs["Emission"], output.inputs["Surface"])
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = image
+    nodes.active = texture
+    data.materials.clear()
+    data.materials.append(material)
 
-    for o in scena.objects:
-        o.select_set(o == oggetto)
-    bpy.context.view_layer.objects.active = oggetto
+    for other in scene.objects:
+        other.select_set(other == item)
+    bpy.context.view_layer.objects.active = item
     bpy.ops.object.bake(type="EMIT", margin=8, use_clear=True)
-    immagine.filepath_raw = os.path.join(CARTELLA_TEXTURE, f"{nome}_BaseColor.png")
-    immagine.file_format = "PNG"
-    immagine.save()
+    image.filepath_raw = os.path.join(TEXTURE_FOLDER, f"{name}_BaseColor.png")
+    image.file_format = "PNG"
+    image.save()
 
-    # Materiale finale: PBR opaco (si integra con la luce reale in mixed reality).
-    nodi.remove(emissione)
-    nodi.remove(attributo)
-    bsdf = nodi.new("ShaderNodeBsdfPrincipled")
-    bsdf.inputs["Roughness"].default_value = 0.9
-    bsdf.inputs["Metallic"].default_value = 0.0
-    collegamenti.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
-    collegamenti.new(bsdf.outputs["BSDF"], uscita.inputs["Surface"])
+    # Final material: matte PBR (blends with the real light in mixed reality).
+    nodes.remove(emission)
+    nodes.remove(attribute)
+    shader = nodes.new("ShaderNodeBsdfPrincipled")
+    shader.inputs["Roughness"].default_value = 0.9
+    shader.inputs["Metallic"].default_value = 0.0
+    links.new(texture.outputs["Color"], shader.inputs["Base Color"])
+    links.new(shader.outputs["BSDF"], output.inputs["Surface"])
 
-    # I colori per vertice non servono più: solo peso nel file.
-    dati.color_attributes.remove(colore)
-    print(f"Baked {nome}: {len(dati.polygons)} faces, {risoluzione}px texture")
+    # The vertex colours are no longer needed: only weight in the file.
+    data.color_attributes.remove(colour)
+    print(f"Baked {name}: {len(data.polygons)} faces, {resolution}px texture")
 
-# --- Export ----------------------------------------------------------------------------------------
-for o in scena.objects:
-    o.select_set(o.name in mesh)
-destinazione = os.path.join(USCITA, "FloatingIsland.usdz")
-bpy.ops.wm.usd_export(filepath=destinazione, selected_objects_only=True, export_animation=False,
+# --- Export -------------------------------------------------------------------------------------------
+for item in scene.objects:
+    item.select_set(item.name in meshes or item.name in fruit_names)
+destination = os.path.join(OUTPUT, "FloatingIsland.usdz")
+bpy.ops.wm.usd_export(filepath=destination, selected_objects_only=True, export_animation=False,
                       export_materials=True, generate_preview_surface=True, export_mesh_colors=False,
                       export_textures_mode="NEW", overwrite_textures=True,
                       convert_orientation=True, export_global_forward_selection="NEGATIVE_Z",
                       export_global_up_selection="Y", root_prim_path="/FloatingIsland")
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(USCITA, "isola.blend"))
-print(f"Island asset written to {destinazione}")
+bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUTPUT, "island.blend"))
+print(f"Island asset written to {destination}")
