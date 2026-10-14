@@ -1,13 +1,38 @@
 # Macrowavers
 
-A native visionOS game for Apple Vision Pro on the theme "Sky and the Planets", built in 40 days by a team of five
+A native visionOS game for Apple Vision Pro inspired by a Persian fairy tale, built in 40 days by a team of five
 for the Arte-1 challenge.
 
-Stack: Swift 6, SwiftUI, RealityKit, Reality Composer Pro 3. Target: visionOS 27.
+Stack: Swift 6, SwiftUI, RealityKit, Reality Composer Pro 3. Target: visionOS 26.5 (deployment target, matching the team's test devices).
+
+## Features
+
+### Untangle the Dragon
+
+Branch `feature/AR126-100-untangle-dragon` · Jira AR126-100 · full docs in
+[docs/features/untangle-dragon/README.md](docs/features/untangle-dragon/README.md)
+
+A mixed-reality chapter of the tale. A floating island appears in the room with a dragon bound to the tree at its
+centre. The player spins the island, taps the dragon (it gets angry), calls it down, and the dragon settles in front
+of them with its long body tied in a knot. The player has to set it free:
+
+- **Untangle it with your hands.** Pinch and drag any part of the body, even two parts at once (one per hand), and
+  lift them to pass them over or under the rest. The part you look at glows; red pulsing spheres mark every
+  crossing and the panel counts how many are left.
+- **The dragon fights back.** If you stop making progress it warns you (it stares at you, growls, smoke rises
+  from its nostrils), then it has a fit: it turns around, rears up and roars with a burst of fire, lashes its tail
+  and coils. Every fit adds at least one new crossing, and fits come sooner each time.
+- **Set it free.** At zero crossings the dragon turns gold, celebrates, circles you, roars its thanks and flies
+  away into the sky.
+- **Two windows only.** The main window opens the island, spins it and restarts the whole game; the dragon panel
+  (opened by tapping the dragon) shows its state and debug info and restarts the dragon's scene.
+
+Open it from the main window with **Open the Island**. It uses a placeholder dragon built in code until the
+design team's asset (`DragonBody` / `DragonHead`) is added; the asset specification is in the feature docs.
 
 ## Requirements
 
-- macOS 26 or later, Xcode 27 with the visionOS 27 simulator runtime
+- macOS 26 or later, Xcode 27 with a visionOS 26.5 (or later) simulator runtime
 - Reality Composer Pro 3 (separate beta download from Apple)
 - Homebrew (for `brew bundle`: GitHub CLI, Git LFS, SwiftLint)
 - Vision Pro in Developer Mode, paired in Xcode's Device Hub, for anything with hands, room sensing or comfort
