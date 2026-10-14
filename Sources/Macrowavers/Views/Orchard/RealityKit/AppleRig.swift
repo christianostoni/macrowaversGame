@@ -310,7 +310,8 @@ final class AppleRig {
         stem.addChild(stick)
         stem.components.set(AppleStemComponent())
         stem.components.set(CollisionComponent(shapes: [
-            ShapeResource.generateSphere(radius: 0.04).offsetBy(translation: SIMD3(0, 0.025, 0)),
+            // Generous: the stem is thin and the player pinches it while it moves up.
+            ShapeResource.generateSphere(radius: 0.06).offsetBy(translation: SIMD3(0, 0.03, 0)),
         ]))
         stem.components.set(InputTargetComponent.disabled)
         stem.components.set(HoverEffectComponent())
@@ -327,7 +328,7 @@ final class AppleRig {
             }
             worm.components.set(WormComponent(index: index))
             // Larger than the worm: easier to look at and tap while it crawls.
-            worm.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.025)]))
+            worm.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.035)]))
             worm.components.set(InputTargetComponent.disabled)
             worm.components.set(HoverEffectComponent())
             worm.isEnabled = false

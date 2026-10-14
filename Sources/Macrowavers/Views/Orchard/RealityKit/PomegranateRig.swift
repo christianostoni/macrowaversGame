@@ -42,7 +42,11 @@ final class PomegranateRig {
         body.addChild(leftHalf)
         // Target of the two-handed gesture that pulls it apart.
         body.components.set(PomegranateBodyComponent())
-        body.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius * 1.1)]))
+        // Covers both halves even fully open (they move up to 12 cm sideways), so pulling them apart or
+        // pushing them back together always lands on the fruit.
+        body.components.set(CollisionComponent(shapes: [
+            .generateBox(width: 2 * (0.12 + radius * 1.1), height: radius * 2.2, depth: radius * 2.4),
+        ]))
         body.components.set(InputTargetComponent.disabled)
         root.addChild(body)
 
