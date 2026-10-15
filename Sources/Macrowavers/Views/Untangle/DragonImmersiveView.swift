@@ -4,7 +4,9 @@ import SwiftUI
 
 /// Immersive space in mixed reality: a floating island (the player spins it) with the dragon captive
 /// around the tree and fruit on its branches. The artifact found in an apple soothes the dragon: it flies to
-/// the player and settles tangled in front of them; untangled, it flies away into the sky.
+/// the player and settles tangled in front of them; untangled, it thanks them and flies away into the sky.
+/// The story (`StoryViewModel`) frames it: the narrator's pages in a darkened room before the island fades in,
+/// the dragon's words above it once it is free; its farewell waits for the player's answer.
 struct DragonImmersiveView: View {
     static let spaceID = "DragonSpace"
 
@@ -19,6 +21,7 @@ struct DragonImmersiveView: View {
 
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
+    @Environment(StoryViewModel.self) private var story
     @Environment(\.openWindow) private var openWindow
     /// Rotation of the island when the current gesture started.
     @State private var islandYawStart: Float?
@@ -26,20 +29,23 @@ struct DragonImmersiveView: View {
     @State private var subscriptions: [EventSubscription] = []
     /// Position of the player's head: the dragon looks at the knight.
     @State private var viewer = ViewerTracker()
+    /// The island, the dragon and their panels: built at once, added to the scene when the story reveals them.
+    @State private var world = HiddenWorld()
 
     var body: some View {
         RealityView { content, attachments in
             // The island first: the dragon is born already circling its tree, the fruit hangs from it.
             let island = await IslandSceneBuilder.makeIsland(placement: viewModel.islandPlacement)
-            content.add(island.root)
-            content.add(island.floorOccluder)
             let playArea = await DragonSceneBuilder.makePlayArea(viewModel: viewModel, viewer: viewer,
                                                                  orbitAnchor: island.treeAnchor)
-            content.add(playArea)
             // Focus mode: with a fruit close the island and the dragon fade back; while the dragon is untangled
-            // only the island does.
-            island.root.components.set(FocusDimmingComponent(untangle: viewModel, orchard: orchard, part: .island))
-            playArea.components.set(FocusDimmingComponent(untangle: viewModel, orchard: orchard, part: .dragon))
+            // or speaks only the island does. Both start invisible: they fade in when the story reveals them.
+            for (entity, part) in [(island.root, SceneFocus.Part.island), (playArea, .dragon)] {
+                entity.components.set(FocusDimmingComponent(untangle: viewModel, orchard: orchard, story: story,
+                                                            part: part, opacity: 0))
+                entity.components.set(OpacityComponent(opacity: 0))
+            }
+            world.entities = [island.root, island.floorOccluder, playArea]
             // The artifact flies to the dragon's head (node 0).
             let dragonHead = playArea.findEntity(named: "DragonNode0") ?? playArea
             // While a fruit is close, what is behind it (island rock, dragon) must not take the pinch.
@@ -48,13 +54,20 @@ struct DragonImmersiveView: View {
             let orchardRoot = await OrchardSceneBuilder.makeOrchard(
                 viewModel: orchard, viewer: viewer, island: island, deliveryTarget: dragonHead,
                 background: background)
-            content.add(orchardRoot)
+            world.entities.append(orchardRoot)
             // Island panel on the left, dragon panel on the right.
             if let islandPanel = attachments.entity(for: IslandControlsView.attachmentID) {
-                content.add(Self.placeSidePanel(islandPanel, angle: -Self.panelAngle))
+                world.entities.append(Self.placeSidePanel(islandPanel, angle: -Self.panelAngle))
             }
             if let dragonPanel = attachments.entity(for: DragonPanelView.attachmentID) {
-                content.add(Self.placeSidePanel(dragonPanel, angle: Self.panelAngle))
+                world.entities.append(Self.placeSidePanel(dragonPanel, angle: Self.panelAngle))
+            }
+            // The story's words: in front of the player, or above the dragon when it speaks.
+            if let storyPanel = attachments.entity(for: StoryPanelView.attachmentID) {
+                storyPanel.components.set(StoryPanelComponent(story: story, untangle: viewModel, viewer: viewer,
+                                                              playArea: playArea))
+                storyPanel.components.set(BillboardComponent())
+                content.add(storyPanel)
             }
             // Instructions under the fruit in front of the player.
             // Attachments are never disabled (`isEnabled`): deactivating a SwiftUI-hosting entity while its
@@ -67,6 +80,8 @@ struct DragonImmersiveView: View {
             }
             subscriptions = subscribeToDragonGrabs(content)
         } update: { content, _ in
+            // Reading `story.step` here re-runs this block when the story moves on.
+            if story.step.revealsWorld { world.reveal(in: content) }
             // Reading `placement`/`islandPlacement` here re-runs this block on every change.
             if let island = content.entities.first(where: { $0.name == IslandSceneBuilder.islandName }),
                var turntable = island.components[TurntableComponent.self] {
@@ -79,6 +94,10 @@ struct DragonImmersiveView: View {
             playArea.orientation = placement.rotation
         }
         attachments: {
+            Attachment(id: StoryPanelView.attachmentID) {
+                StoryPanelView()
+                    .environment(story)
+            }
             Attachment(id: FruitPanelView.attachmentID) {
                 FruitPanelView()
                     .environment(orchard)
@@ -98,6 +117,16 @@ struct DragonImmersiveView: View {
         .orchardInteractions()
         .simultaneousGesture(spinIslandGesture)
         .simultaneousGesture(rotateIslandGesture)
+        // The narrator's pages and the dragon's words darken the room (passthrough) around them.
+        .preferredSurroundingsEffect(story.step.dimsSurroundings ? .dark : nil)
+        .onChange(of: viewModel.isSolved) { _, isSolved in
+            // Free, the dragon speaks; back around the tree (Restart Scene), its words are still to come.
+            if isSolved { story.dragonFreed() } else { story.dragonRecaptured() }
+        }
+        .onChange(of: story.step) { _, step in
+            // The player answered "I'm Ready": the dragon takes off.
+            if step == .farewell { viewModel.beginFarewell() }
+        }
         .task { await viewer.start() }
         .onAppear { viewModel.immersiveSpaceState = .open }
         .onDisappear {
@@ -105,6 +134,7 @@ struct DragonImmersiveView: View {
             viewer.stop()
             viewModel.resetGame()
             orchard.reset()
+            story.reset()
             viewModel.immersiveSpaceState = .closed
             openWindow(id: ContentView.windowID)
         }
@@ -210,9 +240,26 @@ struct DragonImmersiveView: View {
     }
 }
 
+/// What the story keeps out of the room until the chapter's title has been read: the island, its fruit, the
+/// dragon and the side panels. Added to the scene once (never disabled: attachments must not be).
+@MainActor
+final class HiddenWorld {
+    var entities: [Entity] = []
+    private(set) var isRevealed = false
+
+    func reveal(in content: RealityViewContent) {
+        guard !isRevealed, !entities.isEmpty else { return }
+        isRevealed = true
+        entities.forEach { content.add($0) }
+    }
+}
+
 #Preview(immersionStyle: .mixed) {
-    DragonImmersiveView()
-        .environment(UntangleViewModel())
+    let story = StoryViewModel()
+    story.begin()
+    return DragonImmersiveView()
+        .environment(UntangleViewModel(farewellWaitsForPlayer: true))
         .environment(OrchardViewModel())
+        .environment(story)
 }
 #endif

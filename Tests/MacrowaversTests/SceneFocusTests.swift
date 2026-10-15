@@ -33,6 +33,15 @@ struct SceneFocusTests {
         }
     }
 
+    @Test func theSpeakingDragonKeepsOnlyItselfVisible() {
+        // Free, the dragon thanks the player (story screens 4 and 5): the island fades back behind it.
+        let focus = SceneFocus(isFruitFocused: false, isArtifactFlying: false, phase: .free, isDragonSpeaking: true)
+
+        #expect(focus == .dragon)
+        #expect(focus.opacity(of: .island) == SceneFocus.dimmedOpacity)
+        #expect(focus.opacity(of: .dragon) == 1)
+    }
+
     @Test func theFlyingArtifactBringsTheSceneBack() {
         // The player follows the artifact to the dragon: nothing stays faded while it flies.
         let focus = SceneFocus(isFruitFocused: true, isArtifactFlying: true, phase: .alerted)

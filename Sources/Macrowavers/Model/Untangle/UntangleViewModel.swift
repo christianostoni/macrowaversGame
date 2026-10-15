@@ -61,6 +61,10 @@ final class UntangleViewModel {
     @ObservationIgnored private var freeTime: Float = 0
     /// Seconds of celebration in the play area before taking off.
     @ObservationIgnored private let takeoffDelay: Float = 1.5
+    /// With the story on, the free dragon waits in the play area (it speaks to the player) until
+    /// `beginFarewell()`; without it, it takes off after `takeoffDelay`.
+    @ObservationIgnored private let farewellWaitsForPlayer: Bool
+    @ObservationIgnored private var isFarewellCleared = false
     /// After the win: takes off, sweeps once in front of the player, hovers in front of their eyes to thank them
     /// with a roar and flies away (`DragonFlight.Settings.farewell` keeps it all in front of them).
     @ObservationIgnored private let farewell: [DragonFlight.Maneuver] = [.takeoff, .cruise, .hover, .depart]
@@ -89,8 +93,10 @@ final class UntangleViewModel {
 
     init(shape: TangleShape = .trefoil,
          config: TangleConfig = TangleConfig(),
-         difficulty: DifficultySettings = DifficultySettings()) {
+         difficulty: DifficultySettings = DifficultySettings(),
+         farewellWaitsForPlayer: Bool = false) {
         self.shape = shape
+        self.farewellWaitsForPlayer = farewellWaitsForPlayer
         simulation = TangleSimulation(config: config, positions: shape.positions(config: config))
         behavior = DragonBehavior(settings: difficulty)
     }
@@ -154,6 +160,12 @@ final class UntangleViewModel {
         refreshMood()
     }
 
+    /// The player is ready to go: the free dragon takes off for its farewell (see `farewellWaitsForPlayer`).
+    func beginFarewell() {
+        guard phase == .free else { return }
+        isFarewellCleared = true
+    }
+
     /// Restarts the tangle (same initial knot), staying in the mini-game.
     func restartPuzzle() {
         guard phase == .untangling else { return }
@@ -170,6 +182,7 @@ final class UntangleViewModel {
         worldFromFlight = matrix_identity_float4x4
         isFlying = false
         freeTime = 0
+        isFarewellCleared = false
         crossingPoints = []
         if crossingCount != 0 { crossingCount = 0 }
         refreshMood()
@@ -360,7 +373,7 @@ final class UntangleViewModel {
             return
         }
         simulation.step(deltaTime: deltaTime)
-        if freeTime >= takeoffDelay {
+        if freeTime >= takeoffDelay && (!farewellWaitsForPlayer || isFarewellCleared) {
             let start = simulation.positions.map { Self.transform($0, by: worldFromLocal) }
             flight = DragonFlight(start: start, segmentLength: config.segmentLength, settings: .farewell,
                                   plan: farewell, viewer: viewer, viewerForward: viewerForward)

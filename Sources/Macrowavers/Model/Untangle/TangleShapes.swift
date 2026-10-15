@@ -8,6 +8,8 @@ enum TangleShape {
     case trefoil
     /// Open figure-eight knot: 4 crossings, harder.
     case figureEight
+    /// Open ring with no crossings: already untangled (the dragon is free as soon as it settles).
+    case loop
 
     /// Parametric curve: (x, z) is the projection seen from above, y is the height that decides who passes over.
     private func point(at angle: Float) -> SIMD3<Float> {
@@ -20,6 +22,8 @@ enum TangleShape {
             return SIMD3((2 + cos(2 * angle)) * cos(3 * angle),
                          sin(4 * angle),
                          (2 + cos(2 * angle)) * sin(3 * angle))
+        case .loop:
+            return SIMD3(2 * sin(angle), 0, 2 * cos(angle))
         }
     }
 
