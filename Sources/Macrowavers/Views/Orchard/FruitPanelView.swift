@@ -12,14 +12,16 @@ struct FruitPanelView: View {
         if orchard.focusedFruitID != nil { panel }
     }
 
+    private var isEmpty: Bool { orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored }
+
     private var panel: some View {
         VStack(spacing: 10) {
-            Text(orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored ? "No artifact in this one" : title)
+            Text(isEmpty ? "No orb left in this one" : title)
                 .font(.headline)
             Text(hint)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            if orchard.focusedFruit?.kind == .apple && orchard.artifact == .guarded {
+            if orchard.focusedFruit?.kind == .apple && orchard.focusedOrb == .sealed {
                 Text("Worms caught: \(orchard.caughtWorms)/\(orchard.wormCount)")
                     .font(.subheadline.monospacedDigit())
                     .contentTransition(.numericText())
@@ -29,7 +31,7 @@ struct FruitPanelView: View {
                 Button("Close It Again", systemImage: "arrow.counterclockwise") {
                     orchard.restartFruit()
                 }
-                if orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored {
+                if isEmpty {
                     Button("Back to the Tree", systemImage: "arrow.uturn.backward") {
                         orchard.back()
                     }
@@ -40,7 +42,7 @@ struct FruitPanelView: View {
                     }
                 }
             }
-            .disabled(orchard.artifact == .flying)
+            .disabled(orchard.kalash.spell == .flying)
         }
         .multilineTextAlignment(.center)
         .frame(width: 360)
@@ -52,36 +54,43 @@ struct FruitPanelView: View {
         switch orchard.focusedFruit?.kind {
         case .apple: "An apple from the tree"
         case .pomegranate: "A pomegranate from the tree"
+        case .banana: "A banana from the tree"
+        case .pineapple: "A pineapple from the tree"
         case nil: ""
         }
     }
 
     private var hint: String {
-        switch orchard.focusedFruit?.kind {
-        case .apple: appleHint
-        case .pomegranate:
-            orchard.pomegranateBurst
-                ? "Drag the seeds around, then put it back on the tree and try an apple."
-                : "Pull it apart with both hands."
-        case nil: ""
+        switch orchard.focusedOrb {
+        case .revealed, .held:
+            return orchard.kalash.isFull
+                ? "A glowing orb! Your kalash is full: cast its spell first."
+                : "A glowing orb! Drag it into your kalash."
+        case .stored, .spent:
+            return isEmpty ? "Its orb is already in your kalash. Put it back on the tree." : openHint
+        case .sealed, nil:
+            return openHint
         }
     }
 
-    private var appleHint: String {
-        if orchard.appleOpening < orchard.wormSettings.minimumOpening {
-            return "Pull the stem up to open the apple."
-        }
-        switch orchard.artifact {
-        case .guarded:
-            return "Catch the worms! They burrow now and then, and get faster after each catch."
-        case .revealed:
-            return orchard.focusedFruitID == orchard.artifactFruitID
-                ? "Something glows inside! Tap it to send it to the dragon."
-                : "Only worms in this one: the artifact is in another apple. Put it back on the tree."
-        case .flying:
-            return "The artifact flies to the dragon…"
-        case .hidden, .used:
-            return "Only worms in this one. Put it back on the tree."
+    /// How to open the focused fruit.
+    private var openHint: String {
+        switch orchard.focusedFruit?.kind {
+        case .apple:
+            if orchard.appleOpening < orchard.wormSettings.minimumOpening { return "Pull the stem up to open the apple." }
+            return orchard.focusedOrb == .sealed
+                ? "Catch the worms! They burrow now and then, and get faster after each catch."
+                : "Only worms in this one. Put it back on the tree."
+        case .pomegranate:
+            return orchard.pomegranateBurst ? "Drag the seeds around for fun." : "Pull it apart with both hands."
+        case .banana:
+            return "Pinch a strip of the peel and pull it outwards and down. Peel all four."
+        case .pineapple:
+            return orchard.isHandTrackingAvailable
+                ? "Chop down through it with the edge of your hand, or tap it."
+                : "Tap it to cut it open."
+        case nil:
+            return ""
         }
     }
 }

@@ -60,7 +60,7 @@ final class AppleSpiralPipeline {
 final class AppleRig {
     let root = Entity()
     let stem = Entity()
-    /// Where the artifact sits while the apple guards it (centre of the core).
+    /// Where the orb sits while the apple guards it (centre of the core).
     let core = Entity()
     let shape: AppleShape
 
