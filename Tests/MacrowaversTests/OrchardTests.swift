@@ -96,97 +96,183 @@ struct OrchardViewModelTests {
         }
     }
 
-    @Test func firstClearedAppleFreesTheArtifact() {
-        let orchard = OrchardViewModel(apples: 3, pomegranates: 1)
+    private func id(of kind: FruitKind, in orchard: OrchardViewModel) -> Int {
+        orchard.fruits.first { $0.kind == kind }?.id ?? -1
+    }
+
+    /// Opens the focused fruit whatever it is, so its orb comes out.
+    private func open(_ orchard: OrchardViewModel) {
+        switch orchard.focusedFruit?.kind {
+        case .apple: clearWorms(orchard)
+        case .pomegranate: orchard.setPomegranateOpening(1)
+        case .banana:
+            for strip in 0..<OrchardViewModel.bananaStrips { orchard.setBananaPeel(strip: strip, progress: 1) }
+        case .pineapple: orchard.chopPineapple()
+        case nil: break
+        }
+    }
+
+    /// Picks a fruit, opens it and carries its orb into the kalash.
+    private func harvest(_ fruit: Int, into orchard: OrchardViewModel) {
+        orchard.focus(fruit: fruit)
+        open(orchard)
+        orchard.grabOrb(fruit: fruit)
+        orchard.releaseOrb(fruit: fruit, intoKalash: true)
+    }
+
+    private func run(_ orchard: OrchardViewModel, seconds: Float) {
+        for _ in 0..<Int(seconds * 60) { orchard.update(deltaTime: 1.0 / 60.0) }
+    }
+
+    @Test func treeHasEveryKindOfFruit() {
+        let orchard = OrchardViewModel()
+        #expect(orchard.fruits.map(\.kind) == [.apple, .apple, .apple, .pomegranate, .banana, .pineapple])
+        #expect(orchard.orbs.allSatisfy { $0 == .sealed })
+    }
+
+    @Test func clearingTheWormsFreesTheApplesOrb() {
+        let orchard = OrchardViewModel()
         #expect(orchard.focus(fruit: 0))
-        #expect(orchard.artifact == .guarded)
         // Only one fruit at a time.
         #expect(!orchard.focus(fruit: 1))
-
         clearWorms(orchard)
         #expect(orchard.caughtWorms == orchard.wormCount)
-        #expect(orchard.artifact == .revealed)
-        #expect(orchard.artifactFruitID == 0)
+        #expect(orchard.orbs[0] == .revealed)
+        #expect(orchard.orbs[1] == .sealed)
     }
 
-    @Test func leavingAnAppleEarlyKeepsTheArtifactForTheNextOne() {
+    @Test func everyFruitOpensItsOwnWay() {
         let orchard = OrchardViewModel()
-        orchard.focus(fruit: 0)
-        orchard.back()
-        #expect(orchard.artifact == .hidden)
-
-        orchard.focus(fruit: 1)
-        clearWorms(orchard)
-        #expect(orchard.artifact == .revealed)
-        #expect(orchard.artifactFruitID == 1)
-
-        // Other apples only have worms; the freed one keeps its artifact.
-        orchard.back()
-        orchard.focus(fruit: 2)
-        clearWorms(orchard)
-        #expect(orchard.artifactFruitID == 1)
-        #expect(!orchard.useArtifact())
-        orchard.back()
-        orchard.focus(fruit: 1)
-        #expect(orchard.caughtWorms == orchard.wormCount)
-        #expect(orchard.useArtifact())
-    }
-
-    @Test func artifactFliesToTheDragonAndTheFruitGoesBack() {
-        let orchard = OrchardViewModel()
-        orchard.focus(fruit: 0)
-        clearWorms(orchard)
-        #expect(orchard.useArtifact())
-        #expect(orchard.artifact == .flying)
-        // While it flies no fruit can be picked.
-        orchard.back()
-        #expect(!orchard.focus(fruit: 1))
-
-        orchard.artifactDelivered()
-        #expect(orchard.artifact == .used)
-        #expect(orchard.focusedFruitID == nil)
-
-        orchard.reset()
-        #expect(orchard.artifact == .hidden)
-    }
-
-    @Test func wrongFruitStaysUntilThePlayerSendsItBack() {
-        let orchard = OrchardViewModel(apples: 2, pomegranates: 1)
-        // Pomegranate: never the artifact, but it does not leave by itself.
-        let pomegranate = orchard.fruits.first { $0.kind == .pomegranate }?.id ?? -1
+        let pomegranate = id(of: .pomegranate, in: orchard)
         orchard.focus(fruit: pomegranate)
+        orchard.setPomegranateOpening(0.5)
+        #expect(orchard.orbs[pomegranate] == .sealed)
         orchard.setPomegranateOpening(1)
-        for _ in 0..<(60 * 20) { orchard.update(deltaTime: 1.0 / 60.0) }
-        #expect(orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored)
-        #expect(orchard.focusedFruitID == pomegranate)
+        #expect(orchard.pomegranateBurst && orchard.orbs[pomegranate] == .revealed)
         orchard.back()
-        #expect(orchard.focusedFruitID == nil)
 
-        // Second apple after the artifact came out of the first: empty, stays until sent back.
-        orchard.focus(fruit: 0)
-        #expect(!orchard.isFocusedFruitEmpty)
-        clearWorms(orchard)
-        orchard.back()
-        orchard.focus(fruit: 1)
+        let banana = id(of: .banana, in: orchard)
+        orchard.focus(fruit: banana)
+        for strip in 0..<(OrchardViewModel.bananaStrips - 1) { orchard.setBananaPeel(strip: strip, progress: 1) }
+        // Three strips out of four: still closed.
+        #expect(orchard.orbs[banana] == .sealed && !orchard.isFocusedFruitExplored)
+        orchard.setBananaPeel(strip: OrchardViewModel.bananaStrips - 1, progress: OrchardViewModel.peeledStrip)
+        #expect(orchard.orbs[banana] == .revealed && orchard.isFocusedFruitExplored)
+        // Other fruits' gestures do nothing to a banana.
         orchard.setAppleOpening(1)
-        for _ in 0..<(60 * 20) { orchard.update(deltaTime: 1.0 / 60.0) }
-        #expect(orchard.isFocusedFruitEmpty)
-        #expect(orchard.focusedFruitID == 1)
-        #expect(orchard.artifact == .revealed)
+        orchard.chopPineapple()
+        #expect(orchard.appleOpening == 0 && !orchard.pineappleChopped)
+        orchard.back()
+
+        let pineapple = id(of: .pineapple, in: orchard)
+        orchard.focus(fruit: pineapple)
+        orchard.chopPineapple()
+        #expect(orchard.pineappleChopped && orchard.orbs[pineapple] == .revealed)
     }
 
-    @Test func pomegranateBurstsButHasNoArtifact() {
-        let orchard = OrchardViewModel(apples: 1, pomegranates: 1)
-        let pomegranate = orchard.fruits.first { $0.kind == .pomegranate }
-        #expect(pomegranate != nil)
-        orchard.focus(fruit: pomegranate?.id ?? -1)
-        #expect(orchard.artifact == .hidden)
+    @Test func leavingAFruitEarlyKeepsItsOrbForLater() {
+        let orchard = OrchardViewModel()
+        orchard.focus(fruit: 0)
         orchard.setAppleOpening(1)
+        orchard.back()
+        #expect(orchard.orbs[0] == .sealed)
         #expect(orchard.appleOpening == 0)
 
-        orchard.setPomegranateOpening(0.5)
-        #expect(!orchard.pomegranateBurst)
-        orchard.setPomegranateOpening(1)
-        #expect(orchard.pomegranateBurst)
+        // A freed orb waits above its fruit; back at the apple there are no worms left.
+        orchard.focus(fruit: 0)
+        clearWorms(orchard)
+        orchard.back()
+        orchard.focus(fruit: 0)
+        #expect(orchard.orbs[0] == .revealed)
+        #expect(orchard.caughtWorms == orchard.wormCount)
+    }
+
+    @Test func orbDroppedIntoTheKalashSendsTheFruitBack() {
+        let orchard = OrchardViewModel()
+        let banana = id(of: .banana, in: orchard)
+        orchard.focus(fruit: banana)
+        // Not out yet: it cannot be grabbed.
+        #expect(!orchard.grabOrb(fruit: banana))
+        open(orchard)
+        #expect(orchard.grabOrb(fruit: banana))
+        // Let go away from the kalash: it floats back above the fruit.
+        #expect(!orchard.releaseOrb(fruit: banana, intoKalash: false))
+        #expect(orchard.orbs[banana] == .revealed && orchard.focusedFruitID == banana)
+
+        orchard.grabOrb(fruit: banana)
+        #expect(orchard.releaseOrb(fruit: banana, intoKalash: true))
+        #expect(orchard.orbs[banana] == .stored(slot: 0))
+        #expect(orchard.kalash.storedCount == 1)
+        #expect(orchard.focusedFruitID == nil)
+    }
+
+    @Test func emptyFruitStaysUntilThePlayerSendsItBack() {
+        let orchard = OrchardViewModel()
+        let pineapple = id(of: .pineapple, in: orchard)
+        harvest(pineapple, into: orchard)
+        orchard.focus(fruit: pineapple)
+        #expect(orchard.isFocusedFruitEmpty)
+        orchard.chopPineapple()
+        // Its orb is in the kalash: nothing comes out, and the fruit does not leave by itself.
+        #expect(orchard.orbs[pineapple] == .stored(slot: 0))
+        run(orchard, seconds: 3)
+        #expect(orchard.focusedFruitID == pineapple)
+        orchard.back()
+        #expect(orchard.focusedFruitID == nil)
+    }
+
+    @Test func fullKalashTakesNoMoreOrbs() {
+        let orchard = OrchardViewModel()
+        for fruit in 0..<Kalash.capacity { harvest(fruit, into: orchard) }
+        #expect(orchard.kalash.spell == .ready)
+        let pineapple = id(of: .pineapple, in: orchard)
+        orchard.focus(fruit: pineapple)
+        open(orchard)
+        orchard.grabOrb(fruit: pineapple)
+        #expect(!orchard.releaseOrb(fruit: pineapple, intoKalash: true))
+        #expect(orchard.orbs[pineapple] == .revealed)
+    }
+
+    @Test func spellNeedsThreeOrbsThenFliesToTheDragon() {
+        let orchard = OrchardViewModel()
+        harvest(id(of: .banana, in: orchard), into: orchard)
+        harvest(id(of: .pineapple, in: orchard), into: orchard)
+        #expect(!orchard.castSpell())
+        harvest(id(of: .pomegranate, in: orchard), into: orchard)
+        #expect(orchard.castSpell())
+        #expect(orchard.kalash.spell == .forming)
+
+        run(orchard, seconds: Kalash.formingDuration + 0.1)
+        #expect(orchard.kalash.spell == .formed)
+        #expect(orchard.orbs.filter { $0 == .spent }.count == Kalash.capacity)
+        run(orchard, seconds: Kalash.formedHold + 0.1)
+        #expect(orchard.kalash.spell == .flying)
+        // While it flies no fruit can be picked.
+        #expect(!orchard.focus(fruit: 0))
+
+        orchard.spellDelivered()
+        #expect(orchard.kalash.spell == .delivered)
+        orchard.reset()
+        #expect(orchard.kalash == Kalash())
+        #expect(orchard.orbs.allSatisfy { $0 == .sealed })
+    }
+
+    @Test func spellWaitsAboveTheKalashWhenTheDragonIsGone() {
+        let orchard = OrchardViewModel()
+        for fruit in 0..<Kalash.capacity { harvest(fruit, into: orchard) }
+        orchard.isDragonOnIsland = false
+        orchard.castSpell()
+        run(orchard, seconds: Kalash.formingDuration + Kalash.formedHold + 1)
+        #expect(orchard.kalash.spell == .formed)
+    }
+
+    @Test func spellFlyingSendsTheCloseFruitBack() {
+        let orchard = OrchardViewModel()
+        for fruit in 0..<Kalash.capacity { harvest(fruit, into: orchard) }
+        orchard.castSpell()
+        orchard.focus(fruit: id(of: .banana, in: orchard))
+        run(orchard, seconds: Kalash.formingDuration + Kalash.formedHold + 0.2)
+        #expect(orchard.kalash.spell == .flying)
+        #expect(orchard.focusedFruitID == nil)
     }
 }

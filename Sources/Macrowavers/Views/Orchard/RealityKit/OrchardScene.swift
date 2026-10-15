@@ -40,8 +40,10 @@ struct PomegranateBodyComponent: Component {}
 /// A pomegranate seed.
 struct SeedComponent: Component {}
 
-/// The artifact that soothes the dragon.
-struct ArtifactComponent: Component {}
+/// The glowing orb of a fruit (`fruitID`): it rises out of the open fruit and is dragged into the kalash.
+struct OrbComponent: Component {
+    let fruitID: Int
+}
 
 /// Smoothly moves an entity to `target` (in its parent's space), then removes itself.
 struct FocusComponent: Component {
@@ -81,6 +83,8 @@ struct OrchardFruit {
     enum Rig {
         case apple(AppleRig)
         case pomegranate(PomegranateRig)
+        case banana(BananaRig)
+        case pineapple(PineappleRig)
     }
 
     let fruit: Fruit
@@ -93,17 +97,20 @@ struct OrchardFruit {
 }
 
 /// Connects the orchard to its view model. Every frame the `OrchardSystem` advances the worms, brings the
-/// focused fruit close or puts it back, applies openings and moves the artifact.
+/// focused fruit close or puts it back, applies openings, moves the orbs and draws the kalash and its spell.
 struct OrchardComponent: Component {
     let viewModel: OrchardViewModel
     let viewer: ViewerTracker
+    let hands: HandTracker
     /// Where the fruits hang (they turn and bob with the island).
     let island: Entity
     /// Point in front of the player where the focused fruit is shown.
     let stage: Entity
     let fruits: [OrchardFruit]
-    let artifact: Entity
-    /// Where the artifact flies when used: the dragon's head.
+    /// The orb of each fruit, by fruit id.
+    let orbs: [Int: Entity]
+    let kalash: KalashRig
+    /// Where the blue spell flies: the dragon's head.
     let deliveryTarget: Entity
     /// Interactive things behind the fruit (island rock, dragon colliders): switched off while a fruit is close,
     /// so a pinch that just misses the stem, a worm or the pomegranate never lands on them.
@@ -111,9 +118,13 @@ struct OrchardComponent: Component {
     /// Focus already applied to the entities (`.some(nil)` = all on the tree).
     var appliedFocus: Int??
     var time: Float = 0
+    var chop = ChopDetector()
+    var twist = TwistDetector()
 
-    /// Speed of the artifact flying to the dragon (m/s).
-    static let artifactSpeed: Float = 1.1
+    /// Speed of the blue spell flying to the dragon (m/s).
+    static let spellSpeed: Float = 1.1
+    /// An orb let go closer than this to the kalash's mouth drops in (m).
+    static let kalashDropRadius: Float = 0.12
 }
 
 struct OrchardSystem: System {
@@ -130,7 +141,10 @@ struct OrchardSystem: System {
         WormComponent.registerComponent()
         PomegranateBodyComponent.registerComponent()
         SeedComponent.registerComponent()
-        ArtifactComponent.registerComponent()
+        BananaPeelComponent.registerComponent()
+        PineappleBodyComponent.registerComponent()
+        OrbComponent.registerComponent()
+        KalashComponent.registerComponent()
         FocusComponent.registerComponent()
         OrchardComponent.registerComponent()
         FocusSystem.registerSystem()
@@ -150,21 +164,51 @@ struct OrchardSystem: System {
                 orchard.appliedFocus = .some(viewModel.focusedFruitID)
             }
             for fruit in orchard.fruits {
-                let isFocused = fruit.fruit.id == viewModel.focusedFruitID
-                switch fruit.rig {
-                case .apple(let rig):
-                    // Sent back to the tree, the apple closes gently on its way (it never snaps or vanishes).
-                    rig.ease(towards: isFocused ? viewModel.appleOpening : 0, deltaTime: deltaTime)
-                    if isFocused {
-                        rig.apply(worms: viewModel.worms, opening: rig.displayedOpening, time: orchard.time)
-                    }
-                case .pomegranate(let rig):
-                    rig.ease(towards: isFocused ? viewModel.pomegranateOpening : 0,
-                             burst: isFocused && viewModel.pomegranateBurst, deltaTime: deltaTime)
-                }
+                Self.applyOpening(fruit, viewModel: viewModel, time: orchard.time, deltaTime: deltaTime)
             }
-            Self.updateArtifact(orchard: orchard, root: entity, deltaTime: deltaTime)
+            Self.detectChop(&orchard)
+            Self.updateOrbs(orchard: orchard, deltaTime: deltaTime)
+            Self.updateKalash(&orchard, root: entity, deltaTime: deltaTime)
             entity.components.set(orchard)
+        }
+    }
+
+    /// Draws the fruit's opening. Sent back to the tree, a fruit closes gently on its way (it never snaps or
+    /// vanishes).
+    @MainActor
+    private static func applyOpening(_ fruit: OrchardFruit, viewModel: OrchardViewModel, time: Float, deltaTime: Float) {
+        let isFocused = fruit.fruit.id == viewModel.focusedFruitID
+        switch fruit.rig {
+        case .apple(let rig):
+            rig.ease(towards: isFocused ? viewModel.appleOpening : 0, deltaTime: deltaTime)
+            if isFocused {
+                rig.apply(worms: viewModel.worms, opening: rig.displayedOpening, time: time)
+            }
+        case .pomegranate(let rig):
+            rig.ease(towards: isFocused ? viewModel.pomegranateOpening : 0,
+                     burst: isFocused && viewModel.pomegranateBurst, deltaTime: deltaTime)
+        case .banana(let rig):
+            rig.ease(towards: isFocused ? viewModel.bananaPeel : rig.displayedPeel.map { _ in 0 }, deltaTime: deltaTime)
+        case .pineapple(let rig):
+            rig.ease(towards: isFocused && viewModel.pineappleChopped ? 1 : 0, deltaTime: deltaTime)
+        }
+    }
+
+    /// A hand coming down fast through the pineapple in front of the player chops it (with hand tracking; the
+    /// tap works anyway).
+    @MainActor
+    private static func detectChop(_ orchard: inout OrchardComponent) {
+        let viewModel = orchard.viewModel
+        guard !viewModel.pineappleChopped,
+              let fruit = orchard.fruits.first(where: { $0.fruit.id == viewModel.focusedFruitID }),
+              case .pineapple(let rig) = fruit.rig else {
+            orchard.chop.reset()
+            return
+        }
+        let target = rig.chopTarget()
+        for sample in orchard.hands.samples.values where orchard.chop.process(sample, target: target) {
+            viewModel.chopPineapple()
+            return
         }
     }
 
@@ -176,7 +220,7 @@ struct OrchardSystem: System {
             // Back on its branch, following the island wherever it turned meanwhile.
             fruit.holder.setParent(orchard.island, preservingWorldTransform: true)
             fruit.holder.components.set(FocusComponent(target: fruit.home, responsiveness: 4))
-            setInteractive(fruit, false)
+            fruit.setInteractive(false)
             if case .apple(let rig) = fruit.rig { rig.resetWorms() }
         }
         if let newID, let fruit = orchard.fruits.first(where: { $0.fruit.id == newID }) {
@@ -184,7 +228,7 @@ struct OrchardSystem: System {
             fruit.holder.setParent(orchard.stage, preservingWorldTransform: true)
             fruit.holder.components.set(FocusComponent(target: Transform(scale: SIMD3(repeating: fruit.focusScale)),
                                                        responsiveness: 3.5))
-            setInteractive(fruit, true)
+            fruit.setInteractive(true)
         }
         suspendBackground(orchard.background, newID != nil)
         // Fruits on the tree can be picked only while none is close.
@@ -205,14 +249,6 @@ struct OrchardSystem: System {
         direction = simd_length(direction) > 1e-4 ? simd_normalize(direction) : SIMD3(0, 0, -1)
         stage.position = viewer + direction * 0.5 - SIMD3(0, 0.12, 0)
         stage.orientation = simd_quatf(angle: atan2(-direction.x, -direction.z), axis: SIMD3(0, 1, 0))
-    }
-
-    @MainActor
-    private static func setInteractive(_ fruit: OrchardFruit, _ isInteractive: Bool) {
-        switch fruit.rig {
-        case .apple(let rig): rig.setInteractive(isInteractive)
-        case .pomegranate(let rig): rig.setInteractive(isInteractive)
-        }
     }
 
     /// Off while a fruit is close. Back on only where it belongs: the island's rock always, the dragon's
@@ -236,74 +272,12 @@ struct OrchardSystem: System {
             holder.components.remove(InputTargetComponent.self)
         }
     }
-
-    // MARK: - Artifact
-
-    @MainActor
-    private static func updateArtifact(orchard: OrchardComponent, root: Entity, deltaTime: Float) {
-        let viewModel = orchard.viewModel
-        let artifact = orchard.artifact
-        let focusedApple = orchard.fruits.first { $0.fruit.id == viewModel.focusedFruitID }.flatMap { fruit -> AppleRig? in
-            if case .apple(let rig) = fruit.rig { return rig }
-            return nil
-        }
-        let pulse = 1 + 0.08 * sin(orchard.time * 4)
-
-        switch viewModel.artifact {
-        case .hidden, .used:
-            artifact.isEnabled = false
-        case .guarded:
-            // Locked in the core: visible between the slices, not yet tappable.
-            guard let focusedApple else {
-                artifact.isEnabled = false
-                return
-            }
-            attach(artifact, to: focusedApple.core)
-            artifact.isEnabled = true
-            artifact.position = .zero
-            artifact.setScale(SIMD3(repeating: 0.7), relativeTo: nil)
-            artifact.components[InputTargetComponent.self]?.isEnabled = false
-        case .revealed:
-            guard let focusedApple, viewModel.focusedFruitID == viewModel.artifactFruitID else {
-                artifact.isEnabled = false
-                return
-            }
-            attach(artifact, to: focusedApple.core)
-            artifact.isEnabled = true
-            // Rises out of the opened apple and floats above it.
-            let rise = min(viewModel.artifactRevealTime / 1.2, 1)
-            let eased = rise * rise * (3 - 2 * rise)
-            let above = focusedApple.shape.height / 2 + viewModel.appleOpening * focusedApple.shape.maxLift + 0.07
-            artifact.position = SIMD3(0, above * eased + 0.01 * sin(orchard.time * 2), 0)
-            artifact.setScale(SIMD3(repeating: pulse), relativeTo: nil)
-            artifact.components[InputTargetComponent.self]?.isEnabled = rise >= 1
-        case .flying:
-            if artifact.parent !== root { artifact.setParent(root, preservingWorldTransform: true) }
-            artifact.isEnabled = true
-            artifact.components[InputTargetComponent.self]?.isEnabled = false
-            let target = orchard.deliveryTarget.position(relativeTo: root)
-            let offset = target - artifact.position
-            let distance = simd_length(offset)
-            if distance < 0.05 {
-                artifact.isEnabled = false
-                viewModel.artifactDelivered()
-            } else {
-                artifact.position += offset / distance * min(distance, OrchardComponent.artifactSpeed * deltaTime)
-                artifact.setScale(SIMD3(repeating: pulse), relativeTo: nil)
-            }
-        }
-    }
-
-    @MainActor
-    private static func attach(_ artifact: Entity, to parent: Entity) {
-        guard artifact.parent !== parent else { return }
-        artifact.setParent(parent, preservingWorldTransform: false)
-    }
 }
 
 // MARK: - Building
 
-/// Builds the orchard: fruits hanging on the island's tree, the stage in front of the player, the artifact.
+/// Builds the orchard: fruits hanging on the island's tree, the stage in front of the player, an orb in every
+/// fruit and the kalash at the player's side.
 enum OrchardSceneBuilder {
     static let rootName = "Orchard"
     static let stageName = "OrchardStage"
@@ -313,13 +287,23 @@ enum OrchardSceneBuilder {
     static let appleSizeFocused: Float = 0.2
     static let pomegranateSizeOnTree: Float = 0.08
     static let pomegranateSizeFocused: Float = 0.14
+    static let bananaSizeOnTree: Float = 0.1
+    static let bananaSizeFocused: Float = 0.22
+    static let pineappleSizeOnTree: Float = 0.09
+    static let pineappleSizeFocused: Float = 0.18
+
+    /// What the orchard reads of the player: where their eyes are and what their hands do.
+    struct Player {
+        let viewer: ViewerTracker
+        let hands: HandTracker
+    }
 
     /// - Parameters:
     ///   - island: the fruit hangs from its root at its hang points (it turns and bobs with the island).
-    ///   - deliveryTarget: where the artifact flies (the dragon's head).
+    ///   - deliveryTarget: where the blue spell flies (the dragon's head).
     ///   - background: interactive entities behind the fruit, switched off while a fruit is close.
     @MainActor
-    static func makeOrchard(viewModel: OrchardViewModel, viewer: ViewerTracker, island: IslandSceneBuilder.Island,
+    static func makeOrchard(viewModel: OrchardViewModel, player: Player, island: IslandSceneBuilder.Island,
                             deliveryTarget: Entity, background: [Entity]) async -> Entity {
         let hangPoints = island.fruitHangPoints
         let islandScale = island.root.scale.x
@@ -329,29 +313,75 @@ enum OrchardSceneBuilder {
         stage.name = stageName
         root.addChild(stage)
 
+        let orbTemplate = await makeOrbTemplate()
         var fruits: [OrchardFruit] = []
+        var orbs: [Int: Entity] = [:]
         for (index, fruit) in viewModel.fruits.enumerated() {
             let point = hangPoints.isEmpty ? .zero : hangPoints[index % hangPoints.count]
-            if let orchardFruit = makeFruit(fruit, at: point, islandScale: islandScale, shape: viewModel.appleShape,
-                                            wormCount: viewModel.wormCount) {
-                island.root.addChild(orchardFruit.holder)
-                fruits.append(orchardFruit)
+            guard let orchardFruit = await makeFruit(fruit, at: point, islandScale: islandScale, viewModel: viewModel) else {
+                continue
             }
+            island.root.addChild(orchardFruit.holder)
+            fruits.append(orchardFruit)
+            let orb = orbTemplate.clone(recursive: true)
+            orb.name = "Orb\(fruit.id)"
+            orb.components.set(OrbComponent(fruitID: fruit.id))
+            orb.isEnabled = false
+            orchardFruit.orbAnchor.addChild(orb)
+            orbs[fruit.id] = orb
         }
 
-        let artifact = await makeArtifact()
-        artifact.isEnabled = false
-        root.addChild(artifact)
+        let kalash = await KalashRig.make()
+        root.addChild(kalash.root)
 
-        root.components.set(OrchardComponent(viewModel: viewModel, viewer: viewer, island: island.root, stage: stage,
-                                             fruits: fruits, artifact: artifact, deliveryTarget: deliveryTarget,
-                                             background: background))
+        root.components.set(OrchardComponent(viewModel: viewModel, viewer: player.viewer, hands: player.hands,
+                                             island: island.root, stage: stage, fruits: fruits, orbs: orbs,
+                                             kalash: kalash, deliveryTarget: deliveryTarget, background: background))
         return root
+    }
+
+    /// A fruit's drawing and its sizes, before it is hung on the tree.
+    private struct RigBuild {
+        let rig: OrchardFruit.Rig
+        let root: Entity
+        /// Height of the drawing in its own units.
+        let size: Float
+        let tapShape: ShapeResource
+        let treeSize: Float
+        let focusedSize: Float
+    }
+
+    @MainActor
+    private static func makeRig(_ kind: FruitKind, viewModel: OrchardViewModel) async -> RigBuild? {
+        switch kind {
+        case .apple:
+            let shape = viewModel.appleShape
+            guard let apple = AppleRig(shape: shape, wormCount: viewModel.wormCount) else { return nil }
+            return RigBuild(rig: .apple(apple), root: apple.root, size: shape.height,
+                            tapShape: .generateSphere(radius: shape.height * 0.9),
+                            treeSize: appleSizeOnTree, focusedSize: appleSizeFocused)
+        case .pomegranate:
+            guard let pomegranate = PomegranateRig() else { return nil }
+            return RigBuild(rig: .pomegranate(pomegranate), root: pomegranate.root, size: pomegranate.radius * 2,
+                            tapShape: .generateSphere(radius: pomegranate.radius * 1.8),
+                            treeSize: pomegranateSizeOnTree, focusedSize: pomegranateSizeFocused)
+        case .banana:
+            guard let banana = await BananaRig() else { return nil }
+            return RigBuild(rig: .banana(banana), root: banana.root, size: banana.size,
+                            tapShape: .generateSphere(radius: banana.size * 0.6),
+                            treeSize: bananaSizeOnTree, focusedSize: bananaSizeFocused)
+        case .pineapple:
+            guard let pineapple = await PineappleRig() else { return nil }
+            return RigBuild(rig: .pineapple(pineapple), root: pineapple.root, size: pineapple.size,
+                            tapShape: .generateSphere(radius: pineapple.size * 0.8),
+                            treeSize: pineappleSizeOnTree, focusedSize: pineappleSizeFocused)
+        }
     }
 
     @MainActor
     private static func makeFruit(_ fruit: Fruit, at point: SIMD3<Float>, islandScale: Float,
-                                  shape: AppleShape, wormCount: Int) -> OrchardFruit? {
+                                  viewModel: OrchardViewModel) async -> OrchardFruit? {
+        guard let build = await makeRig(fruit.kind, viewModel: viewModel) else { return nil }
         let holder = Entity()
         holder.name = "Fruit\(fruit.id)"
         // Gentle sway on the branch (and in front of the player).
@@ -359,68 +389,62 @@ enum OrchardSceneBuilder {
         sway.components.set(FloatingComponent(base: .zero, amplitude: 0.006, period: 3.5 + Float(fruit.id) * 0.4,
                                               phase: Float(fruit.id)))
         holder.addChild(sway)
+        sway.addChild(build.root)
 
-        let rig: OrchardFruit.Rig
-        let size: Float
-        let tapShape: ShapeResource
-        let treeSize: Float
-        let focusedSize: Float
-        switch fruit.kind {
-        case .apple:
-            guard let apple = AppleRig(shape: shape, wormCount: wormCount) else { return nil }
-            sway.addChild(apple.root)
-            rig = .apple(apple)
-            size = shape.height
-            tapShape = .generateSphere(radius: shape.height * 0.9)
-            treeSize = appleSizeOnTree
-            focusedSize = appleSizeFocused
-        case .pomegranate:
-            guard let pomegranate = PomegranateRig() else { return nil }
-            sway.addChild(pomegranate.root)
-            rig = .pomegranate(pomegranate)
-            size = pomegranate.radius * 2
-            tapShape = .generateSphere(radius: pomegranate.radius * 1.8)
-            treeSize = pomegranateSizeOnTree
-            focusedSize = pomegranateSizeFocused
-        }
-
-        let home = Transform(scale: SIMD3(repeating: treeSize / size / islandScale),
+        let home = Transform(scale: SIMD3(repeating: build.treeSize / build.size / islandScale),
                              rotation: simd_quatf(angle: Float(fruit.id) * 1.3, axis: SIMD3(0, 1, 0)),
                              translation: point)
         holder.transform = home
         holder.components.set(FruitComponent(id: fruit.id, kind: fruit.kind))
         // Larger than the fruit: it is small and far away on the tree.
-        holder.components.set(FruitTapTargetComponent(shape: tapShape))
-        holder.components.set(CollisionComponent(shapes: [tapShape]))
+        holder.components.set(FruitTapTargetComponent(shape: build.tapShape))
+        holder.components.set(CollisionComponent(shapes: [build.tapShape]))
         holder.components.set(InputTargetComponent())
         holder.components.set(HoverEffectComponent())
-        return OrchardFruit(fruit: fruit, holder: holder, rig: rig, home: home, focusScale: focusedSize / size)
+        return OrchardFruit(fruit: fruit, holder: holder, rig: build.rig, home: home,
+                            focusScale: build.focusedSize / build.size)
+    }
+}
+
+// MARK: - Per-fruit drawing
+
+extension OrchardFruit {
+    /// Where the fruit's orb sits until it rises.
+    @MainActor
+    var orbAnchor: Entity {
+        switch rig {
+        case .apple(let rig): rig.core
+        case .pomegranate(let rig): rig.orbAnchor
+        case .banana(let rig): rig.orbAnchor
+        case .pineapple(let rig): rig.orbAnchor
+        }
     }
 
-    /// The artifact: `Artifact.usdz` from the bundle when the design team delivers it, otherwise a glowing
-    /// golden orb (placeholder). Origin at its centre, about 5 cm wide.
+    /// How high above its anchor the freed orb floats, in the fruit's own units.
     @MainActor
-    private static func makeArtifact() async -> Entity {
-        let artifact = Entity()
-        artifact.name = "Artifact"
-        if let asset = try? await Entity(named: "Artifact", in: .main) {
-            artifact.addChild(asset)
-        } else {
-            var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(tint: UIColor(red: 1, green: 0.8, blue: 0.35, alpha: 1))
-            material.emissiveColor = .init(color: UIColor(red: 1, green: 0.75, blue: 0.3, alpha: 1))
-            material.emissiveIntensity = 2.5
-            material.metallic = 0.6
-            material.roughness = 0.2
-            artifact.addChild(ModelEntity(mesh: .generateSphere(radius: 0.025), materials: [material]))
-            var halo = UnlitMaterial(color: UIColor(red: 1, green: 0.85, blue: 0.4, alpha: 1))
-            halo.blending = .transparent(opacity: .init(floatLiteral: 0.25))
-            artifact.addChild(ModelEntity(mesh: .generateSphere(radius: 0.038), materials: [halo]))
+    func orbHeight(viewModel: OrchardViewModel) -> Float {
+        switch rig {
+        case .apple(let rig): rig.shape.height / 2 + viewModel.appleOpening * rig.shape.maxLift + 0.07
+        case .pomegranate(let rig): rig.radius * 0.9 + 0.07
+        case .banana(let rig): rig.heightAboveAnchor + 0.05
+        case .pineapple(let rig): rig.size / 2 + 0.07
         }
-        artifact.components.set(ArtifactComponent())
-        artifact.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.05)]))
-        artifact.components.set(InputTargetComponent.disabled)
-        artifact.components.set(HoverEffectComponent())
-        return artifact
+    }
+
+    /// The sealed orb shows only in the apple: between its slices, guarded by the worms.
+    var showsSealedOrb: Bool {
+        if case .apple = rig { return true }
+        return false
+    }
+
+    /// The fruit's own targets (stem, worms, halves, peel) answer only while it is close to the player.
+    @MainActor
+    func setInteractive(_ isInteractive: Bool) {
+        switch rig {
+        case .apple(let rig): rig.setInteractive(isInteractive)
+        case .pomegranate(let rig): rig.setInteractive(isInteractive)
+        case .banana(let rig): rig.setInteractive(isInteractive)
+        case .pineapple(let rig): rig.setInteractive(isInteractive)
+        }
     }
 }

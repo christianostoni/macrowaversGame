@@ -6,7 +6,7 @@ struct SceneFocusTests {
     private let phases: [DragonPhase] = [.captive, .alerted, .approaching, .landing, .untangling, .free, .gone]
 
     @Test func aFruitCloseFadesTheIslandAndTheDragon() {
-        let focus = SceneFocus(isFruitFocused: true, isArtifactFlying: false, phase: .captive)
+        let focus = SceneFocus(isFruitFocused: true, isSpellFlying: false, phase: .captive)
 
         #expect(focus == .fruit)
         #expect(focus.opacity(of: .island) == SceneFocus.dimmedOpacity)
@@ -15,7 +15,7 @@ struct SceneFocusTests {
 
     @Test func untanglingKeepsOnlyTheDragonVisible() {
         for phase in [DragonPhase.landing, .untangling] {
-            let focus = SceneFocus(isFruitFocused: false, isArtifactFlying: false, phase: phase)
+            let focus = SceneFocus(isFruitFocused: false, isSpellFlying: false, phase: phase)
 
             #expect(focus == .dragon)
             #expect(focus.opacity(of: .island) == SceneFocus.dimmedOpacity)
@@ -25,7 +25,7 @@ struct SceneFocusTests {
 
     @Test func exploringRestoresEverything() {
         for phase in phases where !phase.focusesOnDragon {
-            let focus = SceneFocus(isFruitFocused: false, isArtifactFlying: false, phase: phase)
+            let focus = SceneFocus(isFruitFocused: false, isSpellFlying: false, phase: phase)
 
             #expect(focus == .none)
             #expect(focus.opacity(of: .island) == 1)
@@ -35,16 +35,16 @@ struct SceneFocusTests {
 
     @Test func theSpeakingDragonKeepsOnlyItselfVisible() {
         // Free, the dragon thanks the player (story screens 4 and 5): the island fades back behind it.
-        let focus = SceneFocus(isFruitFocused: false, isArtifactFlying: false, phase: .free, isDragonSpeaking: true)
+        let focus = SceneFocus(isFruitFocused: false, isSpellFlying: false, phase: .free, isDragonSpeaking: true)
 
         #expect(focus == .dragon)
         #expect(focus.opacity(of: .island) == SceneFocus.dimmedOpacity)
         #expect(focus.opacity(of: .dragon) == 1)
     }
 
-    @Test func theFlyingArtifactBringsTheSceneBack() {
-        // The player follows the artifact to the dragon: nothing stays faded while it flies.
-        let focus = SceneFocus(isFruitFocused: true, isArtifactFlying: true, phase: .alerted)
+    @Test func theFlyingSpellBringsTheSceneBack() {
+        // The player follows the spell to the dragon: nothing stays faded while it flies.
+        let focus = SceneFocus(isFruitFocused: true, isSpellFlying: true, phase: .alerted)
 
         #expect(focus == .none)
     }

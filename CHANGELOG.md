@@ -13,6 +13,9 @@ and versions follow [Semantic Versioning](https://semver.org). One release per s
   flight; one island window, one dragon panel, one immersive space; visionOS 26.5 deployment target.
 - The tree's fruit: apples with a Metal spiral-cut opening and worms guarding the artifact that soothes the dragon,
   and a bonus pomegranate (from Isadora's AppleSpiral prototype).
+- A banana (peel it strip by strip) and a pineapple (chop it) on the tree. Every fruit now hides a glowing orb:
+  drag three into the kalash by your hip, then pinch and twist while looking at it to cast the blue spell that
+  soothes the dragon (replaces tapping the apple's artifact).
 
 ### Changed
 - All code comments, scripts and docs are in English.

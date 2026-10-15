@@ -25,12 +25,12 @@ enum SceneFocus: Equatable {
 
     /// - Parameters:
     ///   - isFruitFocused: a fruit has been brought close to the player.
-    ///   - isArtifactFlying: the artifact is on its way to the dragon: the scene comes back so the player
+    ///   - isSpellFlying: the blue spell is on its way to the dragon: the scene comes back so the player
     ///     can follow it, even though the fruit is still close.
     ///   - phase: the dragon's chapter.
     ///   - isDragonSpeaking: the story shows the dragon's words (`StoryStep.focusesOnDragon`).
-    init(isFruitFocused: Bool, isArtifactFlying: Bool, phase: DragonPhase, isDragonSpeaking: Bool = false) {
-        if isFruitFocused && !isArtifactFlying {
+    init(isFruitFocused: Bool, isSpellFlying: Bool, phase: DragonPhase, isDragonSpeaking: Bool = false) {
+        if isFruitFocused && !isSpellFlying {
             self = .fruit
         } else if phase.focusesOnDragon || isDragonSpeaking {
             self = .dragon

@@ -8,6 +8,8 @@ import UIKit
 @MainActor
 final class PomegranateRig {
     let root = Entity()
+    /// Where the orb sits until the seeds burst out (centre of the fruit).
+    let orbAnchor = Entity()
     let radius: Float = 0.08
 
     private let body = Entity()
@@ -49,6 +51,7 @@ final class PomegranateRig {
         ]))
         body.components.set(InputTargetComponent.disabled)
         root.addChild(body)
+        root.addChild(orbAnchor)
 
         spawnSeeds()
         apply(opening: 0, burst: false)

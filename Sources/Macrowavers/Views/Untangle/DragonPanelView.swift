@@ -46,17 +46,17 @@ struct DragonPanelView: View {
         switch viewModel.phase {
         case .captive:
             headline("The dragon is circling the tree",
-                     detail: orchard.artifact == .flying
-                        ? "The artifact is flying to the dragon…"
-                        : "Something hidden in the tree's fruit can calm it. Open an apple and catch its worms.")
+                     detail: orchard.kalash.spell == .flying
+                        ? "The blue spell is flying to the dragon…"
+                        : "The orbs hidden in the tree's fruit can calm it. Put three in your kalash and twist.")
         case .alerted:
             headline("The dragon is getting angry!",
                      detail: "It's glaring at you, growling and snorting smoke. It won't come near you: "
-                        + "find the artifact in the tree's fruit to calm it.")
+                        + "fill your kalash with three orbs and cast the spell to calm it.")
             Button("Call It Now", systemImage: "hand.wave") {
                 viewModel.callDragon()
             }
-            Text("Debug: skips the artifact.")
+            Text("Debug: skips the spell.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         case .approaching:
@@ -133,7 +133,7 @@ struct DragonPanelView: View {
                 LabeledContent("Fruit", value: orchard.focusedFruit.map { "\($0.kind) #\($0.id)" } ?? "on the tree")
                 LabeledContent("Apple opening", value: orchard.appleOpening.formatted(.percent.precision(.fractionLength(0))))
                 LabeledContent("Worms", value: "\(orchard.caughtWorms)/\(orchard.wormCount)")
-                LabeledContent("Artifact", value: String(describing: orchard.artifact))
+                LabeledContent("Kalash", value: "\(orchard.kalash.storedCount)/\(Kalash.capacity) orbs, \(orchard.kalash.spell)")
             }
             .font(.footnote.monospaced())
         }

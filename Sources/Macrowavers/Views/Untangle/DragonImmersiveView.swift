@@ -3,7 +3,8 @@ import RealityKit
 import SwiftUI
 
 /// Immersive space in mixed reality: a floating island (the player spins it) with the dragon captive
-/// around the tree and fruit on its branches. The artifact found in an apple soothes the dragon: it flies to
+/// around the tree and fruit on its branches. Every fruit hides a glowing orb: three of them in the kalash and a
+/// twist of the fingers make the blue spell that soothes the dragon: it flies to
 /// the player and settles tangled in front of them; untangled, it thanks them and flies away into the sky.
 /// The story (`StoryViewModel`) frames it: the narrator's pages in a darkened room before the island fades in,
 /// the dragon's words above it once it is free; its farewell waits for the player's answer.
@@ -29,6 +30,8 @@ struct DragonImmersiveView: View {
     @State private var subscriptions: [EventSubscription] = []
     /// Position of the player's head: the dragon looks at the knight.
     @State private var viewer = ViewerTracker()
+    /// The player's hands: chopping the pineapple, twisting the fingers at the kalash.
+    @State private var hands = HandTracker()
     /// The island, the dragon and their panels: built at once, added to the scene when the story reveals them.
     @State private var world = HiddenWorld()
 
@@ -46,14 +49,14 @@ struct DragonImmersiveView: View {
                 entity.components.set(OpacityComponent(opacity: 0))
             }
             world.entities = [island.root, island.floorOccluder, playArea]
-            // The artifact flies to the dragon's head (node 0).
+            // The blue spell flies to the dragon's head (node 0).
             let dragonHead = playArea.findEntity(named: "DragonNode0") ?? playArea
             // While a fruit is close, what is behind it (island rock, dragon) must not take the pinch.
             let background = [island.root.findEntity(named: IslandSceneBuilder.rockName)].compactMap { $0 }
                 + Self.descendants(of: playArea).filter { $0.components.has(DragonNodeComponent.self) }
             let orchardRoot = await OrchardSceneBuilder.makeOrchard(
-                viewModel: orchard, viewer: viewer, island: island, deliveryTarget: dragonHead,
-                background: background)
+                viewModel: orchard, player: .init(viewer: viewer, hands: hands), island: island,
+                deliveryTarget: dragonHead, background: background)
             world.entities.append(orchardRoot)
             // Island panel on the left, dragon panel on the right.
             if let islandPanel = attachments.entity(for: IslandControlsView.attachmentID) {
@@ -78,6 +81,13 @@ struct DragonImmersiveView: View {
                 panel.position = SIMD3(0, -0.2, 0.02)
                 stage.addChild(panel)
             }
+            // The kalash's counter, beside it (it follows the kalash wherever the player puts it).
+            if let panel = attachments.entity(for: KalashPanelView.attachmentID),
+               let kalash = orchardRoot.findEntity(named: KalashRig.name) {
+                panel.position = SIMD3(0.16, 0.1, 0)
+                panel.components.set(BillboardComponent())
+                kalash.addChild(panel)
+            }
             subscriptions = subscribeToDragonGrabs(content)
         } update: { content, _ in
             // Reading `story.step` here re-runs this block when the story moves on.
@@ -100,6 +110,10 @@ struct DragonImmersiveView: View {
             }
             Attachment(id: FruitPanelView.attachmentID) {
                 FruitPanelView()
+                    .environment(orchard)
+            }
+            Attachment(id: KalashPanelView.attachmentID) {
+                KalashPanelView()
                     .environment(orchard)
             }
             Attachment(id: IslandControlsView.attachmentID) {
@@ -128,10 +142,15 @@ struct DragonImmersiveView: View {
             if step == .farewell { viewModel.beginFarewell() }
         }
         .task { await viewer.start() }
+        .task {
+            orchard.isHandTrackingAvailable = await hands.start()
+            await hands.track()
+        }
         .onAppear { viewModel.immersiveSpaceState = .open }
         .onDisappear {
             // Closed from the island panel or by the system (Digital Crown): start over from the launch window.
             viewer.stop()
+            hands.stop()
             viewModel.resetGame()
             orchard.reset()
             story.reset()

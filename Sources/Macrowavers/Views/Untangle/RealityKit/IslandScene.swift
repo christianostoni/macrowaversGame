@@ -69,8 +69,8 @@ struct TurntableSystem: System {
 
 /// Focus mode (`SceneFocus`): fades a part of the scene back while the player's attention is elsewhere and
 /// brings it back when they return to exploring. On the island root (rock, tree, floating rocks and the fruit
-/// hanging on it) and on the play area (the dragon). The focused fruit and the artifact live under the orchard,
-/// outside both, so they always stay fully visible.
+/// hanging on it) and on the play area (the dragon). The focused fruit, the orbs, the kalash and the spell live
+/// under the orchard, outside both, so they always stay fully visible.
 /// `OpacityComponent` multiplies with the ones below it: the dragon's own fade-in/fade-out keeps working.
 struct FocusDimmingComponent: Component {
     let untangle: UntangleViewModel
@@ -85,7 +85,7 @@ struct FocusDimmingComponent: Component {
 
     @MainActor
     var focus: SceneFocus {
-        SceneFocus(isFruitFocused: orchard.focusedFruitID != nil, isArtifactFlying: orchard.artifact == .flying,
+        SceneFocus(isFruitFocused: orchard.focusedFruitID != nil, isSpellFlying: orchard.kalash.spell == .flying,
                    phase: untangle.phase, isDragonSpeaking: story.step.focusesOnDragon)
     }
 }
