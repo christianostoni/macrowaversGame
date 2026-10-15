@@ -63,9 +63,9 @@ enum DragonRigLoader {
 /// "Expressive" pose of the dragon computed every frame. Valid for any rig.
 struct DragonPose {
     var headOrientation = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
-    /// How high the head rises on the neck (m) and how many nodes take part.
+    /// How high the head rises on the neck (m) and how much of the body (m) takes part.
     var neckLift: Float = 0.02
-    var neckLength: Float = 5
+    var neckLength: Float = 0.25
     /// 0 = mouth closed, 1 = wide open.
     var jawOpen: Float = 0
     /// 0 = wings folded along the body, 1 = spread.
@@ -93,7 +93,12 @@ struct DragonLifeAnimator {
 
     /// Breathing: a swelling wave running from head to tail.
     func breathScale(node index: Int, time: Float) -> Float {
-        1 + 0.06 * sin(time * 2.2 - Float(index) * 0.25)
+        1 + 0.06 * sin(time * 2.2 - distance(of: index) * 5)
+    }
+
+    /// Distance of a node from the head along the body at rest (m): the animations do not depend on the node count.
+    private func distance(of index: Int) -> Float {
+        Float(index) * config.segmentLength
     }
 
     /// Eyelids (1 = open, 0 = closed): one blink every ~3.5 s.
@@ -102,18 +107,16 @@ struct DragonLifeAnimator {
         return phase < 0.15 ? abs(phase - 0.075) / 0.075 : 1
     }
 
-    /// Positions to draw: simulation + raised neck + wave + trembling.
+    /// Positions to draw: simulation + raised neck + wave + a slow shiver when it is about to lose its temper.
+    /// No tremble while the player holds it: high-frequency shaking on a grab read as a glitch, not as anger.
     func visualPositions(_ frame: DragonFrame) -> [SIMD3<Float>] {
         let positions = frame.positions
-        let trembleAmount: Float = switch frame.mood {
-        case .restless: 0.006 * frame.restlessness
-        case .annoyed: 0.004 * frame.strain
-        default: 0
-        }
+        let shiver: Float = frame.mood == .restless ? 0.003 * frame.restlessness : 0
         return positions.indices.map { index in
             var position = positions[index]
+            let along = distance(of: index)
             // The neck rises gradually towards the head.
-            let neckWeight = max(0, 1 - Float(index) / pose.neckLength)
+            let neckWeight = max(0, 1 - along / max(pose.neckLength, 1e-3))
             position.y += pose.neckLift * neckWeight * neckWeight
             // Sideways wave running along the body (snaking).
             if pose.bodyWave > 0 {
@@ -123,12 +126,12 @@ struct DragonLifeAnimator {
                 tangent.y = 0
                 if simd_length(tangent) > 1e-5 {
                     let side = simd_normalize(SIMD3(-tangent.z, 0, tangent.x))
-                    position += side * pose.bodyWave * sin(frame.time * 9 - Float(index) * 0.45)
+                    position += side * pose.bodyWave * sin(frame.time * 9 - along * 9)
                 }
             }
-            if trembleAmount > 0 {
-                let seed = Float(index) * 12.9898
-                position += SIMD3(sin(frame.time * 41 + seed), 0, cos(frame.time * 37 + seed)) * trembleAmount
+            if shiver > 0 {
+                // A ripple running down the body (~1.3 Hz), not a per-vertebra buzz.
+                position.y += shiver * sin(frame.time * 8 - along * 12)
             }
             return position
         }
@@ -169,15 +172,19 @@ struct DragonLifeAnimator {
                     pitchOffset = 0.1 * sin(time * 0.9)
                 }
             case .annoyed:
+                // Watches the hand that pulls it; the harder the pull, the more it bares its teeth and tugs back
+                // with its head (slowly: a fast shake looked like a glitch).
                 if let hand = frame.lookTarget { look = toward(hand) }
                 target.neckLift = 0.05
                 target.jawOpen = 0.5 * frame.strain
-                yawOffset = 0.08 * sin(time * 25) * frame.strain
-                responsiveness = 9
+                yawOffset = 0.06 * sin(time * 3) * frame.strain
+                responsiveness = 6
             case .restless:
                 // Warning: stares at the knight, shakes its head, smoke from the nostrils, growling mouth.
                 look = toward(frame.viewer)
-                yawOffset = 0.3 * sin(time * (6 + 8 * frame.restlessness)) * frame.restlessness
+                // Fixed frequency: scaling `time` by the restlessness made the shake speed up wildly (its phase
+                // grew with the game time).
+                yawOffset = 0.3 * sin(time * 9) * frame.restlessness
                 target.neckLift = 0.04 + 0.05 * frame.restlessness
                 target.smoke = 0.3 + 0.7 * frame.restlessness
                 target.jawOpen = 0.25 * frame.restlessness
@@ -189,7 +196,7 @@ struct DragonLifeAnimator {
                 // Gratitude: head high towards the knight, wings spread and beating slowly.
                 look = toward(frame.viewer)
                 target.neckLift = 0.12 + 0.02 * sin(time * 4)
-                target.neckLength = 8
+                target.neckLength = 0.4
                 target.wingFlare = 1
                 target.wingFlap = 0.3 * sin(time * 4)
             }
@@ -225,7 +232,7 @@ struct DragonLifeAnimator {
             let rise = smoothstep(0, 0.3, progress) * (1 - smoothstep(0.8, 1, progress))
             let roar = smoothstep(0.35, 0.45, progress) * (1 - smoothstep(0.7, 0.8, progress))
             target.neckLift = 0.22 * rise
-            target.neckLength = 12
+            target.neckLength = 0.6
             look = toward(frame.viewer)
             pitch = -0.5 * roar
             target.jawOpen = roar
@@ -265,7 +272,7 @@ struct DragonLifeAnimator {
         if speed > 0.05 { look = flight.velocity / speed }
         // In flight the body is already in 3D: no raised neck nor extra wave.
         target.neckLift = 0
-        target.neckLength = 1
+        target.neckLength = 0.05
         target.wingFlare = 1
         let climb = speed > 0.05 ? flight.velocity.y / speed : 0
 

@@ -34,6 +34,8 @@ final class UntangleViewModel {
     private(set) var isFlying = false
     /// Placement and rotation of the island (the player spins it).
     private(set) var islandPlacement = IslandPlacement.standard
+    /// Which hand holds which node (from the manipulation events; shown in the debug info).
+    private(set) var handGrabs = HandGrabs()
 
     // MARK: - Model
 
@@ -59,7 +61,8 @@ final class UntangleViewModel {
     @ObservationIgnored private var freeTime: Float = 0
     /// Seconds of celebration in the play area before taking off.
     @ObservationIgnored private let takeoffDelay: Float = 1.5
-    /// After the win: takes off, circles the player once, thanks them with a roar and flies away.
+    /// After the win: takes off, sweeps once in front of the player, hovers in front of their eyes to thank them
+    /// with a roar and flies away (`DragonFlight.Settings.farewell` keeps it all in front of them).
     @ObservationIgnored private let farewell: [DragonFlight.Maneuver] = [.takeoff, .cruise, .hover, .depart]
     /// Just settled, the body blends smoothly from the flight's shape to the simulated one.
     @ObservationIgnored private var settleFrom: [SIMD3<Float>]?
@@ -69,6 +72,12 @@ final class UntangleViewModel {
     @ObservationIgnored private var worldFromLocal = matrix_identity_float4x4
     /// Last known position of the player's eyes (scene space).
     @ObservationIgnored private var viewer = SIMD3<Float>(0, 1.15, 0)
+    /// Where the player is looking (scene space).
+    @ObservationIgnored private var viewerForward = SIMD3<Float>(0, 0, -1)
+    /// Strain filtered over time: the dragon's reaction to a pull builds up and fades, it never flickers.
+    @ObservationIgnored private var smoothedStrain: Float = 0
+    /// How fast `strain` follows the body's tension (1/s).
+    @ObservationIgnored private let strainResponsiveness: Float = 6
     /// Space `flight` works in, towards the scene: the tree (the island's anchor) while the dragon is
     /// captive, so it turns and bobs with the island; the identity when it flies in the scene.
     @ObservationIgnored private var worldFromFlight = matrix_identity_float4x4
@@ -104,9 +113,8 @@ final class UntangleViewModel {
     var dragonOpacity: Float {
         if phase == .gone { return 0 }
         guard let flight else { return phase == .captive || phase == .alerted ? 0 : 1 }
-        guard flight.maneuver == .depart else { return 1 }
-        // Fades while moving away, before reaching the real room's ceiling.
-        let amount = max(0, min(1, (flight.maneuverProgress - 0.3) / 0.55))
+        // Fades while moving away, within a couple of metres: before reaching the real room's walls or ceiling.
+        let amount = flight.departFade
         return 1 - amount * amount * (3 - 2 * amount)
     }
     var flightManeuver: DragonFlight.Maneuver? { flight?.maneuver }
@@ -183,6 +191,9 @@ final class UntangleViewModel {
         untangledTime = 0
         restlessness = 0
         settleFrom = nil
+        if handGrabs != HandGrabs() { handGrabs.reset() }
+        smoothedStrain = 0
+        if strain != 0 { strain = 0 }
     }
 
     /// Can be called several times with different nodes: each hand holds its own node.
@@ -242,12 +253,15 @@ final class UntangleViewModel {
     /// Called every frame by the `DragonBodySystem`.
     /// - Parameters:
     ///   - viewer: the player's eyes in scene space (the flying dragon circles them).
+    ///   - viewerForward: where the player is looking, in scene space (the free dragon stays in front of them).
     ///   - worldFromLocal: transform from the dragon's space to the scene's.
     ///   - orbit: path around the tree and where the tree is in the scene (nil = no island).
-    func update(deltaTime: Float, viewer: SIMD3<Float>, worldFromLocal: float4x4, orbit: AnchoredOrbit?) {
+    func update(deltaTime: Float, viewer: SIMD3<Float>, viewerForward: SIMD3<Float> = SIMD3(0, 0, -1),
+                worldFromLocal: float4x4, orbit: AnchoredOrbit?) {
         time += deltaTime
         self.worldFromLocal = worldFromLocal
         self.viewer = viewer
+        self.viewerForward = viewerForward
 
         switch phase {
         case .captive, .alerted, .approaching, .landing:
@@ -274,7 +288,10 @@ final class UntangleViewModel {
             worldFromFlight = orbit.worldFromAnchor
             flight.orbit = anchorPath(orbit)
         }
-        flight.update(deltaTime: deltaTime, viewer: Self.transform(viewer, by: worldFromFlight.inverse))
+        let flightFromWorld = worldFromFlight.inverse
+        let forward = flightFromWorld * SIMD4(viewerForward, 0)
+        flight.update(deltaTime: deltaTime, viewer: Self.transform(viewer, by: flightFromWorld),
+                      viewerForward: SIMD3(forward.x, forward.y, forward.z))
 
         if phase == .alerted {
             alertedTime += deltaTime
@@ -306,7 +323,9 @@ final class UntangleViewModel {
         simulation.step(deltaTime: deltaTime)
         refreshCrossings()
 
-        let newStrain = max(0, min(1, (simulation.tension - 1) / (config.maxTension - 1)))
+        let rawStrain = max(0, min(1, (simulation.tension - 1) / (config.maxTension - 1)))
+        smoothedStrain += (rawStrain - smoothedStrain) * (1 - exp(-deltaTime * strainResponsiveness))
+        let newStrain = smoothedStrain < 0.01 ? 0 : smoothedStrain
         if abs(newStrain - strain) > 0.05 || (newStrain == 0 && strain != 0) { strain = newStrain }
         if abs(behavior.restlessness - restlessness) > 0.02 || behavior.restlessness == 0 && restlessness != 0 {
             restlessness = behavior.restlessness
@@ -336,14 +355,15 @@ final class UntangleViewModel {
     private func updateFreedom(deltaTime: Float) {
         freeTime += deltaTime
         if let flight {
-            flight.update(deltaTime: deltaTime, viewer: viewer)
+            flight.update(deltaTime: deltaTime, viewer: viewer, viewerForward: viewerForward)
             if flight.isFinished && phase != .gone { phase = .gone }
             return
         }
         simulation.step(deltaTime: deltaTime)
         if freeTime >= takeoffDelay {
             let start = simulation.positions.map { Self.transform($0, by: worldFromLocal) }
-            flight = DragonFlight(start: start, segmentLength: config.segmentLength, plan: farewell)
+            flight = DragonFlight(start: start, segmentLength: config.segmentLength, settings: .farewell,
+                                  plan: farewell, viewer: viewer, viewerForward: viewerForward)
             isFlying = true
         }
     }
@@ -378,5 +398,36 @@ final class UntangleViewModel {
         crossingPoints = crossings.map(\.position)
         // Assign only when it changes, so the views are not invalidated every frame.
         if crossings.count != crossingCount { crossingCount = crossings.count }
+    }
+}
+
+// MARK: - Hands (manipulation events)
+
+extension UntangleViewModel {
+    /// One or two hands started holding a node (each node has its own manipulation: one per hand).
+    func manipulationBegan(node index: Int, hands: Set<HandGrabs.Hand>) {
+        apply(handGrabs.began(node: index, hands: hands))
+    }
+
+    /// The node passed from one hand to the other, or a second hand joined or left.
+    func manipulationHandedOff(node index: Int, to hands: Set<HandGrabs.Hand>) {
+        apply(handGrabs.handedOff(node: index, to: hands))
+    }
+
+    func manipulationReleased(node index: Int) {
+        apply(handGrabs.released(node: index))
+    }
+
+    func manipulationEnded(node index: Int) {
+        apply(handGrabs.ended(node: index))
+    }
+
+    private func apply(_ changes: [HandGrabs.Change]) {
+        for change in changes {
+            switch change {
+            case .grab(let index): grab(node: index)
+            case .release(let index): release(node: index)
+            }
+        }
     }
 }

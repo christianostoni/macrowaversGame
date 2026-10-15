@@ -26,7 +26,7 @@ arrives.
 | Moment | Behaviour |
 |---|---|
 | On the tree | 3 apples and 1 pomegranate hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
-| Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows to ~20 cm. A small panel under it says what to do |
+| Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows to ~20 cm. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close, and come back when it returns to the tree (or as soon as the artifact flies to the dragon) |
 | Open the apple | Dragging the stem up lifts the spiral slices apart (Metal compute shader on the mesh) |
 | Worms | 3 worms crawl along the slices. Every few seconds one **burrows** for about a second (it cannot be caught then), they **speed up** after each catch, and they hide while the apple is almost closed |
 | Last worm caught | The artifact, sealed in the core so far, **rises out of the apple**, glowing and pulsing. Tap it |
@@ -100,6 +100,10 @@ The fruit hangs from the island's root at the points `fruit_01` … `fruit_06` s
   (`FocusComponent`) and the fruit closes gently on the way (`AppleRig.ease`, `PomegranateRig.ease`, seeds flying
   back in) instead of snapping shut or vanishing. `OrchardViewModel.isFocusedFruitEmpty` tells the panel when the
   fruit cannot hold the artifact.
+- **Focus mode while a fruit is close** (`SceneFocus.fruit`). The island (and the fruit still hanging from it)
+  and the dragon fade back (see the dragon docs); the focused fruit has moved to the stage, outside the island,
+  so it is the only thing at full strength in front of the player. When the artifact flies, the scene comes
+  back so the player can follow it to the dragon.
 - **Pomegranate kept as a bonus.** Same interactions as the prototype; it shares `FloatingComponent` with the
   island instead of its own float system.
 

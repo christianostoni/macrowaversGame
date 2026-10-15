@@ -57,6 +57,88 @@ struct TangleSimulationTests {
         #expect(simulation.positions[20].y > restingHeight + 0.01)
         #expect(simulation.isGrabbed(config.nodeCount - 1))
     }
+
+    @Test func shakyHandDoesNotShakeTheBody() {
+        let config = TangleConfig()
+        let simulation = TangleSimulation(config: config, positions: TangleShape.trefoil.positions(config: config))
+        let node = config.nodeCount - 1
+        simulation.grab(node)
+        let hand = simulation.positions[node] + SIMD3(0.06, 0.04, 0)
+        var heights: [Float] = []
+        for frame in 0..<120 {
+            // Hand-tracking noise: ±1 cm every frame.
+            let noise: Float = frame.isMultiple(of: 2) ? 0.01 : -0.01
+            simulation.drag(node, to: hand + SIMD3(noise, noise, noise))
+            simulation.step(deltaTime: 1.0 / 60.0)
+            heights.append(simulation.positions[node].y)
+        }
+
+        let settled = heights.suffix(30)
+        #expect(settled.max()! - settled.min()! < 0.005)
+        #expect(abs(heights.last! - hand.y) < 0.01)
+    }
+
+    @Test func oneHandPullingTautDoesNotLockTheOtherHand() {
+        let config = TangleConfig()
+        let simulation = TangleSimulation(config: config, positions: TangleShape.trefoil.positions(config: config))
+        let tail = config.nodeCount - 1
+        let middle = config.nodeCount / 3
+        simulation.grab(tail)
+        simulation.grab(middle)
+        // The right hand pulls the tail until the body is taut, the left hand just holds its node.
+        let pulled = simulation.positions[tail] + SIMD3(0.8, 0.05, 0)
+        let held = simulation.positions[middle]
+        for _ in 0..<90 {
+            simulation.drag(tail, to: pulled)
+            simulation.drag(middle, to: held)
+            simulation.step(deltaTime: 1.0 / 60.0)
+        }
+        #expect(simulation.tension > config.maxTension - config.tensionSoftness)
+
+        // Now the left hand lifts its node: it must follow, even though the body is taut.
+        let start = simulation.positions[middle]
+        for _ in 0..<60 {
+            simulation.drag(tail, to: pulled)
+            simulation.drag(middle, to: start + SIMD3(0, 0.06, 0))
+            simulation.step(deltaTime: 1.0 / 60.0)
+        }
+
+        #expect(simulation.positions[middle].y > start.y + 0.03)
+        #expect(simulation.tension < config.maxTension + config.tensionSoftness * 2)
+    }
+
+    @Test func tautBodyGivesWayWithoutFlickering() {
+        let config = TangleConfig()
+        let simulation = TangleSimulation(config: config, positions: TangleShape.trefoil.positions(config: config))
+        let first = config.nodeCount * 2 / 5
+        let second = config.nodeCount - 1
+        simulation.grab(first)
+        simulation.grab(second)
+        // The two hands pull far apart, one of them shaky: the body cannot follow both.
+        let left = simulation.positions[first] + SIMD3(-0.6, 0.05, 0)
+        let right = simulation.positions[second] + SIMD3(0.6, 0.05, 0)
+        var jerk: Float = 0
+        var frames: Float = 0
+        var previousStep = SIMD3<Float>.zero
+        var previous = simulation.positions[second]
+        for frame in 0..<240 {
+            let noise: Float = frame.isMultiple(of: 2) ? 0.008 : -0.008
+            simulation.drag(first, to: left)
+            simulation.drag(second, to: right + SIMD3(repeating: noise))
+            simulation.step(deltaTime: 1.0 / 60.0)
+            let step = simulation.positions[second] - previous
+            previous = simulation.positions[second]
+            // Once taut, the held node must not jerk back and forth (it used to: ~3 mm per frame, 39 mm shaky).
+            if frame > 60 {
+                jerk += simd_length(step - previousStep)
+                frames += 1
+            }
+            previousStep = step
+        }
+
+        #expect(jerk / frames < 0.0003)
+        #expect(simulation.tension < config.maxTension + config.tensionSoftness * 2)
+    }
 }
 
 struct DragonBehaviorTests {
@@ -167,6 +249,94 @@ struct DragonFlightTests {
         #expect(flight.isFinished)
         #expect(flight.maneuver == .depart)
     }
+
+    @Test(arguments: [SIMD3<Float>(0, 0, -1), simd_normalize(SIMD3<Float>(0.6, -0.3, -1))])
+    func freeDragonStaysInFrontOfThePlayerAndHoversWhereTheyLook(forward: SIMD3<Float>) {
+        let config = TangleConfig()
+        let viewer = SIMD3<Float>(0, 1.15, 0)
+        let settings = DragonFlight.Settings.farewell
+        let flat = simd_normalize(SIMD3(forward.x, 0, forward.z))
+        let start = TangleShape.trefoil.positions(config: config).map { $0 + SIMD3<Float>(0, 0.75, -0.6) }
+        let flight = DragonFlight(start: start, segmentLength: config.segmentLength, settings: settings,
+                                  plan: [.takeoff, .cruise, .hover, .depart], viewer: viewer, viewerForward: forward)
+        var departStart: SIMD3<Float>?
+        var hoverEnd: SIMD3<Float>?
+        var elapsed: Float = 0
+        while !flight.isFinished && elapsed < 60 {
+            flight.update(deltaTime: 1.0 / 60.0, viewer: viewer, viewerForward: forward)
+            elapsed += 1.0 / 60.0
+            let head = flight.positions[0]
+            let offset = SIMD3(head.x - viewer.x, 0, head.z - viewer.z)
+            if flight.maneuver == .hover { hoverEnd = head }
+            if flight.maneuver == .depart && departStart == nil { departStart = head }
+            guard flight.maneuver == .cruise || flight.maneuver == .hover else { continue }
+            // Within the flight volume and never behind or beside the player.
+            #expect(simd_length(offset) < settings.orbitRadius.upperBound + settings.boundsMargin + 0.05)
+            #expect(head.y < settings.altitude.upperBound + settings.boundsMargin + 0.05)
+            #expect(simd_distance(head, viewer) > settings.personalSpace * 0.95)
+            #expect(simd_dot(simd_normalize(offset), flat) > cos(settings.frontArc! + 0.35))
+        }
+
+        #expect(flight.isFinished)
+        // It thanked the player straight in front of their eyes, at a comfortable distance.
+        let spot = viewer + flat * settings.hoverDistance
+        #expect(hoverEnd.map { simd_distance($0, spot) < 0.25 } == true)
+        // It faded out within a couple of metres: before the room's walls or ceiling.
+        #expect(departStart.map { simd_distance(flight.positions[0], $0) < settings.departFade.upperBound + 0.2 } == true)
+        #expect(flight.positions.allSatisfy { $0.y < 2.6 })
+    }
+}
+
+struct HandGrabsTests {
+    @Test func eachHandHoldsItsOwnNode() {
+        var grabs = HandGrabs()
+
+        #expect(grabs.began(node: 10, hands: [.left]) == [.grab(10)])
+        #expect(grabs.began(node: 40, hands: [.right]) == [.grab(40)])
+        #expect(grabs.node(heldBy: .left) == 10)
+        #expect(grabs.node(heldBy: .right) == 40)
+        // The left hand lets go: the right one keeps its node.
+        #expect(grabs.released(node: 10) == [.release(10)])
+        #expect(grabs.ended(node: 10).isEmpty)
+        #expect(grabs.heldNodes == [40])
+    }
+
+    @Test func aHandThatGrabsAgainLetsGoOfItsOldNode() {
+        var grabs = HandGrabs()
+        _ = grabs.began(node: 10, hands: [.left])
+
+        // The release of node 10 was missed: the left hand cannot hold two nodes.
+        #expect(grabs.began(node: 20, hands: [.left]) == [.release(10), .grab(20)])
+        #expect(grabs.heldNodes == [20])
+    }
+
+    @Test func aNodePassesFromHandToHandWithoutBeingDropped() {
+        var grabs = HandGrabs()
+        _ = grabs.began(node: 10, hands: [.left])
+
+        #expect(grabs.handedOff(node: 10, to: [.left, .right]).isEmpty)
+        #expect(grabs.handedOff(node: 10, to: [.right]).isEmpty)
+        #expect(grabs.node(heldBy: .right) == 10)
+        #expect(grabs.node(heldBy: .left) == nil)
+    }
+
+    @Test func aLateEndDoesNotDropAQuickRegrab() {
+        var grabs = HandGrabs()
+        _ = grabs.began(node: 10, hands: [.left])
+        #expect(grabs.released(node: 10) == [.release(10)])
+        // Grabbed again before the end of the previous grab arrives.
+        #expect(grabs.began(node: 10, hands: [.left]) == [.grab(10)])
+        #expect(grabs.ended(node: 10).isEmpty)
+        #expect(grabs.heldNodes == [10])
+    }
+
+    @Test func aCancelledGrabIsDropped() {
+        var grabs = HandGrabs()
+        _ = grabs.began(node: 10, hands: [.right])
+
+        #expect(grabs.ended(node: 10) == [.release(10)])
+        #expect(grabs.heldNodes.isEmpty)
+    }
 }
 
 @MainActor
@@ -255,6 +425,44 @@ struct UntangleViewModelTests {
         #expect(viewModel.crossingCount == 3)
         // Between the first pose and the simulated tangle there are no visible jumps.
         #expect(zip(viewModel.displayPositions, viewModel.nodePositions).allSatisfy { simd_distance($0, $1) < 0.03 })
+    }
+
+    @Test func leftAndRightHandsDragTwoPartsIndependently() {
+        let viewModel = UntangleViewModel(shape: .trefoil)
+        let frame = { viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0),
+                                       worldFromLocal: matrix_identity_float4x4, orbit: self.islandOrbit()) }
+        frame()
+        viewModel.callDragon()
+        while viewModel.phase != .untangling { frame() }
+
+        let left = 20
+        let right = viewModel.config.nodeCount - 1
+        viewModel.manipulationBegan(node: left, hands: [.left])
+        viewModel.manipulationBegan(node: right, hands: [.right])
+        #expect(viewModel.userGrabbedNodes == [left, right])
+
+        let leftStart = viewModel.nodePositions[left]
+        let rightStart = viewModel.nodePositions[right]
+        for _ in 0..<60 {
+            viewModel.drag(node: left, to: leftStart + SIMD3(0, 0.05, 0))
+            viewModel.drag(node: right, to: rightStart + SIMD3(0.04, 0, 0))
+            frame()
+        }
+        // Each hand moved its own part, in its own direction.
+        #expect(viewModel.nodePositions[left].y > leftStart.y + 0.02)
+        #expect(viewModel.nodePositions[right].x > rightStart.x + 0.02)
+
+        // The left hand lets go: the right one keeps holding and dragging.
+        viewModel.manipulationReleased(node: left)
+        viewModel.manipulationEnded(node: left)
+        #expect(viewModel.userGrabbedNodes == [right])
+        let beforeDrag = viewModel.nodePositions[right]
+        for _ in 0..<30 {
+            viewModel.drag(node: right, to: beforeDrag + SIMD3(0, 0.04, 0))
+            frame()
+        }
+        #expect(viewModel.nodePositions[right].y > beforeDrag.y + 0.015)
+        #expect(viewModel.handGrabs.summary == "R \(right)")
     }
 
     @Test func restartsResetTheDragonAndTheGame() {

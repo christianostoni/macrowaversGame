@@ -77,13 +77,17 @@ struct DetanglingStateComponent: Component {
             case .grab:
                 collider.components.remove(DragonTapTargetComponent.self)
                 if config.anchorHead && index == 0 {
+                    // The anchored head cannot be grabbed: no shape at all, or its large tap sphere would sit
+                    // over the neck and catch the pinches meant for it.
                     collider.components[InputTargetComponent.self]?.isEnabled = false
+                    collider.components.remove(CollisionComponent.self)
                 } else {
-                    DragonSceneBuilder.makeGrabbable(collider, radius: config.radius)
+                    DragonSceneBuilder.makeGrabbable(collider, config: config)
                 }
             case .none:
                 collider.components.remove(DragonTapTargetComponent.self)
                 collider.components[InputTargetComponent.self]?.isEnabled = false
+                collider.components.remove(CollisionComponent.self)
             }
         }
     }

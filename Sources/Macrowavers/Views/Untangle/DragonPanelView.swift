@@ -129,6 +129,7 @@ struct DragonPanelView: View {
                 LabeledContent("Crossings", value: "\(viewModel.crossingCount)")
                 LabeledContent("Restlessness", value: viewModel.restlessness.formatted(.percent.precision(.fractionLength(0))))
                 LabeledContent("Strain", value: viewModel.strain.formatted(.percent.precision(.fractionLength(0))))
+                LabeledContent("Hands", value: viewModel.handGrabs.summary)
                 LabeledContent("Fruit", value: orchard.focusedFruit.map { "\($0.kind) #\($0.id)" } ?? "on the tree")
                 LabeledContent("Apple opening", value: orchard.appleOpening.formatted(.percent.precision(.fractionLength(0))))
                 LabeledContent("Worms", value: "\(orchard.caughtWorms)/\(orchard.wormCount)")

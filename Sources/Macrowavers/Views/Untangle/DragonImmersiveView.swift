@@ -32,9 +32,14 @@ struct DragonImmersiveView: View {
             // The island first: the dragon is born already circling its tree, the fruit hangs from it.
             let island = await IslandSceneBuilder.makeIsland(placement: viewModel.islandPlacement)
             content.add(island.root)
+            content.add(island.floorOccluder)
             let playArea = await DragonSceneBuilder.makePlayArea(viewModel: viewModel, viewer: viewer,
                                                                  orbitAnchor: island.treeAnchor)
             content.add(playArea)
+            // Focus mode: with a fruit close the island and the dragon fade back; while the dragon is untangled
+            // only the island does.
+            island.root.components.set(FocusDimmingComponent(untangle: viewModel, orchard: orchard, part: .island))
+            playArea.components.set(FocusDimmingComponent(untangle: viewModel, orchard: orchard, part: .dragon))
             // The artifact flies to the dragon's head (node 0).
             let dragonHead = playArea.findEntity(named: "DragonNode0") ?? playArea
             // While a fruit is close, what is behind it (island rock, dragon) must not take the pinch.
@@ -167,25 +172,41 @@ struct DragonImmersiveView: View {
             }
     }
 
-    /// Each node of the dragon has a `ManipulationComponent`: each hand grabs and moves its own node,
-    /// so two parts of the body can be held at the same time.
-    /// Here the view model hears when a grab starts/ends; the movement is read by the `DragonBodySystem`.
+    /// Each node of the dragon has its own `ManipulationComponent`: each hand grabs and moves its own node,
+    /// so the left and the right hand hold two parts of the body at the same time, independently.
+    /// Here the view model hears which hand starts, passes on and lets go of which node (`HandGrabs` sorts out
+    /// the events); the movement is read by the `DragonBodySystem`.
     private func subscribeToDragonGrabs(_ content: RealityViewContent) -> [EventSubscription] {
         [
             content.subscribe(to: ManipulationEvents.WillBegin.self) { event in
                 guard let node = event.entity.components[DragonNodeComponent.self] else { return }
-                viewModel.grab(node: node.index)
+                viewModel.manipulationBegan(node: node.index, hands: Self.hands(event.inputDeviceSet))
+            },
+            content.subscribe(to: ManipulationEvents.DidHandOff.self) { event in
+                guard let node = event.entity.components[DragonNodeComponent.self] else { return }
+                viewModel.manipulationHandedOff(node: node.index, to: Self.hands(event.newInputDeviceSet))
             },
             content.subscribe(to: ManipulationEvents.WillRelease.self) { event in
                 guard let node = event.entity.components[DragonNodeComponent.self] else { return }
-                viewModel.release(node: node.index)
+                viewModel.manipulationReleased(node: node.index)
             },
-            // Safety: if the grab ends without a release (e.g. cancelled), the node must still be freed.
+            // A grab that ends without a release (cancelled) still frees the node.
             content.subscribe(to: ManipulationEvents.WillEnd.self) { event in
                 guard let node = event.entity.components[DragonNodeComponent.self] else { return }
-                viewModel.release(node: node.index)
+                viewModel.manipulationEnded(node: node.index)
             },
         ]
+    }
+
+    private static func hands(_ devices: ManipulationEvents.InputDeviceSet) -> Set<HandGrabs.Hand> {
+        Set(devices.map { device in
+            switch device.chirality {
+            case .left: .left
+            case .right: .right
+            case nil: .unknown
+            @unknown default: .unknown
+            }
+        })
     }
 }
 

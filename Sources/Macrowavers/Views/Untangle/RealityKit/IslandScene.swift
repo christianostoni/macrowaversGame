@@ -67,11 +67,60 @@ struct TurntableSystem: System {
     }
 }
 
+/// Focus mode (`SceneFocus`): fades a part of the scene back while the player's attention is elsewhere and
+/// brings it back when they return to exploring. On the island root (rock, tree, floating rocks and the fruit
+/// hanging on it) and on the play area (the dragon). The focused fruit and the artifact live under the orchard,
+/// outside both, so they always stay fully visible.
+/// `OpacityComponent` multiplies with the ones below it: the dragon's own fade-in/fade-out keeps working.
+struct FocusDimmingComponent: Component {
+    let untangle: UntangleViewModel
+    let orchard: OrchardViewModel
+    let part: SceneFocus.Part
+    /// Current opacity of the part (1 = not faded).
+    var opacity: Float = 1
+
+    /// How fast the fade goes (1/s): about 0.6 s either way.
+    static let responsiveness: Float = 6
+
+    @MainActor
+    var focus: SceneFocus {
+        SceneFocus(isFruitFocused: orchard.focusedFruitID != nil, isArtifactFlying: orchard.artifact == .flying,
+                   phase: untangle.phase)
+    }
+}
+
+struct FocusDimmingSystem: System {
+    static let query = EntityQuery(where: .has(FocusDimmingComponent.self))
+
+    init(scene: RealityKit.Scene) {}
+
+    func update(context: SceneUpdateContext) {
+        let deltaTime = Float(context.deltaTime)
+        for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
+            guard var dimming = entity.components[FocusDimmingComponent.self] else { continue }
+            let target = dimming.focus.opacity(of: dimming.part)
+            guard dimming.opacity != target else { continue }
+            var opacity = dimming.opacity + (target - dimming.opacity)
+                * (1 - exp(-deltaTime * FocusDimmingComponent.responsiveness))
+            if abs(opacity - target) < 0.005 { opacity = target }
+            dimming.opacity = opacity
+            entity.components.set(dimming)
+            // Fully back: no opacity at all, so the part is drawn exactly as before (opaque pass).
+            if opacity >= 1 {
+                entity.components.remove(OpacityComponent.self)
+            } else {
+                entity.components.set(OpacityComponent(opacity: opacity))
+            }
+        }
+    }
+}
+
 /// Builds the floating island with the tree at its centre: the dragon circles it, the fruit hangs from it.
 enum IslandSceneBuilder {
     static let islandName = "FloatingIsland"
     static let treeAnchorName = "TreeAnchor"
     static let rockName = "IslandRock"
+    static let floorOccluderName = "IslandFloorOccluder"
 
     struct Island {
         let root: Entity
@@ -79,6 +128,9 @@ enum IslandSceneBuilder {
         let treeAnchor: Entity
         /// Fruit centres on the canopy, in the root's space (asset metres).
         let fruitHangPoints: [SIMD3<Float>]
+        /// Invisible floor under the island: hides the tip of the rock that sinks below the real floor.
+        /// Lives outside the island (it must not turn, bob or fade with it).
+        let floorOccluder: Entity
     }
 
     /// If the asset is missing the anchor still exists: the dragon circles an empty spot and the fruit hangs
@@ -100,10 +152,12 @@ enum IslandSceneBuilder {
         root.addChild(rock)
 
         var rockBounds = BoundingBox(min: SIMD3(-1.25, -1.3, -1.25), max: SIMD3(1.25, 0, 1.25))
+        var modelBounds = rockBounds
         var hangPoints: [SIMD3<Float>] = []
         do {
             let model = try await Entity(named: islandName, in: .main)
             rock.addChild(model)
+            modelBounds = model.visualBounds(relativeTo: root)
             if let island = model.findEntity(named: "Island") {
                 rockBounds = island.visualBounds(relativeTo: root)
             }
@@ -140,6 +194,22 @@ enum IslandSceneBuilder {
         let treeAnchor = Entity()
         treeAnchor.name = treeAnchorName
         root.addChild(treeAnchor)
-        return Island(root: root, treeAnchor: treeAnchor, fruitHangPoints: hangPoints)
+        return Island(root: root, treeAnchor: treeAnchor, fruitHangPoints: hangPoints,
+                      floorOccluder: makeFloorOccluder(under: placement, modelBounds: modelBounds))
+    }
+
+    /// A patch of floor (the immersive space's floor, y = 0) drawn with `OcclusionMaterial`: whatever is below
+    /// it, the rock and the lowest floating rocks sunk into the floor, is hidden and the real floor shows
+    /// through, so the island seems to rise out of the floor instead of being drawn through it. Seen from above
+    /// it hides nothing else; it sits 2 mm under the floor so it does not cover grounding shadows.
+    @MainActor
+    private static func makeFloorOccluder(under placement: IslandPlacement, modelBounds: BoundingBox) -> Entity {
+        // Wide enough for the whole island (floating rocks included) whichever way it is turned.
+        let reach = max(abs(modelBounds.min.x), abs(modelBounds.max.x), abs(modelBounds.min.z), abs(modelBounds.max.z))
+        let size = 2 * reach * placement.scale + 0.4
+        let occluder = ModelEntity(mesh: .generatePlane(width: size, depth: size), materials: [OcclusionMaterial()])
+        occluder.name = floorOccluderName
+        occluder.position = SIMD3(placement.position.x, -0.002, placement.position.z)
+        return occluder
     }
 }

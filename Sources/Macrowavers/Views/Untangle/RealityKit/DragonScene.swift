@@ -40,6 +40,8 @@ struct DragonBodySystem: System {
         IslandHandleComponent.registerComponent()
         TurntableComponent.registerComponent()
         TurntableSystem.registerSystem()
+        FocusDimmingComponent.registerComponent()
+        FocusDimmingSystem.registerSystem()
         registerSystem()
     }
 
@@ -48,7 +50,7 @@ struct DragonBodySystem: System {
         for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
             guard let body = entity.components[DragonBodyComponent.self] else { continue }
             let viewModel = body.viewModel
-            let viewerInScene = body.viewer.viewerPosition()
+            let (viewerInScene, viewerForward) = body.viewer.viewerPose()
 
             // The grabbed colliders are moved by the ManipulationComponent (the hand): they are the nodes' targets.
             let grabbed = viewModel.userGrabbedNodes
@@ -56,7 +58,7 @@ struct DragonBodySystem: System {
                 viewModel.drag(node: index, to: body.colliders[index].position)
             }
 
-            viewModel.update(deltaTime: deltaTime, viewer: viewerInScene,
+            viewModel.update(deltaTime: deltaTime, viewer: viewerInScene, viewerForward: viewerForward,
                              worldFromLocal: entity.transformMatrix(relativeTo: nil),
                              orbit: entity.components[OrbitComponent.self]?.anchoredOrbit())
 
@@ -148,9 +150,10 @@ enum DragonSceneBuilder {
     /// Each node is grabbed with one hand: with two hands two nodes are held together.
     /// `ManipulationComponent` handles one grab per hand; the SwiftUI gesture would handle only one.
     @MainActor
-    static func makeGrabbable(_ collider: Entity, radius: Float) {
-        // A bit larger than the body: easier to look at and grab.
-        let shape = ShapeResource.generateSphere(radius: radius * 1.5)
+    static func makeGrabbable(_ collider: Entity, config: TangleConfig) {
+        // A bit larger than the body, easy to look at and grab, but not much: the spheres of nearby nodes
+        // overlap less, so two hands close together pick two different nodes instead of sharing one.
+        let shape = ShapeResource.generateSphere(radius: max(config.radius * 1.2, config.segmentLength * 0.75))
         #if os(visionOS)
         ManipulationComponent.configureEntity(
             collider,

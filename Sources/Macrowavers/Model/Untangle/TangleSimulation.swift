@@ -3,12 +3,13 @@ import simd
 /// Parameters of the dragon's body simulation.
 /// All sizes are in metres (RealityKit units).
 struct TangleConfig {
-    /// Number of nodes (vertebrae) of the body. With a rigged model it must match the number of spine joints.
-    var nodeCount = 48
-    /// Rest distance between two consecutive nodes.
-    var segmentLength: Float = 0.05
-    /// Body radius used for self-collisions.
-    var radius: Float = 0.03
+    /// Number of nodes (vertebrae) of the body: the control points of the spline the rig draws. More nodes =
+    /// rounder curves in the knot and in flight (the rigged model samples the spline, any bone count works).
+    var nodeCount = 64
+    /// Rest distance between two consecutive nodes: the body stays ~2.35 m long.
+    var segmentLength: Float = 2.35 / 63
+    /// Body radius used for self-collisions; the rigs draw the body this thick.
+    var radius: Float = 0.04
     /// Solver iterations per sub-step: the more, the "stiffer" the body.
     var solverIterations = 10
     /// Sub-steps per frame: they keep a segment from passing through another.
@@ -26,12 +27,24 @@ struct TangleConfig {
     var flattenStrength: Float = 0.04
     /// Bending stiffness (0...1): prevents elbows that are too sharp.
     var bendStiffness: Float = 0.25
-    /// Height at which the dragon lifts its tail when it thrashes: it passes OVER its own body.
-    var grabLift: Float = 0.08
+    /// Height at which the dragon lifts its tail when it thrashes: it passes OVER its own body
+    /// (clear of a body lying on the plane: more than three radii).
+    var grabLift: Float = 0.12
     /// Stretch beyond which grabbed nodes stop following the hands (1.05 = +5%).
     var maxTension: Float = 1.04
     /// Maximum movement of a grabbed node per sub-step (anti-tunnelling).
     var maxGrabSpeed: Float = 0.015
+    /// Time constant (s) of the filter between the hand and the grabbed node: hand-tracking noise and sudden
+    /// pinches do not shake the body.
+    var grabSmoothing: Float = 0.06
+    /// Tension band before `maxTension` where a grabbed node slows down gradually instead of stopping dead
+    /// (a hard stop made the node flicker between following the hand and giving way).
+    var tensionSoftness: Float = 0.02
+
+    /// Nodes this close along the body never collide with each other: they touch because they are neighbours.
+    var collisionSkip: Int {
+        max(3, Int((2 * radius / segmentLength).rounded(.up)) + 1)
+    }
 }
 
 /// The dragon's body simulated as a rope of nodes (Position Based Dynamics / Verlet).
@@ -42,6 +55,8 @@ final class TangleSimulation {
     private var previous: [SIMD3<Float>]
     /// Grabbed nodes (even more than one: one per hand) and where to bring them.
     private var grabTargets: [Int: SIMD3<Float>] = [:]
+    /// Where each grabbed node is heading: `grabTargets` filtered (see `TangleConfig.grabSmoothing`).
+    private var smoothedTargets: [Int: SIMD3<Float>] = [:]
 
     init(config: TangleConfig = TangleConfig(), positions: [SIMD3<Float>]) {
         precondition(positions.count == config.nodeCount, "positions.count must equal config.nodeCount")
@@ -58,10 +73,12 @@ final class TangleSimulation {
     func isGrabbed(_ index: Int) -> Bool { grabTargets[index] != nil }
 
     /// Returns `false` if the node cannot be grabbed (the anchored head).
+    /// `filtered`: the target goes through `TangleConfig.grabSmoothing` (a hand); the dragon's own moves are exact.
     @discardableResult
-    func grab(_ index: Int) -> Bool {
+    func grab(_ index: Int, filtered: Bool = true) -> Bool {
         guard positions.indices.contains(index), !(config.anchorHead && index == 0) else { return false }
         grabTargets[index] = positions[index]
+        if filtered { smoothedTargets[index] = positions[index] }
         return true
     }
 
@@ -74,10 +91,12 @@ final class TangleSimulation {
 
     func release(_ index: Int) {
         grabTargets[index] = nil
+        smoothedTargets[index] = nil
     }
 
     func releaseAll() {
         grabTargets.removeAll()
+        smoothedTargets.removeAll()
     }
 
     /// Rotates the whole body rigidly around a vertical axis (the dragon turns around).
@@ -91,6 +110,7 @@ final class TangleSimulation {
         positions = positions.map(rotate)
         previous = previous.map(rotate)
         grabTargets = grabTargets.mapValues(rotate)
+        smoothedTargets = smoothedTargets.mapValues(rotate)
     }
 
     var centroid: SIMD3<Float> {
@@ -107,6 +127,7 @@ final class TangleSimulation {
             for _ in 0..<config.substeps {
                 integrate()
                 moveGrabbedNodes()
+                findContactCandidates()
                 for _ in 0..<config.solverIterations {
                     solveDistances()
                     solveBending()
@@ -119,6 +140,8 @@ final class TangleSimulation {
 
     private static let tick: Float = 1.0 / 60.0
     private var accumulator: Float = 0
+    /// Pairs of nodes close enough to touch during this sub-step (see `findContactCandidates`).
+    private var contactCandidates: [(Int, Int)] = []
 
     private func integrate() {
         for i in positions.indices where inverseMass(i) > 0 {
@@ -148,19 +171,30 @@ final class TangleSimulation {
     }
 
     private func moveGrabbedNodes() {
+        let substep = Self.tick / Float(config.substeps)
+        let follow = config.grabSmoothing > 0 ? 1 - exp(-substep / config.grabSmoothing) : 1
+        // 1 below the soft band, 0 at `maxTension`: the node slows down smoothly as the body gets taut.
+        let softness = max(config.tensionSoftness, 1e-4)
+        let freedom = max(0, min(1, (config.maxTension - tension) / softness))
+        // Beyond the limit (e.g. two hands pulling in opposite directions) the node gives way towards its
+        // neighbours, as much as the body is overstretched, instead of tearing it.
+        let giveWay = max(0, min(1, (tension - config.maxTension) / softness)) * 0.05
         for (node, target) in grabTargets {
             previous[node] = positions[node]
-            if tension > config.maxTension {
-                // Too taut (e.g. two hands pulling in opposite directions):
-                // the node gives way a little towards its neighbours instead of tearing the body.
+            var smoothed = target
+            if let previousTarget = smoothedTargets[node] {
+                smoothed = simd_mix(previousTarget, target, SIMD3(repeating: follow))
+                smoothedTargets[node] = smoothed
+            }
+            let delta = smoothed - positions[node]
+            let distance = simd_length(delta)
+            let reach = config.maxGrabSpeed * freedom
+            positions[node] += distance > reach ? delta / max(distance, 1e-6) * reach : delta
+            if giveWay > 0 {
                 let before = positions[max(node - 1, 0)]
                 let after = positions[min(node + 1, positions.count - 1)]
-                positions[node] += ((before + after) / 2 - positions[node]) * 0.05
-                continue
+                positions[node] += ((before + after) / 2 - positions[node]) * giveWay
             }
-            let delta = target - positions[node]
-            let distance = simd_length(delta)
-            positions[node] += distance > config.maxGrabSpeed ? delta / distance * config.maxGrabSpeed : delta
         }
     }
 
@@ -196,17 +230,29 @@ final class TangleSimulation {
         }
     }
 
+    /// Broad phase, once per sub-step: the solver iterations move nodes by millimetres, so only the pairs found
+    /// here (within a margin of contact) can collide. Keeps the cost low with many nodes, even in debug builds.
+    private func findContactCandidates() {
+        contactCandidates.removeAll(keepingCapacity: true)
+        let reach = config.radius * 3
+        let count = positions.count
+        let skip = config.collisionSkip
+        for i in 0..<count {
+            for j in (i + skip)..<max(i + skip, count)
+            where simd_length_squared(positions[j] - positions[i]) < reach * reach {
+                contactCandidates.append((i, j))
+            }
+        }
+    }
+
     private func solveSelfCollisions() {
         let minDistance = config.radius * 2
-        let count = positions.count
-        for i in 0..<count {
-            for j in (i + 3)..<max(i + 3, count) {
-                let delta = positions[j] - positions[i]
-                let distanceSquared = simd_length_squared(delta)
-                guard distanceSquared < minDistance * minDistance else { continue }
-                satisfy(i, j, restLength: minDistance, onlyIfShorter: true)
-                applyFriction(i, j, normal: delta / max(sqrt(distanceSquared), 1e-6))
-            }
+        for (i, j) in contactCandidates {
+            let delta = positions[j] - positions[i]
+            let distanceSquared = simd_length_squared(delta)
+            guard distanceSquared < minDistance * minDistance else { continue }
+            satisfy(i, j, restLength: minDistance, onlyIfShorter: true)
+            applyFriction(i, j, normal: delta / max(sqrt(distanceSquared), 1e-6))
         }
     }
 
