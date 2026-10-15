@@ -28,6 +28,9 @@ final class SkeletalDragonRig: DragonRig {
         static let neckBlendLength: Float = 0.18
         /// Curve points between two simulated nodes: the spine has more bones than nodes, without them it would follow the corners.
         static let curveSubdivisions = 4
+        /// Body radius of the asset once scaled to the simulated length (`THICKNESS` in make_dragon_asset.py).
+        /// The rig thickens the body to `TangleConfig.radius`, so what the player sees matches the collisions.
+        static let modelledRadius: Float = 0.03
     }
 
     /// Names of the animations expected in the asset: first the one of the current move, then the mood's.
@@ -72,6 +75,8 @@ final class SkeletalDragonRig: DragonRig {
     private let boneAxes: [SIMD3<Float>]
     /// Distance of each joint from `spine_00` along the chain (model units).
     private let arcLengths: [Float]
+    /// How much thicker than the asset the body is drawn (uniform scale of `spine_00`, inherited by the chain).
+    private let thickness: Float
 
     static func load(config: TangleConfig) async -> SkeletalDragonRig? {
         guard let bodyRoot = try? await Entity(named: Asset.body, in: .main) else { return nil }
@@ -94,6 +99,7 @@ final class SkeletalDragonRig: DragonRig {
         }
 
         animator = DragonLifeAnimator(config: config)
+        thickness = max(config.radius / Asset.modelledRadius, 0.1)
         self.model = model
         self.head = head
         spineIndices = spine
@@ -146,7 +152,8 @@ final class SkeletalDragonRig: DragonRig {
         if measured > 1e-6 {
             let factor = simulatedLength / measured
             bodyRoot.scale *= factor
-            head?.scale *= factor
+            // The head grows with the neck: no seam where they meet.
+            head?.scale *= factor * thickness
         }
     }
 
@@ -172,6 +179,8 @@ final class SkeletalDragonRig: DragonRig {
         for (index, side) in wingJoints {
             transforms[index].rotation = bindTransforms[index].rotation
                 * simd_quatf(angle: side * angle, axis: Asset.wingFlareAxis)
+            // The wings sit on the thicker body but keep their size.
+            transforms[index].scale = bindTransforms[index].scale / thickness
         }
     }
 
@@ -196,8 +205,12 @@ final class SkeletalDragonRig: DragonRig {
                 let relative = Transform(matrix: chainParentMatrix.inverse * world)
                 local.translation = relative.translation
                 local.rotation = relative.rotation
+                // Thicker body: the whole chain inherits this uniform scale...
+                local.scale = bindTransforms[jointIndex].scale * thickness
             } else {
-                // The bone keeps the asset's length: only the rotation changes.
+                // ...and every bone keeps the asset's length (its offset is shortened by the inherited scale):
+                // the skin swells around the spine, the body does not get longer. Only the rotation changes.
+                local.translation = bindTransforms[jointIndex].translation / thickness
                 local.rotation = previousOrientation.inverse * orientation
             }
             transforms[jointIndex] = local

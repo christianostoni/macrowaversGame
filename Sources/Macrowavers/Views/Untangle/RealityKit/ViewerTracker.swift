@@ -40,15 +40,24 @@ final class ViewerTracker {
 
     /// Position of the eyes in the immersive scene's space.
     func viewerPosition() -> SIMD3<Float> {
+        viewerPose().position
+    }
+
+    /// Eyes and gaze direction (unit length) in the immersive scene's space. Without tracking: a seated person
+    /// at the origin looking towards -Z.
+    func viewerPose() -> (position: SIMD3<Float>, forward: SIMD3<Float>) {
         #if os(visionOS)
         guard isRunning, worldTracking.state == .running,
               let device = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) else {
-            return Self.fallbackPosition
+            return (Self.fallbackPosition, SIMD3(0, 0, -1))
         }
-        let column = device.originFromAnchorTransform.columns.3
-        return SIMD3(column.x, column.y, column.z)
+        let transform = device.originFromAnchorTransform
+        let position = SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
+        // The device looks along its -Z axis.
+        let back = SIMD3(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
+        return (position, simd_length(back) > 1e-4 ? -simd_normalize(back) : SIMD3(0, 0, -1))
         #else
-        return Self.fallbackPosition
+        return (Self.fallbackPosition, SIMD3(0, 0, -1))
         #endif
     }
 }

@@ -2,7 +2,8 @@ import Foundation
 import simd
 
 /// Placement of the floating island in the immersive space (origin at the player's feet, -Z in front).
-/// The asset's origin is the base of the trunk, on the ground: `position` is where the tree stands.
+/// The asset's origin is the base of the trunk, on the grass: `position` is where the tree stands, so the grass
+/// height is `position.y` whatever the scale (the scale grows the island around the grass, it never moves it).
 struct IslandPlacement: Equatable {
     var position: SIMD3<Float>
     /// Rotation around the vertical axis (radians): the player spins the island like a turntable.
@@ -10,9 +11,13 @@ struct IslandPlacement: Equatable {
     /// The asset is in "real" metres (island ~2.5 m wide, tree ~1.4 m tall): scaled down for the room.
     var scale: Float
 
-    /// Island ~2 m wide, 2.8 m from the player, ground at the eye height of a seated player: the tip of the
-    /// rock stays just above the floor (~5 cm), the treetop below 2.3 m.
-    static let standard = IslandPlacement(position: SIMD3(0, 1.12, -2.8), yaw: 0, scale: 0.8)
+    /// The asset at its real size: island ~2.5 m wide (floating rocks ~3.6 m), 2.8 m from the player, grass at
+    /// table height (0.6 m), treetop at ~1.95 m. The rock below the grass (1.33 m deep) and the lowest floating
+    /// rocks sink into the real floor: `IslandSceneBuilder` hides what is under the floor with an occluder, so
+    /// the island seems to rise out of it.
+    static let standard = IslandPlacement(position: SIMD3(0, grassHeight, -2.8), yaw: 0, scale: 1)
+    /// Height of the grass above the floor (m).
+    static let grassHeight: Float = 0.6
     /// Step of the rotation buttons.
     static let yawStep: Float = .pi / 8
 

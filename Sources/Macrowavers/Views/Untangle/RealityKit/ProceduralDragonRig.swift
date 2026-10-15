@@ -52,7 +52,8 @@ final class ProceduralDragonRig: DragonRig {
             segments.append(segment)
         }
 
-        wings = ProceduralWings(radius: radius, shoulderIndex: 5)
+        // Shoulders ~25 cm behind the head, whatever the node count.
+        wings = ProceduralWings(radius: radius, shoulderIndex: max(2, Int((0.25 / config.segmentLength).rounded())))
         entity.addChild(wings.entity)
     }
 

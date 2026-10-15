@@ -229,9 +229,10 @@ final class DragonBehavior {
         let reach: ClosedRange<Float> = 0.06...0.28
         let beyond = simulation.config.radius * 3
 
-        // Parts far along the body but within reach, with the landing point inside the play area.
+        // Parts far along the body (over 30 cm) but within reach, with the landing point inside the play area.
+        let nearby = Int((0.3 / simulation.config.segmentLength).rounded())
         var candidates: [SIMD2<Float>] = []
-        for segment in 0..<(positions.count - 1) where abs(segment - node) > 6 {
+        for segment in 0..<(positions.count - 1) where abs(segment - node) > nearby {
             let middle = (positions[segment] + positions[segment + 1]) / 2
             let flatMiddle = SIMD2(middle.x, middle.z)
             let distance = simd_length(flatMiddle - flatStart)
@@ -251,7 +252,8 @@ final class DragonBehavior {
                 target = simd_normalize(target) * settings.platformRadius
             }
         }
-        guard simulation.grab(node) else { return }
+        // Exact moves (no hand filter): the lash must land where it aims.
+        guard simulation.grab(node, filtered: false) else { return }
         grabbedNode = node
         from = start
         to = SIMD3(target.x, simulation.config.grabLift, target.y)

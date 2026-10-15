@@ -30,6 +30,10 @@ enum DragonPhase: Equatable {
     /// Still on the island (circling the tree, calm or angry): the fruit can be picked and the artifact used.
     var isOnIsland: Bool { self == .captive || self == .alerted }
 
+    /// The dragon is the centre of attention (settling into the knot, being untangled): the island and the
+    /// fruit around it fade back so the player's eyes stay on the knot.
+    var focusesOnDragon: Bool { self == .landing || self == .untangling }
+
     var interaction: Interaction {
         switch self {
         case .captive, .alerted: .tap
