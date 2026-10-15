@@ -8,7 +8,8 @@ enum SceneFocus: Equatable {
     case none
     /// A fruit is close to the player: the island, the tree, the other fruit and the dragon fade back.
     case fruit
-    /// The dragon settles into the knot and is untangled: the island, the tree and the fruit fade back.
+    /// The dragon settles into the knot and is untangled, or speaks to the player once free: the island, the
+    /// tree and the fruit fade back.
     case dragon
 
     /// Parts of the scene that can fade. The focused fruit is never one of them: it sits in front of the player.
@@ -27,10 +28,11 @@ enum SceneFocus: Equatable {
     ///   - isArtifactFlying: the artifact is on its way to the dragon: the scene comes back so the player
     ///     can follow it, even though the fruit is still close.
     ///   - phase: the dragon's chapter.
-    init(isFruitFocused: Bool, isArtifactFlying: Bool, phase: DragonPhase) {
+    ///   - isDragonSpeaking: the story shows the dragon's words (`StoryStep.focusesOnDragon`).
+    init(isFruitFocused: Bool, isArtifactFlying: Bool, phase: DragonPhase, isDragonSpeaking: Bool = false) {
         if isFruitFocused && !isArtifactFlying {
             self = .fruit
-        } else if phase.focusesOnDragon {
+        } else if phase.focusesOnDragon || isDragonSpeaking {
             self = .dragon
         } else {
             self = .none

@@ -12,8 +12,9 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
 
 1. Open `Macrowavers.xcodeproj` and run on the visionOS simulator or on a Vision Pro. Run `git lfs pull`
    first if the `.usdz` files under `Sources/Macrowavers/Resources/` are only LFS pointers.
-2. The launch window asks you to **Open the Island**: an `ImmersiveSpace` in `.mixed` style opens, with the
-   floating island (real size, ~2.5 m wide) ~2.8 m in front of you, its grass at table height (0.6 m), and the
+2. Press **Start** (the launch window): an `ImmersiveSpace` in `.mixed` style opens, the room darkens and the
+   narrator speaks (two pages, tap to go on; see [Storytelling](../storytelling/README.md)). Then the floating
+   island (real size, ~2.5 m wide) fades in ~2.8 m in front of you, its grass at table height (0.6 m), with the
    dragon circling its tree. The launch window closes; the island panel is on your left.
 3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island panel): the
    dragon turns with it.
@@ -38,7 +39,7 @@ uses a seated eye height of 1.15 m.
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
 | Grab | The part you look at glows; pinch to grab, one part per hand: left and right hand hold and drag two parts independently (the debug info shows which hand holds which node, e.g. "L 20 · R 63"); a part can pass from one hand to the other without being dropped. The body follows the hand smoothly (no shaking with a shaky hand, no flicker when pulled taut); the dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Turns gold, celebrates for 1.5 s, then **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Scene** puts it back on the island |
+| Solved (0 crossings, body released for 0.6 s) | Turns gold and **speaks**: the room darkens, the island fades back and its words float above it ("Thank you…", then "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Scene** puts it back on the island |
 | Play area | Invisible: the knot floats at knee/table height in front of the player. Rotate it with the panel buttons, tilt it with the slider, reset it. Default is tuned for a seated player |
 
 Everything is in English: user-facing text, code comments and tooling.
@@ -49,10 +50,11 @@ Everything is in English: user-facing text, code comments and tooling.
 Sources/Macrowavers/
 ├── App/MacrowaversApp.swift          Scenes: launch window, ImmersiveSpace (.mixed)
 ├── Views/IslandControlsView.swift    Island panel (attachment): status, rotation, Restart Game
-├── Views/ContentView.swift           Island window: launch, island rotation, Restart Game
+├── Views/ContentView.swift           Launch window: the story's Start button
+├── Model/Story/, Views/Story/        Storytelling screens (see ../storytelling/README.md)
 ├── Model/Untangle/                   Pure game logic: Foundation + simd only, unit-tested
 │   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet) and crossing count
-│   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight)
+│   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight, loop)
 │   ├── DragonBehavior.swift            Difficulty: idle timer → fit (choreography of DragonAction), DragonMood
 │   ├── DragonFlight.swift              Flights (orbit, approach, landing, farewell) with a "follow the leader" body
 │   ├── DragonFlightSettings.swift      Manoeuvres and flight tuning (default and `.farewell`)
@@ -101,7 +103,8 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
   front of the player at eye height: exactly where the island is seen, where the dragon stops to look at the
   player and where the fruit comes close. The 3D content clipped through it and its colliders stole the pinch from
   the window, which became hard to grab. Now:
-  - the **launch window** (`ContentView`) only opens the island and then dismisses itself;
+  - the **launch window** (`ContentView`, plain, the story's **Start** button) only opens the island and then
+    dismisses itself;
   - inside the space the controls are **RealityView attachments**, placed where nothing moves: the **island
     panel** (`IslandControlsView`: status, island rotation, dragon panel toggle, **Restart Game**) 50° to the left
     and the **dragon panel** (`DragonPanelView`: state, debug info, puzzle controls, **Restart Scene**) 50° to the
@@ -194,8 +197,8 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
 - **Focus mode** (`SceneFocus`, applied by `FocusDimmingComponent`). A small state machine in the Model:
   - **fruit** (a fruit is close): the island root (rock, terrain, tree, floating rocks and every fruit still
     hanging on it) **and the dragon** (the play area, body, head, wings and effects) fade to 25%;
-  - **dragon** (landing and untangling, `DragonPhase.focusesOnDragon`): the island, tree and fruit fade, only
-    the dragon stays at 100%;
+  - **dragon** (landing and untangling, `DragonPhase.focusesOnDragon`, and while the freed dragon speaks,
+    `StoryStep.focusesOnDragon`): the island, tree and fruit fade, only the dragon stays at 100%;
   - **none** (exploring, or the artifact flying to the dragon, so the player can follow it): everything at 100%.
 
   Each part eases in ~0.6 s; at 100% its `OpacityComponent` is removed, so it is drawn opaque again. Opacity
@@ -304,7 +307,8 @@ rotation on the file's root, which is why the head is wrapped in a container.
 | `TangleConfig` | `maxTension`, `tensionSoftness` | lower = fewer glitches when pulling hard, softer grab |
 | `TangleConfig` | `nodeCount`, `segmentLength`, `radius` | spline control points, body length (keep ~2.35 m), body thickness (rigs follow it) |
 | `TangleConfig` | `grabSmoothing` | higher = calmer but laggier grab |
-| `TangleShape` | `.trefoil` / `.figureEight` | starting knot (3 / 4 crossings) |
+| `TangleShape` | `.trefoil` / `.figureEight` / `.loop` | starting knot (3 / 4 / 0 crossings) |
+| `UntangleViewModel(farewellWaitsForPlayer:)` | `true` in the app | the free dragon waits for `beginFarewell()` (the story's "I'm Ready") instead of taking off after 1.5 s |
 | `DifficultySettings` | delays, `maxExtraTangles` | how often and how hard the dragon fights back |
 | `DragonFlight.Settings` | `speed`, `orbitRadius`, `altitude`, `personalSpace` | flight feel and room size |
 | `DragonFlight.Settings.farewell` | `frontArc`, `hoverDistance`, `boundsMargin`, `departFade` | where the free dragon flies, where it thanks the player, how far it goes before vanishing |
@@ -327,7 +331,9 @@ landing matching the knot, the farewell ending, the free dragon staying in front
 where they look (two gaze directions), the story flow (tap → puzzle), tilt clamping, restart and play again.
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
 artifact flies, when exploring) and the island's transform (at least the original size, grass at 0.6 m
-whatever the scale, positive uniform scale).
+whatever the scale, positive uniform scale), and the speaking dragon keeping only itself visible.
+`StoryTests.swift` covers the free dragon waiting for the player's answer (and taking off on its own without the
+story).
 
 ## Known limits
 

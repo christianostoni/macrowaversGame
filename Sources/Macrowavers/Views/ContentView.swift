@@ -1,55 +1,55 @@
 import SwiftUI
 
-/// Launch window: asks to open the island. Once the immersive space is open this window closes, so it can
-/// never overlap the island, the dragon or the fruit: from then on the controls are panels inside the space
-/// (`IslandControlsView`, `DragonPanelView`), placed to the sides of the play area. The window comes back
-/// when the space closes (Restart Game or Digital Crown).
+/// Launch window, the story's first screen: a lone Start button floating in the room (plain window, no glass).
+/// Start opens the immersive space, where the story goes on (`StoryStep.searching`); this window closes, so it
+/// can never overlap the island, the dragon or the fruit: from then on the controls are panels inside the space
+/// (`IslandControlsView`, `DragonPanelView`). The window comes back when the space closes (Restart Game or
+/// Digital Crown).
 struct ContentView: View {
     static let windowID = "IslandWindow"
 
     @Environment(UntangleViewModel.self) private var viewModel
+    @Environment(StoryViewModel.self) private var story
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Macrowavers")
-                .font(.extraLargeTitle)
-            Text("The Bound Dragon")
-                .font(.title)
-            Text("A floating island will appear in your room. A dragon is bound to the tree at its centre.")
-                .foregroundStyle(.secondary)
+        Group {
             if viewModel.immersiveSpaceState == .closed {
-                Button("Open the Island", systemImage: "mountain.2") {
-                    Task { await openIsland() }
+                Button("Start") {
+                    Task { await start() }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .accessibilityHint("Opens the floating island and begins the story")
             } else {
-                ProgressView("Opening the island…")
+                ProgressView()
             }
         }
-        .multilineTextAlignment(.center)
-        .padding(40)
-        .frame(width: 520)
+        .padding(24)
     }
 
     /// Window and space actions exist only in the Environment: they live in the view.
-    private func openIsland() async {
+    private func start() async {
         guard viewModel.immersiveSpaceState == .closed else { return }
         viewModel.immersiveSpaceState = .inTransition
+        story.begin()
         switch await openImmersiveSpace(id: DragonImmersiveView.spaceID) {
         case .opened:
             // The state becomes `.open` in DragonImmersiveView's onAppear. The window steps aside.
             dismissWindow(id: Self.windowID)
         case .userCancelled, .error:
             viewModel.immersiveSpaceState = .closed
+            story.reset()
         @unknown default:
             viewModel.immersiveSpaceState = .closed
+            story.reset()
         }
     }
 }
 
-#Preview(windowStyle: .automatic) {
+#Preview(windowStyle: .plain) {
     ContentView()
         .environment(UntangleViewModel())
+        .environment(StoryViewModel())
 }

@@ -75,6 +75,7 @@ struct TurntableSystem: System {
 struct FocusDimmingComponent: Component {
     let untangle: UntangleViewModel
     let orchard: OrchardViewModel
+    let story: StoryViewModel
     let part: SceneFocus.Part
     /// Current opacity of the part (1 = not faded).
     var opacity: Float = 1
@@ -85,7 +86,7 @@ struct FocusDimmingComponent: Component {
     @MainActor
     var focus: SceneFocus {
         SceneFocus(isFruitFocused: orchard.focusedFruitID != nil, isArtifactFlying: orchard.artifact == .flying,
-                   phase: untangle.phase)
+                   phase: untangle.phase, isDragonSpeaking: story.step.focusesOnDragon)
     }
 }
 
