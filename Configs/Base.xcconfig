@@ -1,0 +1,3 @@
+// Shared build settings, the base configuration of the project. Signing is optional: simulator builds need no
+// team. For device builds, copy Local.xcconfig.example to Local.xcconfig (gitignored) and set DEVELOPMENT_TEAM.
+#include? "Local.xcconfig"
