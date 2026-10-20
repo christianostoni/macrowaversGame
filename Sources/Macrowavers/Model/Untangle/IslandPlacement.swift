@@ -11,14 +11,13 @@ struct IslandPlacement: Equatable {
     /// The asset is in "real" metres (island ~2.5 m wide, tree ~1.84 m tall): scaled down for the room.
     var scale: Float
 
-    /// The asset at its real size: island ~2.5 m wide (floating rocks ~3.6 m), 2.8 m from the player, the
-    /// bottom of the rock and its roots on the floor (y = 0), grass at 0.91 m, treetop at ~2.75 m. While it bobs
-    /// the rock dips a couple of centimetres under the floor: `IslandSceneBuilder` hides it with an occluder.
+    /// The asset at its real size: island ~2.5 m wide (floating rocks ~3.6 m), 2.8 m from the player, grass at
+    /// table height (0.6 m), treetop at ~2.45 m. The rock and its roots below the grass (0.91 m deep) sink into
+    /// the real floor: `IslandSceneBuilder` hides what is under the floor with an occluder, so the island seems
+    /// to rise out of it.
     static let standard = IslandPlacement(position: SIMD3(0, grassHeight, -2.8), yaw: 0, scale: 1)
-    /// Depth of the rock and its roots below the grass in the asset (m, `FloatingIsland.usdz`).
-    static let rockDepth: Float = 0.91
-    /// Height of the grass above the floor (m): the rock rests on the floor at the real size.
-    static let grassHeight: Float = rockDepth
+    /// Height of the grass above the floor (m).
+    static let grassHeight: Float = 0.6
     /// Step of the rotation buttons.
     static let yawStep: Float = .pi / 8
 

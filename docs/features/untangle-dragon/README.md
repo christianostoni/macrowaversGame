@@ -14,8 +14,8 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
    first if the `.usdz` files under `Sources/Macrowavers/Resources/` are only LFS pointers.
 2. Press **Start** (the launch window): an `ImmersiveSpace` in `.mixed` style opens, the room darkens and the
    narrator speaks (two pages, tap to go on; see [Storytelling](../storytelling/README.md)). Then the floating
-   island (real size, ~2.5 m wide) fades in ~2.8 m in front of you, its rock resting on the floor (grass at
-   0.91 m), with the dragon circling its tree. The launch window closes; the island panel is on your left.
+   island (real size, ~2.5 m wide) fades in ~2.8 m in front of you, its grass at table height (0.6 m), with the
+   dragon circling its tree. The launch window closes; the island panel is on your left.
 3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island panel): the
    dragon turns with it.
 4. Look at the dragon and pinch (tap): it gets angry for ~3 s and the **dragon panel** appears on your right,
@@ -33,7 +33,7 @@ uses a seated eye height of 1.15 m.
 
 | Moment | Behaviour |
 |---|---|
-| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.75 m), the bottom of the rock on the floor (grass at 0.91 m). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
+| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
 | Tap the dragon | For ~3 s it gets angry: circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling. The dragon panel opens with "The dragon is getting angry!" and debug info (phase, mood, action, crossings, restlessness, strain) |
 | The elixir reaches it (or **Call It Now** in the panel) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
@@ -239,14 +239,12 @@ into the same asset contract the code has always used, so no Swift code changed 
   the island).
 - Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.84 m, canopy from ~0.97 m above the ground, rock and
   roots 0.91 m deep below the grass. In the scene it is at **real size** (scale 1, `IslandPlacement.standard`),
-  2.8 m away, **bottom of the rock on the floor**: grass at 0.91 m (`IslandPlacement.grassHeight` =
-  `IslandPlacement.rockDepth`), treetop ~2.75 m. If it is missing, the dragon
+  2.8 m away, **grass at 0.6 m** (`IslandPlacement.grassHeight`), treetop ~2.45 m. If it is missing, the dragon
   circles an empty spot.
 - Scale and height are independent: the origin is on the grass and the transform is translation × rotation ×
   uniform positive scale, so changing the scale grows the island around the grass and never moves it (test).
-- At that height the rock's roots end on the real floor and the lowest floating rocks are ~0.3 m above it; while
-  the island bobs (±2 cm) the rock dips just under the floor. Passthrough does not hide virtual content under
-  the floor, so `IslandSceneBuilder` adds a floor patch 2 mm
+- At that height the rock's roots end ~0.3 m below the real floor and the lowest floating rocks just above it.
+  Passthrough does not hide virtual content under the floor, so `IslandSceneBuilder` adds a floor patch 2 mm
   under y = 0 with `OcclusionMaterial` (`floorOccluder`, sized to the whole model so the floating rocks are
   covered whichever way the island is turned, outside the island so it never turns, bobs or fades): seen from
   above it hides only what is under the floor, and the island seems to rise out of it.
@@ -343,7 +341,7 @@ a taut pull not flickering, flight keeping its distance from the player, the orb
 landing matching the knot, the farewell ending, the free dragon staying in front of the player and hovering
 where they look (two gaze directions), the story flow (tap → puzzle), tilt clamping, restart and play again.
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
-elixir flies, when exploring) and the island's transform (at least the original size, grass at the rock's depth
+elixir flies, when exploring) and the island's transform (at least the original size, grass at 0.6 m
 whatever the scale, positive uniform scale), and the speaking dragon keeping only itself visible.
 `StoryTests.swift` covers the free dragon waiting for the player's answer (and taking off on its own without the
 story).
@@ -353,8 +351,8 @@ story).
 - Pulling very hard can make one part clip through another for a moment (see `maxTension`).
 - While rearing up the neck is raised only visually; colliders stay on the play area plane for ~1 s.
 - Smoke and fire sizes are eyeballed and need tuning on device.
-- The island (2.8 m away, ~2.5 m wide, floating rocks ~3.6 m, treetop ~2.75 m) does not know the room: reduce
-  `IslandPlacement.standard` in small spaces or under low ceilings.
+- The island (2.8 m away, ~2.5 m wide, floating rocks ~3.6 m) does not know the room: reduce
+  `IslandPlacement.standard` in small spaces.
 - The floor occluder assumes a flat floor at the immersive space's origin (y = 0); on a step or a rug it may
   cut the rock slightly above or below the real floor.
 - Faded parts are drawn with transparency: overlapping parts (canopy over trunk, coils of the dragon) may sort
