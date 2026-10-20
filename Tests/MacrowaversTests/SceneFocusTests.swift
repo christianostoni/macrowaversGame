@@ -60,7 +60,7 @@ struct IslandPlacementTests {
         #expect(IslandPlacement.standard.scale >= 0.8)
     }
 
-    @Test func grassStaysAtTableHeightWhateverTheScale() {
+    @Test func grassStaysAtItsHeightWhateverTheScale() {
         for scale: Float in [0.5, 1, 1.5] {
             var placement = IslandPlacement.standard
             placement.scale = scale
@@ -68,7 +68,8 @@ struct IslandPlacementTests {
             let grass = placement.transform * SIMD4<Float>(0, 0, 0, 1)
 
             #expect(abs(grass.y - IslandPlacement.grassHeight) < 1e-5)
-            #expect(abs(IslandPlacement.grassHeight - 0.6) < 1e-5)
+            // At the real size the bottom of the rock is on the floor.
+            #expect(abs(IslandPlacement.grassHeight - IslandPlacement.rockDepth) < 1e-5)
             // Positive, uniform scale: no mirroring, no squashing.
             #expect(simd_determinant(placement.transform) > 0)
             let columns = [placement.transform.columns.0, placement.transform.columns.1, placement.transform.columns.2]

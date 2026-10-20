@@ -200,8 +200,8 @@ enum IslandSceneBuilder {
     }
 
     /// A patch of floor (the immersive space's floor, y = 0) drawn with `OcclusionMaterial`: whatever is below
-    /// it, the rock and the lowest floating rocks sunk into the floor, is hidden and the real floor shows
-    /// through, so the island seems to rise out of the floor instead of being drawn through it. Seen from above
+    /// it, the bottom of the rock when the island bobs down, is hidden and the real floor shows through, so the
+    /// island rests on the floor instead of being drawn through it. Seen from above
     /// it hides nothing else; it sits 2 mm under the floor so it does not cover grounding shadows.
     @MainActor
     private static func makeFloorOccluder(under placement: IslandPlacement, modelBounds: BoundingBox) -> Entity {
