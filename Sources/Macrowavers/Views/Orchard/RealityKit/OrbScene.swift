@@ -6,7 +6,7 @@ import UIKit
 
 extension OrchardSystem {
     /// Moves every fruit's orb for its state: sealed in the fruit, rising out of it, flying to the orbit in front of the
-    /// player and orbiting there (spiralling into the elixir when it is brewed), spent.
+    /// player and orbiting there (diving into the flask when the elixir is brewed), spent.
     @MainActor
     static func updateOrbs(orchard: OrchardComponent, root: Entity, deltaTime: Float) {
         let viewModel = orchard.viewModel
@@ -25,7 +25,8 @@ extension OrchardSystem {
                 orb.setScale(SIMD3(repeating: pulse), relativeTo: nil)
             case .orbiting(let slot):
                 showOrbiting(orb, slot: slot, orchard: orchard, root: root, deltaTime: deltaTime)
-                orb.setScale(SIMD3(repeating: pulse * viewModel.elixir.ingredientScale), relativeTo: nil)
+                let scale = max(pulse * viewModel.elixir.ingredientScale(slot: slot), 0.001)
+                orb.setScale(SIMD3(repeating: scale), relativeTo: nil)
             case .spent:
                 orb.isEnabled = false
                 setTrail(orb, isEmitting: false)
@@ -59,7 +60,7 @@ extension OrchardSystem {
     }
 
     /// Flies from its fruit to its slot on the orbit (an eased arc), takes its ingredient's colour and leaves a
-    /// trail; then goes round with the others. While the elixir is brewed it spirals into it.
+    /// trail; then goes round with the others. While the elixir is brewed it dives into the flask's neck.
     @MainActor
     private static func showOrbiting(_ orb: Entity, slot: Int, orchard: OrchardComponent, root: Entity,
                                      deltaTime: Float) {
@@ -74,9 +75,14 @@ extension OrchardSystem {
         setTrail(orb, isEmitting: true)
 
         let elixir = viewModel.elixir
-        let target = elixir.state == .fusing || elixir.state == .brewed
-            ? orchard.orbit.fusionPosition(slot: slot, progress: elixir.fusionProgress)
-            : orchard.orbit.point(slot: slot)
+        let target: SIMD3<Float>
+        if elixir.state == .fusing || elixir.state == .brewed {
+            let neck = orchard.elixir.neck(relativeTo: root)
+            target = orchard.orbit.divePosition(slot: slot, progress: elixir.diveProgress(slot: slot),
+                                                neckTop: neck.top, neckBase: neck.base)
+        } else {
+            target = orchard.orbit.point(slot: slot)
+        }
         let start = journey.joinStart ?? orb.position
         journey.joinStart = start
         journey.joinElapsed += deltaTime
@@ -127,15 +133,13 @@ extension OrchardSceneBuilder {
     /// Warm white: an orb not found yet.
     static let sealedColor = UIColor(red: 1, green: 0.9, blue: 0.7, alpha: 1)
 
-    /// Colour of each ingredient once it orbits the player (placeholders until the design team's assets):
-    /// pomegranate red, saffron gold, pistachio green.
+    /// Colour of each ingredient once it orbits the player (`Elixir.ingredientColors`).
     static func ingredientColor(slot: Int) -> UIColor {
-        let colors = [
-            UIColor(red: 0.9, green: 0.18, blue: 0.3, alpha: 1),
-            UIColor(red: 1, green: 0.72, blue: 0.15, alpha: 1),
-            UIColor(red: 0.35, green: 0.85, blue: 0.4, alpha: 1),
-        ]
-        return colors[((slot % colors.count) + colors.count) % colors.count]
+        color(Elixir.ingredientColor(slot: slot))
+    }
+
+    static func color(_ rgb: SIMD3<Float>, alpha: CGFloat = 1) -> UIColor {
+        UIColor(red: CGFloat(rgb.x), green: CGFloat(rgb.y), blue: CGFloat(rgb.z), alpha: alpha)
     }
 
     /// The orb found in every fruit, an ingredient of the elixir: a glowing RealityKit sphere with a halo

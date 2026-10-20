@@ -51,7 +51,7 @@ struct OrbComponent: Component {
     var joinElapsed: Float = 0
 
     /// Seconds from the fruit to the orbit.
-    static let joinDuration: Float = 1.4
+    static let joinDuration = Elixir.joinDuration
 }
 
 /// Smoothly moves an entity to `target` (in its parent's space), then removes itself.
@@ -136,6 +136,8 @@ struct OrchardComponent: Component {
     var flight: ElixirFlight?
     /// Elixir state already drawn: its changes start the flash and the flight.
     var drawnElixirState = ElixirState.gathering
+    /// Ingredients already drawn landing in the flask: each new one splashes.
+    var drawnLandings = 0
 }
 
 struct OrchardSystem: System {
@@ -343,7 +345,7 @@ enum OrchardSceneBuilder {
             orbs[fruit.id] = orb
         }
 
-        let elixir = ElixirRig()
+        let elixir = await ElixirRig.make()
         root.addChild(elixir.elixir)
         root.addChild(elixir.hintAnchor)
 

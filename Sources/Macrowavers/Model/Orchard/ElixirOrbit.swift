@@ -1,7 +1,8 @@
 import Foundation
 import simd
 
-/// The small ellipse the elixir's ingredients orbit on, in front of the player, and their fusion into the elixir.
+/// The small ellipse the elixir's ingredients orbit on, in front of the player (the flask in its middle), and their
+/// dive into the flask.
 /// Pure maths (Foundation + simd): the `OrchardSystem` keeps one, feeds it the player's head every frame and
 /// reads where each ingredient is.
 ///
@@ -43,8 +44,8 @@ struct ElixirOrbit: Equatable {
         var roomLift: Float = 0.28
         /// How fast it rises and comes back down (1/s).
         var liftResponsiveness: Float = 4
-        /// Extra turns per turn at the end of the fusion: the ingredients whirl faster as they converge.
-        var fusionSpin: Float = 3
+        /// Extra turns per turn at the end of the brew: the ingredients still waiting whirl faster.
+        var fusionSpin: Float = 1.5
         /// The elixir's label: this far below the orbit's centre (m), under its near side.
         var hintDrop: Float = 0.2
     }
@@ -67,7 +68,7 @@ struct ElixirOrbit: Equatable {
     /// The ellipse's depth axis: forward, tilted up by `tilt`.
     var depth: SIMD3<Float> { forward * cos(settings.tilt) + SIMD3(0, sin(settings.tilt), 0) }
 
-    /// O: the middle of the ellipse. The ingredients fuse here.
+    /// O: the middle of the ellipse. The flask stands here.
     var center: SIMD3<Float> {
         eyes + forward * settings.distance + SIMD3(0, lift - settings.drop, 0)
     }
@@ -79,7 +80,7 @@ struct ElixirOrbit: Equatable {
 
     /// Follows the player's eyes and, lazily, where they face, and moves the ingredients round.
     /// - Parameters:
-    ///   - spin: multiplies the angular speed (1 = calm orbit; higher while fusing).
+    ///   - spin: multiplies the angular speed (1 = calm orbit; higher while brewing).
     ///   - makesRoom: a fruit is in front of the player: the orbit rises above it.
     mutating func follow(eyes position: SIMD3<Float>, forward look: SIMD3<Float>, deltaTime: Float,
                          spin: Float = 1, makesRoom: Bool = false) {
@@ -106,24 +107,46 @@ struct ElixirOrbit: Equatable {
         phase = (phase + 2 * .pi / settings.period * spin * deltaTime).truncatingRemainder(dividingBy: 4 * .pi)
     }
 
-    /// Where the ingredient in `slot` is on the ellipse. `shrink` (0…1) pulls the ellipse in towards its centre.
-    func point(slot: Int, count: Int = Elixir.ingredientCount, shrink: Float = 0) -> SIMD3<Float> {
+    /// Where the ingredient in `slot` is on the ellipse.
+    func point(slot: Int, count: Int = Elixir.ingredientCount) -> SIMD3<Float> {
         let angle = phase + 2 * .pi * Float(slot) / Float(max(count, 1))
-        let size = 1 - min(max(shrink, 0), 1)
-        return center
-            + right * (size * settings.lateralRadius * sin(angle))
-            + depth * (size * settings.depthRadius * cos(angle))
+        return center + right * (settings.lateralRadius * sin(angle)) + depth * (settings.depthRadius * cos(angle))
     }
 
-    /// The ingredient in `slot` while they fuse (`progress` 0…1): an inward spiral, the ellipse shrinking to its
-    /// centre with `e = smootherstep(progress)` (and spinning faster, see `follow`):
+    /// The ingredient in `slot` diving into the flask (`progress` 0…1, `Elixir.diveProgress`): it leaves its place
+    /// on the orbit (still turning) in an arc up to a point above the neck, then drops down the neck's axis into the
+    /// flask. With `n` the neck's axis (from its base to its top, the cork's ends) and `e` an eased progress:
     ///
-    ///     P_fusion = O + (1 − e) · (right · a sin φ + depth · b cos φ)
+    ///     A = top + n · 0.08                      above the open neck
+    ///     first 60 %:  B(t) = (1 − t)² P + 2 (1 − t) t C + t² A,   C = (P + A) / 2 + up · 0.06
+    ///     last 40 %:   from A down to base − n · 0.03, inside the flask
     ///
-    /// so it leaves the orbit with no jump (e = 0) and all the ingredients meet at `O` (e = 1).
-    func fusionPosition(slot: Int, count: Int = Elixir.ingredientCount, progress: Float) -> SIMD3<Float> {
-        point(slot: slot, count: count, shrink: Elixir.smootherstep(progress))
+    /// so it starts on the orbit with no jump and always ends inside the flask, whatever its slot.
+    func divePosition(slot: Int, count: Int = Elixir.ingredientCount, progress: Float,
+                      neckTop: SIMD3<Float>, neckBase: SIMD3<Float>) -> SIMD3<Float> {
+        let start = point(slot: slot, count: count)
+        let axis = simd_normalize(neckTop - neckBase)
+        let above = neckTop + axis * Self.diveClearance
+        let progress = min(max(progress, 0), 1)
+        if progress < Self.diveArc {
+            let time = Elixir.smootherstep(progress / Self.diveArc)
+            let control = (start + above) / 2 + SIMD3(0, Self.diveLift, 0)
+            let early = 1 - time
+            return early * early * start + 2 * early * time * control + time * time * above
+        }
+        let drop = (progress - Self.diveArc) / (1 - Self.diveArc)
+        let inside = neckBase - axis * Self.diveDepth
+        return simd_mix(above, inside, SIMD3(repeating: drop * drop))
     }
+
+    /// Share of the dive spent arcing up to the neck (the rest drops into it).
+    static let diveArc: Float = 0.6
+    /// Height above the open neck where the arc ends (m).
+    static let diveClearance: Float = 0.08
+    /// How much the arc rises above the straight line (m).
+    static let diveLift: Float = 0.06
+    /// How deep below the neck the ingredient ends (m).
+    static let diveDepth: Float = 0.03
 
     /// Angle in −π…π.
     static func wrap(_ angle: Float) -> Float {

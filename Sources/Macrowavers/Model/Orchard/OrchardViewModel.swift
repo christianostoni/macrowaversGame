@@ -23,7 +23,7 @@ enum OrbState: Equatable {
     case revealed
     /// Orbiting the player, at this slot of the orbit.
     case orbiting(slot: Int)
-    /// Fused into the elixir.
+    /// In the flask: brewed into the elixir.
     case spent
 
     /// The orb has left its fruit for good.
@@ -239,7 +239,7 @@ final class OrchardViewModel {
         let before = elixir.state
         elixir.update(deltaTime: deltaTime, canFly: isDragonOnIsland)
         if before == .fusing && elixir.state == .brewed {
-            // The ingredients have fused: only the elixir is left.
+            // The ingredients are in the flask: only the elixir is left.
             for index in orbs.indices where orbs[index].isTaken { orbs[index] = .spent }
         }
         if before != .flying && elixir.state == .flying {
@@ -277,8 +277,8 @@ extension OrchardViewModel {
         return sendToOrbit(fruit: id)
     }
 
-    /// The snap of the fingers (or a tap on an ingredient) with every ingredient in orbit: they start fusing.
-    /// A fruit still in front of the player goes back, out of the way of the fusion.
+    /// The snap of the fingers (or a tap on an ingredient) with every ingredient in orbit: they start diving into
+    /// the flask. A fruit still in front of the player goes back, out of the way of the brew.
     @discardableResult
     func brewElixir() -> Bool {
         guard elixir.brew() else { return false }
