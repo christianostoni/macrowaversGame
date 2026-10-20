@@ -8,6 +8,7 @@ import SwiftUI
 /// the player and settles tangled in front of them; untangled, it thanks them and flies away into the sky.
 /// The story (`StoryViewModel`) frames it: the narrator's pages in a darkened room before the island fades in,
 /// the dragon's words above it once it is free; its farewell waits for the player's answer.
+/// The time of day (`SkyViewModel`) follows it: dawn while gathering, noon while untangling, sunset at the farewell.
 struct DragonImmersiveView: View {
     static let spaceID = "DragonSpace"
 
@@ -23,6 +24,7 @@ struct DragonImmersiveView: View {
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(StoryViewModel.self) private var story
+    @Environment(SkyViewModel.self) private var sky
     @Environment(\.openWindow) private var openWindow
     /// Rotation of the island when the current gesture started.
     @State private var islandYawStart: Float?
@@ -58,6 +60,10 @@ struct DragonImmersiveView: View {
                 viewModel: orchard, player: .init(viewer: viewer, hands: hands), island: island,
                 deliveryTarget: dragonHead, background: background)
             world.entities.append(orchardRoot)
+            // The sun and the sky of the time of day: they light the island, the dragon and the orchard.
+            let skyRoot = await SkySceneBuilder.makeSky(untangle: viewModel, orchard: orchard, story: story, sky: sky,
+                                                        litRoots: [island.root, playArea, orchardRoot])
+            world.entities.append(skyRoot)
             // Island panel on the left, dragon panel on the right.
             if let islandPanel = attachments.entity(for: IslandControlsView.attachmentID) {
                 world.entities.append(Self.placeSidePanel(islandPanel, angle: -Self.panelAngle))
@@ -124,14 +130,14 @@ struct DragonImmersiveView: View {
                 DragonPanelView()
                     .environment(viewModel)
                     .environment(orchard)
+                    .environment(sky)
             }
         }
         .gesture(tapDragonGesture)
         .orchardInteractions()
         .simultaneousGesture(spinIslandGesture)
         .simultaneousGesture(rotateIslandGesture)
-        // The narrator's pages and the dragon's words darken the room (passthrough) around them.
-        .preferredSurroundingsEffect(story.step.dimsSurroundings ? .dark : nil)
+        .preferredSurroundingsEffect(surroundingsEffect)
         .onChange(of: viewModel.isSolved) { _, isSolved in
             // Free, the dragon speaks; back around the tree (Restart Scene), its words are still to come.
             if isSolved { story.dragonFreed() } else { story.dragonRecaptured() }
@@ -153,9 +159,19 @@ struct DragonImmersiveView: View {
             viewModel.resetGame()
             orchard.reset()
             story.reset()
+            sky.reset()
             viewModel.immersiveSpaceState = .closed
             openWindow(id: ContentView.windowID)
         }
+    }
+
+    /// The narrator's pages and the dragon's words darken the room (passthrough) around them; during the game the
+    /// room takes the colour of the time of day (warm at dawn, as it is at noon, orange and violet at sunset).
+    private var surroundingsEffect: SurroundingsEffect? {
+        if story.step.dimsSurroundings { return .dark }
+        guard story.step.revealsWorld else { return nil }
+        let tint = sky.roomTint
+        return .colorMultiply(Color(red: Double(tint.x), green: Double(tint.y), blue: Double(tint.z)))
     }
 
     // MARK: - Dragon

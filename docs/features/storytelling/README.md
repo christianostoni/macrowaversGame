@@ -30,7 +30,8 @@ and the narrator's cut-off line ends with an ellipsis. All the text lives in `St
   reaching `farewell` → `UntangleViewModel.beginFarewell()`. The app creates the dragon's view model with
   `farewellWaitsForPlayer: true`, so the free dragon stays in the play area (celebrating) until the answer.
 - **Dimming**: every step with a page darkens the passthrough with `.preferredSurroundingsEffect(.dark)` (the
-  system's own dimming of the room, applied to the immersive space). While the dragon speaks, focus mode also
+  system's own dimming of the room, applied to the immersive space). Without a page, once the island is out, the
+  room takes the colour of the time of day instead (`.colorMultiply`, see [Time of Day](../time-of-day/README.md)). While the dragon speaks, focus mode also
   fades the island, tree and fruit to 25% (`SceneFocus.dragon`), so only the dragon and its words stand out.
 - **Reveal**: the island, the dragon, the orchard and the side panels are built when the space opens but added
   to the scene only when the story reaches `adventure` (`HiddenWorld` in `DragonImmersiveView`); island and

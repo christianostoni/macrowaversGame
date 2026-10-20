@@ -16,6 +16,8 @@ struct MacrowaversApp: App {
     @State private var orchardViewModel = OrchardViewModel()
     /// The storytelling screens around the game (Start, the narrator, the dragon's words).
     @State private var storyViewModel = StoryViewModel()
+    /// The time of day: dawn while gathering the ingredients, noon while untangling, sunset at the farewell.
+    @State private var skyViewModel = SkyViewModel()
 
     init() {
         DragonBodySystem.registerAll()
@@ -38,6 +40,7 @@ struct MacrowaversApp: App {
                 .environment(untangleViewModel)
                 .environment(orchardViewModel)
                 .environment(storyViewModel)
+                .environment(skyViewModel)
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }

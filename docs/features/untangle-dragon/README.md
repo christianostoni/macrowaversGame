@@ -64,7 +64,8 @@ Sources/Macrowavers/
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
 │   └── UntangleViewModel.swift         @Observable @MainActor view model shared by panel and immersive space
 └── Views/Untangle/
-    ├── DragonPanelView.swift           Dragon panel: state, debug info, Call the Dragon, puzzle controls, Restart Scene
+    ├── DragonPanelView.swift           Dragon panel: state, debug info, Call the Dragon, puzzle controls, Restart Scene,
+    │                                   Hold the Time of Day ([Time of Day](../time-of-day/README.md))
     ├── DragonImmersiveView.swift       RealityView, island, grab events, tap on the dragon
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers

@@ -8,6 +8,7 @@ struct DragonPanelView: View {
 
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
+    @Environment(SkyViewModel.self) private var sky
 
     var body: some View {
         // Hidden in SwiftUI, not by disabling its entity (see DragonImmersiveView).
@@ -26,6 +27,7 @@ struct DragonPanelView: View {
             status
             Divider()
             debugInfo
+            timeOfDayControls
             Button("Restart Scene", systemImage: "arrow.counterclockwise") {
                 viewModel.restartScene()
                 orchard.reset()
@@ -136,8 +138,27 @@ struct DragonPanelView: View {
                 LabeledContent("Elixir",
                                value: "\(orchard.elixir.orbitingCount)/\(Elixir.ingredientCount) ingredients, \(orchard.elixir.state)")
                 LabeledContent("Snap", value: orchard.isHandTrackingAvailable ? orchard.snapDebug : "no hand tracking")
+                LabeledContent("Time of day", value: String(describing: sky.moment))
             }
             .font(.footnote.monospaced())
+        }
+    }
+
+    /// Debug: holds the time of day at any point, to tune the light of dawn, noon and sunset on device.
+    private var timeOfDayControls: some View {
+        VStack(spacing: 8) {
+            Toggle("Hold the Time of Day", isOn: Binding(get: { sky.debugClock != nil },
+                                                         set: { sky.debugClock = $0 ? sky.clock : nil }))
+            if let clock = sky.debugClock {
+                HStack {
+                    Image(systemName: "sunrise")
+                    Slider(value: Binding(get: { Double(clock) }, set: { sky.debugClock = Float($0) }), in: 0...1)
+                    Image(systemName: "sunset")
+                }
+            }
+            Text("Debug: off, the light follows the game.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -173,4 +194,5 @@ struct DragonPanelView: View {
     DragonPanelView()
         .environment(UntangleViewModel())
         .environment(OrchardViewModel())
+        .environment(SkyViewModel())
 }
