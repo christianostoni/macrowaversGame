@@ -3,8 +3,8 @@ import RealityKit
 import SwiftUI
 
 /// Immersive space in mixed reality: a floating island (the player spins it) with the dragon captive
-/// around the tree and fruit on its branches. Every fruit hides a glowing orb: three of them in the kalash and a
-/// twist of the fingers make the blue spell that soothes the dragon: it flies to
+/// around the tree and fruit on its branches. Every fruit hides an ingredient that joins an orbit around the
+/// player: three of them and a snap of the fingers brew the elixir that soothes the dragon: it flies to
 /// the player and settles tangled in front of them; untangled, it thanks them and flies away into the sky.
 /// The story (`StoryViewModel`) frames it: the narrator's pages in a darkened room before the island fades in,
 /// the dragon's words above it once it is free; its farewell waits for the player's answer.
@@ -30,7 +30,7 @@ struct DragonImmersiveView: View {
     @State private var subscriptions: [EventSubscription] = []
     /// Position of the player's head: the dragon looks at the knight.
     @State private var viewer = ViewerTracker()
-    /// The player's hands: chopping the pineapple, twisting the fingers at the kalash.
+    /// The player's hands: chopping the pineapple, snapping the fingers to brew the elixir.
     @State private var hands = HandTracker()
     /// The island, the dragon and their panels: built at once, added to the scene when the story reveals them.
     @State private var world = HiddenWorld()
@@ -49,7 +49,7 @@ struct DragonImmersiveView: View {
                 entity.components.set(OpacityComponent(opacity: 0))
             }
             world.entities = [island.root, island.floorOccluder, playArea]
-            // The blue spell flies to the dragon's head (node 0).
+            // The elixir flies to the dragon's head (node 0).
             let dragonHead = playArea.findEntity(named: "DragonNode0") ?? playArea
             // While a fruit is close, what is behind it (island rock, dragon) must not take the pinch.
             let background = [island.root.findEntity(named: IslandSceneBuilder.rockName)].compactMap { $0 }
@@ -81,12 +81,11 @@ struct DragonImmersiveView: View {
                 panel.position = SIMD3(0, -0.2, 0.02)
                 stage.addChild(panel)
             }
-            // The kalash's counter, beside it (it follows the kalash wherever the player puts it).
-            if let panel = attachments.entity(for: KalashPanelView.attachmentID),
-               let kalash = orchardRoot.findEntity(named: KalashRig.name) {
-                panel.position = SIMD3(0.16, 0.1, 0)
+            // The elixir's label, under the ingredients' orbit (it follows the player with the orbit).
+            if let panel = attachments.entity(for: ElixirPanelView.attachmentID),
+               let anchor = orchardRoot.findEntity(named: ElixirRig.hintAnchorName) {
                 panel.components.set(BillboardComponent())
-                kalash.addChild(panel)
+                anchor.addChild(panel)
             }
             subscriptions = subscribeToDragonGrabs(content)
         } update: { content, _ in
@@ -112,8 +111,8 @@ struct DragonImmersiveView: View {
                 FruitPanelView()
                     .environment(orchard)
             }
-            Attachment(id: KalashPanelView.attachmentID) {
-                KalashPanelView()
+            Attachment(id: ElixirPanelView.attachmentID) {
+                ElixirPanelView()
                     .environment(orchard)
             }
             Attachment(id: IslandControlsView.attachmentID) {

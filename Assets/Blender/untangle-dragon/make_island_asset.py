@@ -1,19 +1,23 @@
-"""Prepares the floating island for RealityKit, without opening Blender.
+"""Prepares the floating island with its tree for RealityKit, without opening Blender.
 
 Usage:
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-        -P Assets/Blender/untangle-dragon/make_island_asset.py -- <FloatingIsland.usdc> <output folder>
+        -P Assets/Blender/untangle-dragon/make_island_asset.py -- <Tree_FloatingIsland.usdc> <output folder>
 
-What it does (and why):
-- The source file points to external textures (./textures/*_BaseColor.png) that do not exist: the real
-  colours are vertex colours (primvar `Col`), which RealityKit does not draw. The script bakes them into one
-  texture per mesh using the existing UVs and rebuilds the PBR material (base colour + roughness).
-- Moves the origin to the base of the trunk, at ground level: in RealityKit the tree is the anchor of the
-  scene and the dragon circles it with no magic offsets in code.
+The source is the design team's raw Blender export (Z-up, ~14 m wide, ~90 loose meshes, a camera, a sun and a
+dome light). The app expects the same asset contract as before, so the code needs no magic numbers:
+- Keeps only the meshes and joins them into the three parts the code looks for: `Island` (grass, rock, roots,
+  stones, bushes, flowers: the collider that spins the island is built from its bounds), `Tree` (trunk, branch
+  and canopy) and `FloatingRocks` (the debris and small floating islands, which bob on their own). Fewer
+  entities and draw calls than ~90 meshes.
+- Moves the origin to the base of the trunk, on the grass: the dragon circles it with no offsets in code.
+- Scales it to the previous asset's real size: island `TARGET_WIDTH` metres wide (so `IslandPlacement.standard`,
+  the dragon's orbit, the fruit sizes and the floor occluder all stay as they were).
 - Adds empty objects `fruit_01` ... `fruit_06` on the outside of the canopy, found by casting rays at the
-  foliage: the code hangs the apples and the pomegranate there (designers can move them in Blender).
-- Exports a Y-up USDZ with the textures inside (no external files to forget) and without vertex colours
-  (useless after baking, only weight).
+  foliage: the code hangs the fruit there (designers can move them in Blender).
+- The colours are plain material colours (no textures, no vertex colours): they are exported as
+  UsdPreviewSurface, matte (roughness 0.85), the tree's materials get readable names.
+- Exports a Y-up USDZ (rotation on the file root, so the code never overwrites the loaded entity's transform).
 """
 import math
 import os
@@ -24,143 +28,158 @@ from mathutils import Vector
 
 arguments = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if len(arguments) != 2:
-    raise SystemExit("Usage: ... -- <FloatingIsland.usdc> <output folder>")
+    raise SystemExit("Usage: ... -- <Tree_FloatingIsland.usdc> <output folder>")
 SOURCE, OUTPUT = (os.path.abspath(argument) for argument in arguments)
 os.makedirs(OUTPUT, exist_ok=True)
-TEXTURE_FOLDER = os.path.join(OUTPUT, "island_textures")
-os.makedirs(TEXTURE_FOLDER, exist_ok=True)
 
-# Baked texture resolution per mesh: the island has many more distinct colours than the rocks and the tree.
-RESOLUTION = {"Island": 2048, "Tree": 1024, "FloatingRocks": 512}
-
-# Fruit hang points: (angle in degrees around the trunk, height above the ground in metres).
-FRUIT_SPOTS = [(20, 0.78), (95, 0.92), (160, 0.74), (230, 0.88), (290, 0.8), (340, 0.95)]
-# Distance of the fruit centre from the foliage surface (half a fruit on the tree, asset metres).
+# Width of the island (grass and rock, without the floating rocks) in metres: the previous asset's size.
+TARGET_WIDTH = 2.5
+# Fruit hang points: (angle in degrees around the canopy, height as a fraction of the canopy, 0 = its bottom).
+FRUIT_SPOTS = [(20, 0.3), (95, 0.42), (160, 0.26), (230, 0.38), (290, 0.32), (340, 0.45)]
+# Distance of the fruit centre from the foliage surface (half a fruit on the tree, metres after scaling).
 FRUIT_OFFSET = 0.045
+# Readable names for the source's anonymous materials.
+MATERIAL_NAMES = {"Material_002": "Tree_Bark", "Material_003": "Tree_Leaves"}
+ROUGHNESS = 0.85
 
-# Empty scene, then import (Blender converts to Z-up).
+
+def part_of(item):
+    """Which of the three parts a source mesh belongs to (by its name and its parent before flattening)."""
+    names = [item.name]
+    parent = item.parent
+    while parent is not None:
+        names.append(parent.name)
+        parent = parent.parent
+    # `Vert` is the tree; `Island_Root_007` is a branch on its trunk (bark material, above the grass).
+    if any(name.startswith("Vert") for name in names) or item.name.startswith("Island_Root_007"):
+        return "Tree"
+    if item.name.startswith(("Island_Debris", "Island_Floater")):
+        return "FloatingRocks"
+    return "Island"
+
+
+# Empty scene, then import (Blender converts to Z-up). Camera and lights stay out: the room lights the island.
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.wm.usd_import(filepath=SOURCE, import_materials=False, read_mesh_colors=True)
+bpy.ops.wm.usd_import(filepath=SOURCE, import_materials=True, import_cameras=False, import_lights=False)
 
-meshes = {item.name: item for item in bpy.context.scene.objects if item.type == "MESH"}
-for name in RESOLUTION:
-    if name not in meshes:
-        raise SystemExit(f"Missing mesh '{name}' in {SOURCE}")
+meshes = [item for item in bpy.context.scene.objects if item.type == "MESH" and len(item.data.vertices) > 0]
+# Keyed by the object itself: joining renames them.
+parts = {item: part_of(item) for item in meshes}
+# The grass alone tells where the ground is next to the trunk.
+grass = next((item for item in meshes if item.name.startswith("Island_GrassTop")), None)
+if grass is None or not any(part == "Tree" for part in parts.values()):
+    raise SystemExit(f"{SOURCE} has no Island_GrassTop or no tree (Vert): is it the right file?")
 
 # --- Applied transforms: every mesh in world coordinates, no parents -----------------------------------
-for item in meshes.values():
+for item in meshes:
     matrix = item.matrix_world.copy()
     item.parent = None
     item.matrix_world = matrix
+for item in meshes:
     bpy.context.view_layer.objects.active = item
     for other in bpy.context.scene.objects:
         other.select_set(other == item)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 for item in list(bpy.context.scene.objects):
-    if item.type != "MESH":
+    if item not in meshes:
         bpy.data.objects.remove(item)
 
-# --- Origin at the base of the trunk, on the ground ----------------------------------------------------
-tree_points = [vertex.co.copy() for vertex in meshes["Tree"].data.vertices]
+# --- Origin at the base of the trunk, on the grass; island at its real size ---------------------------
+tree_points = [vertex.co.copy() for item in meshes if parts[item] == "Tree" for vertex in item.data.vertices]
 lowest = min(point.z for point in tree_points)
-base = [point for point in tree_points if point.z < lowest + 0.04]
+base = [point for point in tree_points if point.z < lowest + 0.3]
 center_x = sum(point.x for point in base) / len(base)
 center_y = sum(point.y for point in base) / len(base)
-# The trunk sinks into the ground: the origin goes on the island's surface next to the trunk.
-nearby = [vertex.co.z for vertex in meshes["Island"].data.vertices
-          if math.hypot(vertex.co.x - center_x, vertex.co.y - center_y) < 0.2]
+nearby = [vertex.co.z for vertex in grass.data.vertices
+          if math.hypot(vertex.co.x - center_x, vertex.co.y - center_y) < 1.5]
 ground = max(nearby) if nearby else lowest
-for item in meshes.values():
+island_points = [vertex.co for item in meshes if parts[item] == "Island" for vertex in item.data.vertices]
+width = max(max(point.x for point in island_points) - min(point.x for point in island_points),
+            max(point.y for point in island_points) - min(point.y for point in island_points))
+scale = TARGET_WIDTH / width
+origin = Vector((center_x, center_y, ground))
+for item in meshes:
     for vertex in item.data.vertices:
-        vertex.co.x -= center_x
-        vertex.co.y -= center_y
-        vertex.co.z -= ground
-print(f"Origin moved to the tree trunk: ({center_x:.3f}, {center_y:.3f}, {ground:.3f}) in the source file")
+        vertex.co = (vertex.co - origin) * scale
+print(f"Origin moved to the trunk {tuple(round(value, 3) for value in origin)}, scale {scale:.4f} "
+      f"(island {width:.2f} -> {TARGET_WIDTH} m)")
+
+# --- Materials: readable names, matte -----------------------------------------------------------------
+for material in bpy.data.materials:
+    material.name = MATERIAL_NAMES.get(material.name, material.name)
+    if material.node_tree:
+        for node in material.node_tree.nodes:
+            if node.type == "BSDF_PRINCIPLED":
+                node.inputs["Roughness"].default_value = ROUGHNESS
+                node.inputs["Metallic"].default_value = 0.0
+
+# --- Canopy band (before joining: the leaves are the tree's green blobs) ------------------------------
+canopy_points = [vertex.co.copy() for item in meshes if parts[item] == "Tree"
+                 and any(material and material.name == "Tree_Leaves" for material in item.data.materials)
+                 for vertex in item.data.vertices]
+if not canopy_points:
+    raise SystemExit("No canopy found (meshes with the Tree_Leaves material)")
+canopy_center = sum(canopy_points, Vector()) / len(canopy_points)
+canopy_bottom = min(point.z for point in canopy_points)
+canopy_top = max(point.z for point in canopy_points)
+canopy_reach = max(math.hypot(point.x - canopy_center.x, point.y - canopy_center.y) for point in canopy_points)
+
+# --- Three objects: Island, Tree, FloatingRocks --------------------------------------------------------
+# Grouped first: joining deletes the other objects of a group.
+groups = {name: [item for item in meshes if parts[item] == name] for name in ("Island", "Tree", "FloatingRocks")}
+joined = {}
+for name, group in groups.items():
+    if not group:
+        raise SystemExit(f"Nothing for the part '{name}'")
+    for other in bpy.context.scene.objects:
+        other.select_set(other in group)
+    bpy.context.view_layer.objects.active = group[0]
+    if len(group) > 1:
+        bpy.ops.object.join()
+    item = bpy.context.view_layer.objects.active
+    item.name = name
+    item.data.name = name
+    joined[name] = item
+    triangles = sum(len(polygon.vertices) - 2 for polygon in item.data.polygons)
+    print(f"{name}: {len(group)} meshes, {triangles} triangles, {len(item.data.materials)} materials")
 
 # --- Fruit hang points on the outside of the canopy ----------------------------------------------------
 bpy.context.view_layer.update()
-tree = meshes["Tree"]
+tree = joined["Tree"]
 fruit_names = []
-for index, (degrees, height) in enumerate(FRUIT_SPOTS, start=1):
+
+
+def foliage_hit(degrees, fraction):
+    """First point of the foliage seen from outside the canopy, towards its centre; None between the blobs."""
     angle = math.radians(degrees)
     outward = Vector((math.cos(angle), math.sin(angle), 0))
-    # From outside the canopy towards the trunk: the first hit is the foliage surface.
-    hit, location, _, _ = tree.ray_cast(outward * 2 + Vector((0, 0, height)), -outward)
-    if not hit:
-        print(f"Warning: no foliage at {degrees}° / {height} m, fruit_{index:02d} skipped")
+    height = canopy_bottom + fraction * (canopy_top - canopy_bottom)
+    start = Vector((canopy_center.x, canopy_center.y, height)) + outward * (canopy_reach + 0.5)
+    hit, location, _, _ = tree.ray_cast(start, -outward)
+    return (location, outward) if hit else None
+
+
+for index, (degrees, fraction) in enumerate(FRUIT_SPOTS, start=1):
+    # The canopy is made of separate blobs: a ray may pass between them, so look around the wanted spot.
+    tries = [(degrees + turn, fraction + rise) for turn in (0, 8, -8, 16, -16, 24, -24) for rise in (0, 0.08, -0.08)]
+    found = next((result for result in (foliage_hit(*spot) for spot in tries) if result), None)
+    if found is None:
+        print(f"Warning: no foliage around {degrees}° / {fraction:.2f}, fruit_{index:02d} skipped")
         continue
+    location, outward = found
     empty = bpy.data.objects.new(f"fruit_{index:02d}", None)
     empty.location = location + outward * FRUIT_OFFSET - Vector((0, 0, 0.02))
     bpy.context.scene.collection.objects.link(empty)
     fruit_names.append(empty.name)
     print(f"Fruit {empty.name} at {tuple(round(value, 3) for value in empty.location)}")
 
-# --- Baking the vertex colours ------------------------------------------------------------------------
-scene = bpy.context.scene
-scene.render.engine = "CYCLES"
-scene.cycles.device = "CPU"
-scene.cycles.samples = 1
-scene.render.bake.margin = 8
-
-for name, resolution in RESOLUTION.items():
-    item = meshes[name]
-    data = item.data
-    colour = data.color_attributes.get("Col") or (data.color_attributes[0] if data.color_attributes else None)
-    if colour is None:
-        raise SystemExit(f"Mesh '{name}' has no vertex colours to bake")
-    uv = data.uv_layers.get("st") or data.uv_layers.get("UVMap") or data.uv_layers[0]
-    uv.name = "st"
-    data.uv_layers.active = uv
-
-    image = bpy.data.images.new(f"{name}_BaseColor", resolution, resolution, alpha=False)
-    image.colorspace_settings.name = "sRGB"
-
-    # Temporary material: vertex colour -> emission, baked into the active texture.
-    material = bpy.data.materials.new(f"{name}_Mat")
-    material.use_nodes = True
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-    nodes.clear()
-    output = nodes.new("ShaderNodeOutputMaterial")
-    emission = nodes.new("ShaderNodeEmission")
-    attribute = nodes.new("ShaderNodeVertexColor")
-    attribute.layer_name = colour.name
-    links.new(attribute.outputs["Color"], emission.inputs["Color"])
-    links.new(emission.outputs["Emission"], output.inputs["Surface"])
-    texture = nodes.new("ShaderNodeTexImage")
-    texture.image = image
-    nodes.active = texture
-    data.materials.clear()
-    data.materials.append(material)
-
-    for other in scene.objects:
-        other.select_set(other == item)
-    bpy.context.view_layer.objects.active = item
-    bpy.ops.object.bake(type="EMIT", margin=8, use_clear=True)
-    image.filepath_raw = os.path.join(TEXTURE_FOLDER, f"{name}_BaseColor.png")
-    image.file_format = "PNG"
-    image.save()
-
-    # Final material: matte PBR (blends with the real light in mixed reality).
-    nodes.remove(emission)
-    nodes.remove(attribute)
-    shader = nodes.new("ShaderNodeBsdfPrincipled")
-    shader.inputs["Roughness"].default_value = 0.9
-    shader.inputs["Metallic"].default_value = 0.0
-    links.new(texture.outputs["Color"], shader.inputs["Base Color"])
-    links.new(shader.outputs["BSDF"], output.inputs["Surface"])
-
-    # The vertex colours are no longer needed: only weight in the file.
-    data.color_attributes.remove(colour)
-    print(f"Baked {name}: {len(data.polygons)} faces, {resolution}px texture")
-
 # --- Export -------------------------------------------------------------------------------------------
-for item in scene.objects:
-    item.select_set(item.name in meshes or item.name in fruit_names)
+for item in bpy.context.scene.objects:
+    item.select_set(item.name in joined or item.name in fruit_names)
 destination = os.path.join(OUTPUT, "FloatingIsland.usdz")
 bpy.ops.wm.usd_export(filepath=destination, selected_objects_only=True, export_animation=False,
                       export_materials=True, generate_preview_surface=True, export_mesh_colors=False,
-                      export_textures_mode="NEW", overwrite_textures=True,
+                      export_cameras=False, export_lights=False,
                       convert_orientation=True, export_global_forward_selection="NEGATIVE_Z",
                       export_global_up_selection="Y", root_prim_path="/FloatingIsland")
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUTPUT, "island.blend"))

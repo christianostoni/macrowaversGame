@@ -15,32 +15,30 @@ struct Fruit: Identifiable, Equatable {
     let kind: FruitKind
 }
 
-/// The glowing orb sealed inside every fruit.
+/// The glowing orb sealed inside every fruit: an ingredient of the elixir.
 enum OrbState: Equatable {
     /// Still inside its fruit.
     case sealed
-    /// The fruit is open: the orb floats above it. Drag it into the kalash.
+    /// The fruit is open: the orb rises out of it, then joins the orbit in front of the player by itself.
     case revealed
-    /// In the player's hand, on its way to the kalash.
-    case held
-    /// In the kalash, at this slot.
-    case stored(slot: Int)
-    /// Fused into the blue spell.
+    /// Orbiting the player, at this slot of the orbit.
+    case orbiting(slot: Int)
+    /// Fused into the elixir.
     case spent
 
     /// The orb has left its fruit for good.
     var isTaken: Bool {
         switch self {
-        case .sealed, .revealed, .held: false
-        case .stored, .spent: true
+        case .sealed, .revealed: false
+        case .orbiting, .spent: true
         }
     }
 }
 
 /// View model of the tree's fruit: the player picks a fruit, it comes close (zoom-in), they open it and free its
-/// glowing orb, then drag the orb into the kalash. Three orbs and a twist of the fingers make the blue spell,
-/// which flies to the dragon. Does not know RealityKit or SwiftUI. The immersive view connects it to the dragon
-/// (`UntangleViewModel`).
+/// glowing orb, an ingredient, which rises and joins an orbit in front of the player. Three ingredients and a snap of
+/// the fingers brew the elixir, which flies to the dragon. Does not know RealityKit or SwiftUI. The immersive view
+/// connects it to the dragon (`UntangleViewModel`).
 ///
 /// Every fruit holds one orb, so no choice is wrong: an apple opens by its stem and its worms guard the orb, a
 /// pomegranate is pulled apart with two hands, a banana is peeled strip by strip, a pineapple is chopped.
@@ -64,21 +62,25 @@ final class OrchardViewModel {
     private(set) var pineappleChopped = false
     /// One orb per fruit, indexed by the fruit's id.
     private(set) var orbs: [OrbState]
-    private(set) var kalash = Kalash()
-    /// The dragon still circles the tree: set by the immersive view. The spell flies to it only then, and the
-    /// kalash takes the pinch only then (later its colliders would steal the grabs on the dragon's knot).
+    private(set) var elixir = Elixir()
+    /// The dragon still circles the tree: set by the immersive view. The elixir flies to it only then, and the
+    /// orbiting ingredients take the pinch only then (later they would steal the grabs on the dragon's knot).
     var isDragonOnIsland = true
-    /// The player's hands are tracked: the twist can cast the spell (a tap on the full kalash always can).
+    /// The player's hands are tracked: the snap can brew the elixir (a tap on an ingredient always can).
     var isHandTrackingAvailable = false
-    /// How far the player's twist at the full kalash is (0…1), for the kalash's label. Set by the `OrchardSystem`.
-    var twistProgress: Float = 0
+    /// A hand holds the thumb on the middle finger, ready to snap: the elixir's label says "Now snap!".
+    /// Set by the `OrchardSystem`.
+    var isSnapLoaded = false
+    /// What the snap detector reads (closest thumb–middle contact, last attempt), for the dragon panel's debug.
+    /// Set by the `OrchardSystem`, rounded so it changes only now and then.
+    var snapDebug = "–"
 
     // MARK: - Model
 
     let appleShape = AppleShape()
     @ObservationIgnored private(set) var worms: WormSwarm
     @ObservationIgnored let wormSettings: WormSwarm.Settings
-    /// Seconds since each orb was revealed (drives the rising animation).
+    /// Seconds since each orb was revealed (drives the rising animation, then sends it into orbit).
     @ObservationIgnored private(set) var orbRevealTimes: [Float]
     @ObservationIgnored private var wormSeed: UInt64 = 1
 
@@ -87,6 +89,10 @@ final class OrchardViewModel {
     static let bananaStrips = 4
     /// A strip pulled past this counts as peeled; every strip peeled frees the orb.
     static let peeledStrip: Float = 0.8
+    /// Seconds a freed orb takes to rise out of its fruit (it can be tapped into orbit from then on) ...
+    static let orbRiseDuration: Float = 1.2
+    /// ... and how long it then floats there before joining the orbit by itself (the player sees what they found).
+    static let orbOrbitDelay: Float = 0.6
 
     init(apples: Int = 3, pomegranates: Int = 1, bananas: Int = 1, pineapples: Int = 1,
          wormSettings: WormSwarm.Settings = WormSwarm.Settings()) {
@@ -128,10 +134,10 @@ final class OrchardViewModel {
 
     // MARK: - Player actions
 
-    /// Brings a fruit close to the player. Only one at a time, and not while the spell is flying.
+    /// Brings a fruit close to the player. Only one at a time, and not while the elixir is flying.
     @discardableResult
     func focus(fruit id: Int) -> Bool {
-        guard focusedFruitID == nil, kalash.spell != .flying, let fruit = fruits.first(where: { $0.id == id }) else {
+        guard focusedFruitID == nil, elixir.state != .flying, let fruit = fruits.first(where: { $0.id == id }) else {
             return false
         }
         focusedFruitID = id
@@ -149,10 +155,9 @@ final class OrchardViewModel {
         return true
     }
 
-    /// Puts the fruit back on the tree. A freed orb waits above its fruit for the next visit.
+    /// Puts the fruit back on the tree. A freed orb still joins the orbit from there.
     func back() {
-        guard let id = focusedFruitID else { return }
-        if orbs[id] == .held { orbs[id] = .revealed }
+        guard focusedFruitID != nil else { return }
         focusedFruitID = nil
         closeAll()
     }
@@ -208,14 +213,14 @@ final class OrchardViewModel {
         revealFocusedOrb()
     }
 
-    /// Everything back on the tree, every orb back in its fruit, the kalash empty.
+    /// Everything back on the tree, every orb back in its fruit, no elixir.
     func reset() {
         focusedFruitID = nil
         closeAll()
         caughtWorms = 0
         orbs = Array(repeating: .sealed, count: fruits.count)
         orbRevealTimes = Array(repeating: 0, count: fruits.count)
-        kalash = Kalash()
+        elixir = Elixir()
         worms.reset()
     }
 
@@ -228,15 +233,17 @@ final class OrchardViewModel {
         }
         for index in orbs.indices where orbs[index] == .revealed {
             orbRevealTimes[index] += deltaTime
+            // Found: after rising and floating for a moment it joins the others in orbit.
+            if orbRevealTimes[index] >= Self.orbRiseDuration + Self.orbOrbitDelay { sendToOrbit(fruit: index) }
         }
-        let before = kalash.spell
-        kalash.update(deltaTime: deltaTime, canFly: isDragonOnIsland)
-        if before == .forming && kalash.spell == .formed {
-            // The orbs have fused: only the blue spell is left.
+        let before = elixir.state
+        elixir.update(deltaTime: deltaTime, canFly: isDragonOnIsland)
+        if before == .fusing && elixir.state == .brewed {
+            // The ingredients have fused: only the elixir is left.
             for index in orbs.indices where orbs[index].isTaken { orbs[index] = .spent }
         }
-        if before != .flying && kalash.spell == .flying {
-            // The player follows the spell to the dragon: the fruit in front of them goes back.
+        if before != .flying && elixir.state == .flying {
+            // The player follows the elixir to the dragon: the fruit in front of them goes back.
             back()
         }
     }
@@ -258,41 +265,39 @@ final class OrchardViewModel {
     }
 }
 
-// MARK: - Orbs and the kalash
+// MARK: - Ingredients and the elixir
 
 extension OrchardViewModel {
-    /// Pinches the orb floating above the focused fruit. Returns whether it is now in the hand.
+    /// Taps the orb risen out of a fruit: it joins the orbit now instead of waiting. Returns whether it did.
     @discardableResult
-    func grabOrb(fruit id: Int) -> Bool {
-        guard id == focusedFruitID, orbs.indices.contains(id), orbs[id] == .revealed || orbs[id] == .held else {
+    func collectOrb(fruit id: Int) -> Bool {
+        guard orbs.indices.contains(id), orbs[id] == .revealed, orbRevealTimes[id] >= Self.orbRiseDuration else {
             return false
         }
-        orbs[id] = .held
+        return sendToOrbit(fruit: id)
+    }
+
+    /// The snap of the fingers (or a tap on an ingredient) with every ingredient in orbit: they start fusing.
+    /// A fruit still in front of the player goes back, out of the way of the fusion.
+    @discardableResult
+    func brewElixir() -> Bool {
+        guard elixir.brew() else { return false }
+        back()
         return true
     }
 
-    /// Lets go of the orb. Dropped into the kalash (and the kalash still takes orbs) it stays there and the fruit
-    /// goes back to the tree; anywhere else it floats back above its fruit. Returns whether it went in.
+    /// The elixir reached the dragon.
+    func elixirDelivered() {
+        elixir.delivered()
+    }
+
+    /// The orb joins the orbit, if the orbit still takes ingredients (otherwise it keeps floating above its fruit).
+    /// Its fruit has nothing more to give: it goes back to the tree.
     @discardableResult
-    func releaseOrb(fruit id: Int, intoKalash: Bool) -> Bool {
-        guard orbs.indices.contains(id), orbs[id] == .held else { return false }
-        guard intoKalash, let slot = kalash.store() else {
-            orbs[id] = .revealed
-            return false
-        }
-        orbs[id] = .stored(slot: slot)
+    private func sendToOrbit(fruit id: Int) -> Bool {
+        guard orbs[id] == .revealed, let slot = elixir.collect() else { return false }
+        orbs[id] = .orbiting(slot: slot)
         if id == focusedFruitID { back() }
         return true
-    }
-
-    /// The twist while looking at the full kalash: the orbs start fusing into the blue spell.
-    @discardableResult
-    func castSpell() -> Bool {
-        kalash.cast()
-    }
-
-    /// The blue spell reached the dragon.
-    func spellDelivered() {
-        kalash.delivered()
     }
 }

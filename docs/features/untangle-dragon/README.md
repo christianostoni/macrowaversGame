@@ -20,10 +20,10 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
    dragon turns with it.
 4. Look at the dragon and pinch (tap): it gets angry for ~3 s and the **dragon panel** appears on your right,
    with its state and debug info. It won't come near you until it is soothed.
-5. Pick a fruit on the tree, open an apple and catch its worms to free the **artifact** (see
-   [The tree's fruit](../apple-artifact/README.md)). Tap the artifact: it flies to the dragon, which flies to
-   you, stops to look at you and settles tangled in front of you. (**Call It Now** in the dragon panel skips
-   the artifact, for testing.)
+5. Pick fruit on the tree and open them: each frees an **ingredient** that joins a small orbit in front of you (see
+   [The tree's fruit](../apple-artifact/README.md)). With three in orbit, snap your fingers (or tap one): they
+   fuse into the **elixir**, which flies to the dragon; it flies to you, stops to look at you and settles
+   tangled in front of you. (**Call It Now** in the dragon panel skips the elixir, for testing.)
 6. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
@@ -33,9 +33,9 @@ uses a seated eye height of 1.15 m.
 
 | Moment | Behaviour |
 |---|---|
-| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~1.95 m), the grass at 0.6 m; the rock and the lowest floating rocks sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
+| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
 | Tap the dragon | For ~3 s it gets angry: circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling. The dragon panel opens with "The dragon is getting angry!" and debug info (phase, mood, action, crossings, restlessness, strain) |
-| The artifact reaches it (or **Call It Now** in the panel) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
+| The elixir reaches it (or **Call It Now** in the panel) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
 | Grab | The part you look at glows; pinch to grab, one part per hand: left and right hand hold and drag two parts independently (the debug info shows which hand holds which node, e.g. "L 20 · R 63"); a part can pass from one hand to the other without being dropped. The body follows the hand smoothly (no shaking with a shaky hand, no flicker when pulled taut); the dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
@@ -113,7 +113,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
   - the dragon panel appears when the dragon is tapped and can be closed or reopened from the island panel;
   - panels hide themselves in SwiftUI; their attachment entities are **never disabled** (`isEnabled = false`):
     deactivating an entity that hosts SwiftUI while its content changes makes RealityKit abort with "the new
-    parent is currently being removed" (it crashed the app when the artifact reached the dragon);
+    parent is currently being removed" (it crashed the app when the fruit's orb reached the dragon);
   - closing the space in any way (Restart Game or Digital Crown) resets the game and reopens the launch window,
     so there is never more than one window and never a window over the game.
 - **The captive dragon flies in the tree's space (`AnchoredOrbit`).** `OrbitComponent` passes the tree anchor's
@@ -199,40 +199,51 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
     hanging on it) **and the dragon** (the play area, body, head, wings and effects) fade to 25%;
   - **dragon** (landing and untangling, `DragonPhase.focusesOnDragon`, and while the freed dragon speaks,
     `StoryStep.focusesOnDragon`): the island, tree and fruit fade, only the dragon stays at 100%;
-  - **none** (exploring, or the artifact flying to the dragon, so the player can follow it): everything at 100%.
+  - **none** (exploring, or the elixir flying to the dragon, so the player can follow it): everything at 100%.
 
   Each part eases in ~0.6 s; at 100% its `OpacityComponent` is removed, so it is drawn opaque again. Opacity
   multiplies down the hierarchy, so the dragon's own fade-in and fade-out keep working under it. The focused
-  fruit, its panel and the artifact live under the orchard, outside both parts, and never fade.
+  fruit, its panel, the ingredients and the elixir live under the orchard, outside both parts, and never fade.
 
 ## Floating island
 
-`Sources/Macrowavers/Resources/FloatingIsland.usdz` is generated from the design team's `FloatingIsland.usdc`:
+`Sources/Macrowavers/Resources/FloatingIsland.usdz` is generated from the design team's `Tree_FloatingIsland.usdc`
+(the island with its new tree, a raw Blender export):
 
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-    -P Assets/Blender/untangle-dragon/make_island_asset.py -- <FloatingIsland.usdc> <output folder>
+    -P Assets/Blender/untangle-dragon/make_island_asset.py -- <Tree_FloatingIsland.usdc> <output folder>
 ```
 
-- The source file points to external textures (`./textures/*_BaseColor.png`) that were never exported; the
-  real colours are vertex colours (`Col`), which RealityKit does not draw. The script bakes them into textures
-  on the existing UVs (island 2048, tree 1024, rocks 512), rebuilds a PBR material (roughness 0.9) and drops the
-  vertex colours. Textures are embedded in the USDZ (5 MB), validated with `usdchecker --arkit`.
-- **Origin moved to the base of the trunk, on the ground** (it was the island centre, with the trunk sunk in):
-  the code uses the origin as the orbit centre with no offsets.
+The source is Z-up and ~14 m wide, with ~90 loose meshes, a camera, a sun and a dome light. The script turns it
+into the same asset contract the code has always used, so no Swift code changed with the new island:
+
+- **Three parts, as before:** the meshes are joined into `Island` (grass, rock, roots, stones, bushes, flowers:
+  its bounds give the rock's collider), `Tree` (trunk, branch, canopy) and `FloatingRocks` (debris and small
+  floating islands, which bob on their own). Camera and lights are dropped: the room lights the island.
+- **Plain material colours**, no textures and no vertex colours (nothing to bake): exported as UsdPreviewSurface,
+  matte (roughness 0.85); the tree's anonymous materials become `Tree_Bark` and `Tree_Leaves`. 220 KB, validated
+  with `usdchecker --arkit`.
+- **Origin moved to the base of the trunk, on the grass:** the code uses the origin as the orbit centre with no
+  offsets.
+- **Scaled to the previous asset's size** (`TARGET_WIDTH`, island 2.5 m wide): `IslandPlacement.standard`, the
+  dragon's orbit (`OrbitPath.aroundTree`: no trunk, branch or bush inside it), the fruit sizes and the floor
+  occluder stay as they were.
 - Y-up export with *Convert Orientation* (rotation on the file root, so the code never overwrites the loaded
   entity's transform).
 - Six empty objects `fruit_01` … `fruit_06` mark where the fruit hangs: the script casts rays at the canopy from
-  outside and puts each point just off the foliage. Move them in Blender to move the fruit.
-- 3 meshes / 3 materials (3 draw calls), ~24k triangles. The code adds a collider only below the ground (the
-  rock, to spin the island).
-- Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.4 m, canopy from 0.5 m above the ground, rock
-  1.33 m deep below the grass. In the scene it is at **real size** (scale 1, `IslandPlacement.standard`),
-  2.8 m away, **grass at 0.6 m** (`IslandPlacement.grassHeight`), treetop ~1.95 m. If it is missing, the dragon
+  outside (the canopy is made of separate blobs, so it looks around each wanted spot when a ray slips between
+  them) and puts each point just off the foliage, 1.2–1.35 m above the grass. Move them in Blender to move the
+  fruit.
+- 3 meshes / 20 materials, ~5.3k triangles. The code adds a collider only below the ground (the rock, to spin
+  the island).
+- Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.84 m, canopy from ~0.97 m above the ground, rock and
+  roots 0.91 m deep below the grass. In the scene it is at **real size** (scale 1, `IslandPlacement.standard`),
+  2.8 m away, **grass at 0.6 m** (`IslandPlacement.grassHeight`), treetop ~2.45 m. If it is missing, the dragon
   circles an empty spot.
 - Scale and height are independent: the origin is on the grass and the transform is translation × rotation ×
   uniform positive scale, so changing the scale grows the island around the grass and never moves it (test).
-- At that height the rock's tip ends ~0.7 m and the lowest floating rocks ~0.2 m below the real floor.
+- At that height the rock's roots end ~0.3 m below the real floor and the lowest floating rocks just above it.
   Passthrough does not hide virtual content under the floor, so `IslandSceneBuilder` adds a floor patch 2 mm
   under y = 0 with `OcclusionMaterial` (`floorOccluder`, sized to the whole model so the floating rocks are
   covered whichever way the island is turned, outside the island so it never turns, bobs or fades): seen from
@@ -330,7 +341,7 @@ a taut pull not flickering, flight keeping its distance from the player, the orb
 landing matching the knot, the farewell ending, the free dragon staying in front of the player and hovering
 where they look (two gaze directions), the story flow (tap → puzzle), tilt clamping, restart and play again.
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
-artifact flies, when exploring) and the island's transform (at least the original size, grass at 0.6 m
+elixir flies, when exploring) and the island's transform (at least the original size, grass at 0.6 m
 whatever the scale, positive uniform scale), and the speaking dragon keeping only itself visible.
 `StoryTests.swift` covers the free dragon waiting for the player's answer (and taking off on its own without the
 story).

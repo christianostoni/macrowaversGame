@@ -4,8 +4,8 @@ import simd
 import ARKit
 #endif
 
-/// The player's hands, for the gestures SwiftUI does not offer: chopping the pineapple and twisting the pinched
-/// fingers at the kalash. ARKit hand tracking (asks the player's permission once); when it is not available
+/// The player's hands, for the gestures SwiftUI does not offer: chopping the pineapple and snapping the fingers
+/// to brew the elixir. ARKit hand tracking (asks the player's permission once); when it is not available
 /// (simulator, permission denied) `start()` returns false and the taps take over.
 @MainActor
 final class HandTracker {
@@ -25,7 +25,7 @@ final class HandTracker {
         guard !isRunning else { return true }
         let authorization = await session.requestAuthorization(for: HandTrackingProvider.requiredAuthorizations)
         guard !authorization.values.contains(.denied) else {
-            print("⚠️ Hand tracking not allowed: taps replace the chop and the twist")
+            print("⚠️ Hand tracking not allowed: taps replace the chop and the snap")
             return false
         }
         do {
@@ -65,22 +65,16 @@ final class HandTracker {
     private static func sample(from anchor: HandAnchor, chirality: HandSample.Chirality,
                                timestamp: TimeInterval) -> HandSample? {
         guard anchor.isTracked, let skeleton = anchor.handSkeleton else { return nil }
-        func position(_ name: HandSkeleton.JointName) -> SIMD3<Float>? {
-            let joint = skeleton.joint(name)
-            guard joint.isTracked else { return nil }
-            let transform = anchor.originFromAnchorTransform * joint.anchorFromJointTransform
+        // Every joint, tracked or estimated: in a fast movement (the snap) ARKit often flags the fingertips as not
+        // tracked for a frame while still giving a good estimate. Dropping the whole reading then would hide
+        // exactly the moment the gesture happens.
+        func position(_ name: HandSkeleton.JointName) -> SIMD3<Float> {
+            let transform = anchor.originFromAnchorTransform * skeleton.joint(name).anchorFromJointTransform
             return SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
         }
-        guard let wrist = position(.wrist), let knuckle = position(.middleFingerKnuckle),
-              let thumbTip = position(.thumbTip), let indexTip = position(.indexFingerTip),
-              let indexKnuckle = position(.indexFingerKnuckle), let littleKnuckle = position(.littleFingerKnuckle) else {
-            return nil
-        }
-        // The palm's plane goes through the wrist and the knuckles: its normal rolls with the wrist.
-        let normal = simd_cross(indexKnuckle - wrist, littleKnuckle - wrist)
-        guard simd_length(normal) > 1e-6 else { return nil }
-        return HandSample(chirality: chirality, timestamp: timestamp, knuckle: knuckle, wrist: wrist,
-                          thumbTip: thumbTip, indexTip: indexTip, palmNormal: simd_normalize(normal))
+        return HandSample(chirality: chirality, timestamp: timestamp, knuckle: position(.middleFingerKnuckle),
+                          wrist: position(.wrist), thumbTip: position(.thumbTip), indexTip: position(.indexFingerTip),
+                          middleDistal: position(.middleFingerIntermediateTip), middleTip: position(.middleFingerTip))
     }
     #endif
 }

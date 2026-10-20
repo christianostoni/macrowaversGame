@@ -2,18 +2,16 @@
 import RealityKit
 import SwiftUI
 
-/// Gestures of the tree's fruit and the kalash in the immersive space, and the link between the spell and the
-/// dragon. Every gesture targets its own component, so none of them steals the pinch from the dragon (tap and
+/// Gestures of the tree's fruit and the elixir's ingredients in the immersive space, and the link between the
+/// elixir and the dragon. Every gesture targets its own component, so none of them steals the pinch from the dragon (tap and
 /// grabs) or from the island (spin).
 struct OrchardInteractions: ViewModifier {
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(UntangleViewModel.self) private var untangle
-    /// Gesture state: where the stem drag started, the pinch scale, the grab offsets of a seed, an orb, the kalash.
+    /// Gesture state: where the stem drag started, the pinch scale, the grab offset of a seed.
     @State private var stemDragStart: StemDrag?
     @State private var pinchStart: Float?
     @State private var seedGrabOffset: SIMD3<Float>?
-    @State private var orbGrabOffset: SIMD3<Float>?
-    @State private var kalashGrabOffset: SIMD3<Float>?
 
     private struct StemDrag {
         let height: Float
@@ -29,16 +27,14 @@ struct OrchardInteractions: ViewModifier {
             .simultaneousGesture(dragSeedGesture)
             .simultaneousGesture(peelBananaGesture)
             .simultaneousGesture(chopPineappleGesture)
-            .simultaneousGesture(dragOrbGesture)
-            .simultaneousGesture(dragKalashGesture)
-            .simultaneousGesture(castSpellGesture)
-            // The spell flies to the dragon (and the kalash takes the pinch) only while it circles the tree.
+            .simultaneousGesture(tapOrbGesture)
+            // The elixir flies to the dragon (and the ingredients take the pinch) only while it circles the tree.
             .onChange(of: untangle.phase.isOnIsland, initial: true) { _, isOnIsland in
                 orchard.isDragonOnIsland = isOnIsland
             }
-            // The blue spell reached the dragon: soothed, it comes to the player.
-            .onChange(of: orchard.kalash.spell) { _, spell in
-                if spell == .delivered { untangle.callDragon() }
+            // The elixir reached the dragon: soothed, it comes to the player.
+            .onChange(of: orchard.elixir.state) { _, state in
+                if state == .delivered { untangle.callDragon() }
             }
     }
 
@@ -130,54 +126,19 @@ struct OrchardInteractions: ViewModifier {
             }
     }
 
-    /// Pinch the orb risen out of a fruit and carry it to the kalash: let go over its mouth and it drops in,
-    /// anywhere else it floats back above its fruit.
-    private var dragOrbGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .targetedToEntity(where: .has(OrbComponent.self))
-            .onChanged { value in
-                let orb = value.entity
-                guard let id = orb.components[OrbComponent.self]?.fruitID, let root = orb.orchardRoot,
-                      orchard.grabOrb(fruit: id) else { return }
-                // Out of the fruit, into the orchard's space (the scene's): it goes wherever the hand goes.
-                if orb.parent !== root { orb.setParent(root, preservingWorldTransform: true) }
-                let point = value.convert(value.location3D, from: .local, to: root)
-                let offset = orbGrabOffset ?? orb.position - point
-                orbGrabOffset = offset
-                orb.position = point + offset
-            }
-            .onEnded { value in
-                orbGrabOffset = nil
-                let orb = value.entity
-                guard let id = orb.components[OrbComponent.self]?.fruitID,
-                      let kalash = orb.orchardRoot?.components[OrchardComponent.self]?.kalash else { return }
-                let distance = simd_distance(orb.position(relativeTo: nil), kalash.mouth.position(relativeTo: nil))
-                orchard.releaseOrb(fruit: id, intoKalash: distance < OrchardComponent.kalashDropRadius)
-            }
-    }
-
-    /// Drag the kalash wherever is handy: it stays where it is dropped.
-    private var dragKalashGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .targetedToEntity(where: .has(KalashComponent.self))
-            .onChanged { value in
-                guard orchard.isDragonOnIsland, let parent = value.entity.parent else { return }
-                let point = value.convert(value.location3D, from: .local, to: parent)
-                let offset = kalashGrabOffset ?? value.entity.position - point
-                kalashGrabOffset = offset
-                value.entity.position = point + offset
-            }
-            .onEnded { _ in
-                kalashGrabOffset = nil
-            }
-    }
-
-    /// Tap the full kalash: the spell is cast, like the twist (always available, also without hand tracking).
-    private var castSpellGesture: some Gesture {
+    /// Tap an ingredient: risen out of its fruit it joins the orbit at once (it would a moment later anyway); in
+    /// orbit with all the others it brews the elixir, like the snap (always available, also without hand tracking).
+    private var tapOrbGesture: some Gesture {
         SpatialTapGesture()
-            .targetedToEntity(where: .has(KalashComponent.self))
-            .onEnded { _ in
-                orchard.castSpell()
+            .targetedToEntity(where: .has(OrbComponent.self))
+            .onEnded { value in
+                guard let id = value.entity.components[OrbComponent.self]?.fruitID,
+                      orchard.orbs.indices.contains(id) else { return }
+                switch orchard.orbs[id] {
+                case .revealed: orchard.collectOrb(fruit: id)
+                case .orbiting: orchard.brewElixir()
+                case .sealed, .spent: break
+                }
             }
     }
 }
