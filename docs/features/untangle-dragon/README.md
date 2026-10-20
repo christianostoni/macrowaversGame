@@ -207,12 +207,15 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
 
 ## Floating island
 
-`Sources/Macrowavers/Resources/FloatingIsland.usdz` is generated from the design team's `Tree_FloatingIsland.usdc`
-(the island with its new tree, a raw Blender export):
+`Sources/Macrowavers/Resources/FloatingIsland.usdz` is generated from the design team's latest island export
+(`last.ttttttttusdc.usdc`, a raw Blender export of the island with its tree). Compared with the first export
+(`Tree_FloatingIsland.usdc`) only two meshes changed: the rock body is a little wider and the grass top was
+remodelled (501 vertices instead of 121, a shorter, more regular fringe); the tree, the floating rocks and
+everything else are identical:
 
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-    -P Assets/Blender/untangle-dragon/make_island_asset.py -- <Tree_FloatingIsland.usdc> <output folder>
+    -P Assets/Blender/untangle-dragon/make_island_asset.py -- <island source .usdc> <output folder>
 ```
 
 The source is Z-up and ~14 m wide, with ~90 loose meshes, a camera, a sun and a dome light. The script turns it
@@ -222,26 +225,31 @@ into the same asset contract the code has always used, so no Swift code changed 
   its bounds give the rock's collider), `Tree` (trunk, branch, canopy) and `FloatingRocks` (debris and small
   floating islands, which bob on their own). Camera and lights are dropped: the room lights the island.
 - **Plain material colours**, no textures and no vertex colours (nothing to bake): exported as UsdPreviewSurface,
-  matte (roughness 0.85); the tree's anonymous materials become `Tree_Bark` and `Tree_Leaves`. 220 KB, validated
+  matte (roughness 0.85); the tree's anonymous materials become `Tree_Bark` and `Tree_Leaves`. 247 KB, validated
   with `usdchecker --arkit`.
 - **Inside-out meshes turned the right way:** the source's rock body (`Island_RockBody`) has its faces wound
-  inwards (signed volume −564). Blender draws both sides of every face, so it looks fine there; RealityKit culls
+  inwards (signed volume −564, −586 in the latest export). Blender draws both sides of every face, so it looks fine there; RealityKit culls
   back faces, so the rock looked hollow from the outside, its far inner walls showing through. Every closed mesh
   (≤ 5 % open edges, `MAX_OPEN_EDGES`) with a negative signed volume gets its faces recalculated outwards and its
   normals recomputed; open meshes (petals, grass cards) are left alone, their volume's sign means nothing.
+  Stray vertices without faces are deleted first (the latest export has one in the rock: it misled Blender's
+  guess of the outside), and if the volume is still negative every face is reversed, so the result never depends on it.
   Ask the design team to check *Face Orientation* (Viewport Overlays: blue outside, red inside) on new assets.
 - **Origin moved to the base of the trunk, on the grass:** the code uses the origin as the orbit centre with no
   offsets.
-- **Scaled to the previous asset's size** (`TARGET_WIDTH`, island 2.5 m wide): `IslandPlacement.standard`, the
-  dragon's orbit (`OrbitPath.aroundTree`: no trunk, branch or bush inside it), the fruit sizes and the floor
-  occluder stay as they were.
+- **Scaled by the tree alone** (`TARGET_TREE_HEIGHT`: 1.8415 m from the bottom of the trunk to the top of the
+  canopy; island ~2.5 m wide): `IslandPlacement.standard`, the dragon's orbit (`OrbitPath.aroundTree`: no trunk,
+  branch or bush inside it), the fruit and the floor occluder stay as they were. Not the island's width nor the
+  grass: the wider rock would have shrunk everything by 0.4 %. With the latest export the tree, the fruit points
+  and the floating rocks match the previous asset within 0.001 mm across and 0.5 mm in height (the grass by the
+  trunk, where the origin sits, rose by half a millimetre).
 - Y-up export with *Convert Orientation* (rotation on the file root, so the code never overwrites the loaded
   entity's transform).
 - Six empty objects `fruit_01` … `fruit_06` mark where the fruit hangs: the script casts rays at the canopy from
   outside (the canopy is made of separate blobs, so it looks around each wanted spot when a ray slips between
   them) and puts each point just off the foliage, 1.2–1.35 m above the grass. Move them in Blender to move the
   fruit.
-- 3 meshes / 20 materials, ~5.3k triangles. The code adds a collider only below the ground (the rock, to spin
+- 3 meshes / 20 materials, ~5.9k triangles. The code adds a collider only below the ground (the rock, to spin
   the island).
 - Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.84 m, canopy from ~0.97 m above the ground, rock and
   roots 0.91 m deep below the grass. In the scene it is at **real size** (scale 1, `IslandPlacement.standard`),

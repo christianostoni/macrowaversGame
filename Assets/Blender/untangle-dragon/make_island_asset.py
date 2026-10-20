@@ -2,7 +2,7 @@
 
 Usage:
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-        -P Assets/Blender/untangle-dragon/make_island_asset.py -- <Tree_FloatingIsland.usdc> <output folder>
+        -P Assets/Blender/untangle-dragon/make_island_asset.py -- <island source .usdc> <output folder>
 
 The source is the design team's raw Blender export (Z-up, ~14 m wide, ~90 loose meshes, a camera, a sun and a
 dome light). The app expects the same asset contract as before, so the code needs no magic numbers:
@@ -11,8 +11,10 @@ dome light). The app expects the same asset contract as before, so the code need
   and canopy) and `FloatingRocks` (the debris and small floating islands, which bob on their own). Fewer
   entities and draw calls than ~90 meshes.
 - Moves the origin to the base of the trunk, on the grass: the dragon circles it with no offsets in code.
-- Scales it to the previous asset's real size: island `TARGET_WIDTH` metres wide (so `IslandPlacement.standard`,
-  the dragon's orbit, the fruit sizes and the floor occluder all stay as they were).
+- Scales it so the tree is `TARGET_TREE_HEIGHT` metres tall, from the bottom of its trunk to the top of its
+  canopy (island ~2.5 m wide): the scale of the asset the code is tuned for, so `IslandPlacement.standard`, the
+  dragon's orbit, the fruit and the floor occluder stay as they were. The tree alone, not the island's width nor
+  the grass: a designer reshaping the rock or the grass must not resize the whole island.
 - Adds empty objects `fruit_01` ... `fruit_06` on the outside of the canopy, found by casting rays at the
   foliage: the code hangs the fruit there (designers can move them in Blender).
 - Turns inside-out meshes the right way: the source's rock body (`Island_RockBody`) has its faces wound
@@ -34,12 +36,13 @@ from mathutils import Vector
 
 arguments = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if len(arguments) != 2:
-    raise SystemExit("Usage: ... -- <Tree_FloatingIsland.usdc> <output folder>")
+    raise SystemExit("Usage: ... -- <island source .usdc> <output folder>")
 SOURCE, OUTPUT = (os.path.abspath(argument) for argument in arguments)
 os.makedirs(OUTPUT, exist_ok=True)
 
-# Width of the island (grass and rock, without the floating rocks) in metres: the previous asset's size.
-TARGET_WIDTH = 2.5
+# Height of the tree, bottom of the trunk to top of the canopy, in metres: the scale the code is tuned for
+# (island ~2.5 m wide).
+TARGET_TREE_HEIGHT = 1.8415
 # Fruit hang points: (angle in degrees around the canopy, height as a fraction of the canopy, 0 = its bottom).
 FRUIT_SPOTS = [(20, 0.3), (95, 0.42), (160, 0.26), (230, 0.38), (290, 0.32), (340, 0.45)]
 # Distance of the fruit centre from the foliage surface (half a fruit on the tree, metres after scaling).
@@ -99,7 +102,12 @@ for item in meshes:
     mesh.from_mesh(item.data)
     open_edges = sum(1 for edge in mesh.edges if len(edge.link_faces) < 2)
     if open_edges <= MAX_OPEN_EDGES * len(mesh.edges) and mesh.calc_volume(signed=True) < 0:
+        # Stray vertices (no face) mislead Blender's guess of where the outside is: `last.usdc` has one in the
+        # rock. Then the volume decides: still negative means the guess was wrong, so every face is reversed.
+        bmesh.ops.delete(mesh, geom=[vertex for vertex in mesh.verts if not vertex.link_faces], context="VERTS")
         bmesh.ops.recalc_face_normals(mesh, faces=mesh.faces)
+        if mesh.calc_volume(signed=True) < 0:
+            bmesh.ops.reverse_faces(mesh, faces=mesh.faces)
         mesh.to_mesh(item.data)
         # Imported normals would still point inwards: let Blender compute them from the new winding.
         if item.data.has_custom_normals:
@@ -117,16 +125,16 @@ center_y = sum(point.y for point in base) / len(base)
 nearby = [vertex.co.z for vertex in grass.data.vertices
           if math.hypot(vertex.co.x - center_x, vertex.co.y - center_y) < 1.5]
 ground = max(nearby) if nearby else lowest
+scale = TARGET_TREE_HEIGHT / (max(point.z for point in tree_points) - lowest)
 island_points = [vertex.co for item in meshes if parts[item] == "Island" for vertex in item.data.vertices]
 width = max(max(point.x for point in island_points) - min(point.x for point in island_points),
             max(point.y for point in island_points) - min(point.y for point in island_points))
-scale = TARGET_WIDTH / width
 origin = Vector((center_x, center_y, ground))
 for item in meshes:
     for vertex in item.data.vertices:
         vertex.co = (vertex.co - origin) * scale
 print(f"Origin moved to the trunk {tuple(round(value, 3) for value in origin)}, scale {scale:.4f} "
-      f"(island {width:.2f} -> {TARGET_WIDTH} m)")
+      f"(tree {TARGET_TREE_HEIGHT} m, island {width * scale:.2f} m wide)")
 
 # --- Materials: readable names, matte -----------------------------------------------------------------
 for material in bpy.data.materials:
