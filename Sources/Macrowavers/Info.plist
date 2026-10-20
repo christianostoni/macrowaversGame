@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSHandsTrackingUsageDescription</key>
-	<string>Your hands chop the pineapple and twist the spell out of the kalash.</string>
+	<string>Your hands chop the pineapple and snap their fingers to brew the elixir.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationPreferredDefaultSceneSessionRole</key>

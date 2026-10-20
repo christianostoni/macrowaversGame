@@ -40,9 +40,18 @@ struct PomegranateBodyComponent: Component {}
 /// A pomegranate seed.
 struct SeedComponent: Component {}
 
-/// The glowing orb of a fruit (`fruitID`): it rises out of the open fruit and is dragged into the kalash.
+/// The glowing orb of a fruit (`fruitID`), an ingredient of the elixir: it rises out of the open fruit and flies
+/// to the orbit in front of the player. Also remembers that journey, which only the RealityKit layer draws.
 struct OrbComponent: Component {
     let fruitID: Int
+    /// Orbit slot whose colour the orb wears (nil = not found yet, neutral colour).
+    var tintedSlot: Int?
+    /// Where the flight from the fruit to the orbit started (orchard space) and how long it has lasted.
+    var joinStart: SIMD3<Float>?
+    var joinElapsed: Float = 0
+
+    /// Seconds from the fruit to the orbit.
+    static let joinDuration: Float = 1.4
 }
 
 /// Smoothly moves an entity to `target` (in its parent's space), then removes itself.
@@ -97,7 +106,8 @@ struct OrchardFruit {
 }
 
 /// Connects the orchard to its view model. Every frame the `OrchardSystem` advances the worms, brings the
-/// focused fruit close or puts it back, applies openings, moves the orbs and draws the kalash and its spell.
+/// focused fruit close or puts it back, applies openings, moves the orbit and the orbs, reads the snap and draws
+/// the elixir.
 struct OrchardComponent: Component {
     let viewModel: OrchardViewModel
     let viewer: ViewerTracker
@@ -109,8 +119,8 @@ struct OrchardComponent: Component {
     let fruits: [OrchardFruit]
     /// The orb of each fruit, by fruit id.
     let orbs: [Int: Entity]
-    let kalash: KalashRig
-    /// Where the blue spell flies: the dragon's head.
+    let elixir: ElixirRig
+    /// Where the elixir flies: the dragon's head.
     let deliveryTarget: Entity
     /// Interactive things behind the fruit (island rock, dragon colliders): switched off while a fruit is close,
     /// so a pinch that just misses the stem, a worm or the pomegranate never lands on them.
@@ -119,12 +129,13 @@ struct OrchardComponent: Component {
     var appliedFocus: Int??
     var time: Float = 0
     var chop = ChopDetector()
-    var twist = TwistDetector()
-
-    /// Speed of the blue spell flying to the dragon (m/s).
-    static let spellSpeed: Float = 1.1
-    /// An orb let go closer than this to the kalash's mouth drops in (m).
-    static let kalashDropRadius: Float = 0.12
+    var snap = SnapDetector()
+    /// The small ellipse in front of the player the ingredients go round on.
+    var orbit = ElixirOrbit()
+    /// The elixir's flight to the dragon, once it has left.
+    var flight: ElixirFlight?
+    /// Elixir state already drawn: its changes start the flash and the flight.
+    var drawnElixirState = ElixirState.gathering
 }
 
 struct OrchardSystem: System {
@@ -144,7 +155,6 @@ struct OrchardSystem: System {
         BananaPeelComponent.registerComponent()
         PineappleBodyComponent.registerComponent()
         OrbComponent.registerComponent()
-        KalashComponent.registerComponent()
         FocusComponent.registerComponent()
         OrchardComponent.registerComponent()
         FocusSystem.registerSystem()
@@ -167,8 +177,10 @@ struct OrchardSystem: System {
                 Self.applyOpening(fruit, viewModel: viewModel, time: orchard.time, deltaTime: deltaTime)
             }
             Self.detectChop(&orchard)
-            Self.updateOrbs(orchard: orchard, deltaTime: deltaTime)
-            Self.updateKalash(&orchard, root: entity, deltaTime: deltaTime)
+            Self.updateOrbit(&orchard, deltaTime: deltaTime)
+            Self.detectSnap(&orchard)
+            Self.updateOrbs(orchard: orchard, root: entity, deltaTime: deltaTime)
+            Self.updateElixir(&orchard, root: entity, deltaTime: deltaTime)
             entity.components.set(orchard)
         }
     }
@@ -276,8 +288,8 @@ struct OrchardSystem: System {
 
 // MARK: - Building
 
-/// Builds the orchard: fruits hanging on the island's tree, the stage in front of the player, an orb in every
-/// fruit and the kalash at the player's side.
+/// Builds the orchard: fruits hanging on the island's tree, the stage in front of the player, an orb (an
+/// ingredient of the elixir) in every fruit and the elixir.
 enum OrchardSceneBuilder {
     static let rootName = "Orchard"
     static let stageName = "OrchardStage"
@@ -300,7 +312,7 @@ enum OrchardSceneBuilder {
 
     /// - Parameters:
     ///   - island: the fruit hangs from its root at its hang points (it turns and bobs with the island).
-    ///   - deliveryTarget: where the blue spell flies (the dragon's head).
+    ///   - deliveryTarget: where the elixir flies (the dragon's head).
     ///   - background: interactive entities behind the fruit, switched off while a fruit is close.
     @MainActor
     static func makeOrchard(viewModel: OrchardViewModel, player: Player, island: IslandSceneBuilder.Island,
@@ -313,7 +325,7 @@ enum OrchardSceneBuilder {
         stage.name = stageName
         root.addChild(stage)
 
-        let orbTemplate = await makeOrbTemplate()
+        let orbTemplate = makeOrbTemplate()
         var fruits: [OrchardFruit] = []
         var orbs: [Int: Entity] = [:]
         for (index, fruit) in viewModel.fruits.enumerated() {
@@ -331,12 +343,13 @@ enum OrchardSceneBuilder {
             orbs[fruit.id] = orb
         }
 
-        let kalash = await KalashRig.make()
-        root.addChild(kalash.root)
+        let elixir = ElixirRig()
+        root.addChild(elixir.elixir)
+        root.addChild(elixir.hintAnchor)
 
         root.components.set(OrchardComponent(viewModel: viewModel, viewer: player.viewer, hands: player.hands,
                                              island: island.root, stage: stage, fruits: fruits, orbs: orbs,
-                                             kalash: kalash, deliveryTarget: deliveryTarget, background: background))
+                                             elixir: elixir, deliveryTarget: deliveryTarget, background: background))
         return root
     }
 

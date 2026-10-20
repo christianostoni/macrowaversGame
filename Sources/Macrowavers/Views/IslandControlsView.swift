@@ -57,10 +57,10 @@ struct IslandControlsView: View {
     private var storyStatus: String {
         switch viewModel.phase {
         case .captive:
-            orchard.kalash.spell == .flying
-                ? "The blue spell is flying to the dragon…"
-                : "The dragon is circling the tree. Every fruit hides a glowing orb: put three in your kalash."
-        case .alerted: "The dragon is angry! Fill your kalash with three orbs and cast the spell to calm it."
+            orchard.elixir.state == .flying
+                ? "The elixir is flying to the dragon…"
+                : "The dragon is circling the tree. Every fruit hides an ingredient: find three for the elixir."
+        case .alerted: "The dragon is angry! Find three ingredients in the fruit and brew the elixir to calm it."
         case .approaching, .landing: "The dragon is coming to you."
         case .untangling: "Untangle the dragon: \(viewModel.crossingCount) crossings left."
         case .free: "The dragon is free!"

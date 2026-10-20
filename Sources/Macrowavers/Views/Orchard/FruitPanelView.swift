@@ -16,7 +16,7 @@ struct FruitPanelView: View {
 
     private var panel: some View {
         VStack(spacing: 10) {
-            Text(isEmpty ? "No orb left in this one" : title)
+            Text(isEmpty ? "No ingredient left in this one" : title)
                 .font(.headline)
             Text(hint)
                 .font(.subheadline)
@@ -42,7 +42,7 @@ struct FruitPanelView: View {
                     }
                 }
             }
-            .disabled(orchard.kalash.spell == .flying)
+            .disabled(orchard.elixir.state == .flying)
         }
         .multilineTextAlignment(.center)
         .frame(width: 360)
@@ -62,12 +62,12 @@ struct FruitPanelView: View {
 
     private var hint: String {
         switch orchard.focusedOrb {
-        case .revealed, .held:
-            return orchard.kalash.isFull
-                ? "A glowing orb! Your kalash is full: cast its spell first."
-                : "A glowing orb! Drag it into your kalash."
-        case .stored, .spent:
-            return isEmpty ? "Its orb is already in your kalash. Put it back on the tree." : openHint
+        case .revealed:
+            return orchard.elixir.state == .gathering
+                ? "An ingredient for the elixir! It's joining the others around you."
+                : "Three ingredients already orbit you: brew the elixir first."
+        case .orbiting, .spent:
+            return isEmpty ? "Its ingredient already orbits you. Put it back on the tree." : openHint
         case .sealed, nil:
             return openHint
         }

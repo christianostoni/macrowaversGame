@@ -46,17 +46,17 @@ struct DragonPanelView: View {
         switch viewModel.phase {
         case .captive:
             headline("The dragon is circling the tree",
-                     detail: orchard.kalash.spell == .flying
-                        ? "The blue spell is flying to the dragon…"
-                        : "The orbs hidden in the tree's fruit can calm it. Put three in your kalash and twist.")
+                     detail: orchard.elixir.state == .flying
+                        ? "The elixir is flying to the dragon…"
+                        : "The ingredients hidden in the tree's fruit can calm it. Find three, then snap your fingers.")
         case .alerted:
             headline("The dragon is getting angry!",
                      detail: "It's glaring at you, growling and snorting smoke. It won't come near you: "
-                        + "fill your kalash with three orbs and cast the spell to calm it.")
+                        + "find three ingredients in the fruit and brew the elixir to calm it.")
             Button("Call It Now", systemImage: "hand.wave") {
                 viewModel.callDragon()
             }
-            Text("Debug: skips the spell.")
+            Text("Debug: skips the elixir.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         case .approaching:
@@ -133,7 +133,9 @@ struct DragonPanelView: View {
                 LabeledContent("Fruit", value: orchard.focusedFruit.map { "\($0.kind) #\($0.id)" } ?? "on the tree")
                 LabeledContent("Apple opening", value: orchard.appleOpening.formatted(.percent.precision(.fractionLength(0))))
                 LabeledContent("Worms", value: "\(orchard.caughtWorms)/\(orchard.wormCount)")
-                LabeledContent("Kalash", value: "\(orchard.kalash.storedCount)/\(Kalash.capacity) orbs, \(orchard.kalash.spell)")
+                LabeledContent("Elixir",
+                               value: "\(orchard.elixir.orbitingCount)/\(Elixir.ingredientCount) ingredients, \(orchard.elixir.state)")
+                LabeledContent("Snap", value: orchard.isHandTrackingAvailable ? orchard.snapDebug : "no hand tracking")
             }
             .font(.footnote.monospaced())
         }

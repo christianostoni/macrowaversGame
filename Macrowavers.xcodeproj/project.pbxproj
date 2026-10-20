@@ -17,7 +17,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		33B1C26EBB0591DF798B478A /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
+		33B1C26EBB0591DF798B478A /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		5F7A303E82E9FC885410F8CC /* Macrowavers.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Macrowavers.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8B32B2288A49C30D6B76BC8 /* MacrowaversTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MacrowaversTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -69,7 +69,7 @@
 		94260A0E16E14787E8AD922A /* Configs */ = {
 			isa = PBXGroup;
 			children = (
-				33B1C26EBB0591DF798B478A /* Local.xcconfig */,
+				33B1C26EBB0591DF798B478A /* Base.xcconfig */,
 			);
 			path = Configs;
 			sourceTree = "<group>";
@@ -151,11 +151,9 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					468D21F4D4553F6054669E97 = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					C668E19EE51FC182D96BCB5C = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -242,7 +240,7 @@
 		};
 		5C543F1EC1D7E16FF427347C /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 33B1C26EBB0591DF798B478A /* Local.xcconfig */;
+			baseConfigurationReference = 33B1C26EBB0591DF798B478A /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -340,7 +338,7 @@
 		};
 		E6E2C57B1B32ECC3717A2DCB /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 33B1C26EBB0591DF798B478A /* Local.xcconfig */;
+			baseConfigurationReference = 33B1C26EBB0591DF798B478A /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;

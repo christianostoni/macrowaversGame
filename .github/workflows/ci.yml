@@ -106,9 +106,6 @@ jobs:
           xcodebuild -showComponent MetalToolchain | grep -q "Status: installed" \
             || xcodebuild -downloadComponent MetalToolchain
 
-      - name: Local build settings
-        run: cp -n Configs/Local.xcconfig.example Configs/Local.xcconfig || true
-
       - name: Build and test (visionOS simulator)
         run: |
           set -o pipefail

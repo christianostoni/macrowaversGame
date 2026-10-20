@@ -17,16 +17,25 @@ struct HandSample: Equatable {
     var wrist: SIMD3<Float>
     var thumbTip: SIMD3<Float>
     var indexTip: SIMD3<Float>
-    /// Normal of the palm (unit length): turns with the wrist when the player twists.
-    var palmNormal: SIMD3<Float>
+    /// Last joint of the middle finger before its tip (ARKit's `middleFingerIntermediateTip`, the DIP joint).
+    var middleDistal: SIMD3<Float>
+    var middleTip: SIMD3<Float>
 
-    /// Wrist → middle knuckle (unit length): the axis the hand rolls around in a twist.
-    var handAxis: SIMD3<Float> {
-        let axis = knuckle - wrist
-        return simd_length(axis) > 1e-5 ? simd_normalize(axis) : SIMD3(0, 0, -1)
+    /// Thumb tip to middle tip: far apart right after a snap.
+    var snapGap: Float { simd_distance(thumbTip, middleTip) }
+
+    /// Thumb tip to the middle finger's last phalanx (the segment DIP → tip). Before a snap the thumb presses on
+    /// the pad of that phalanx, not on its tip: the two tip joints can stay 2–4 cm apart while touching.
+    var thumbToMiddlePad: Float {
+        let segment = middleTip - middleDistal
+        let length = simd_length_squared(segment)
+        guard length > 1e-8 else { return simd_distance(thumbTip, middleTip) }
+        let along = min(max(simd_dot(thumbTip - middleDistal, segment) / length, 0), 1)
+        return simd_distance(thumbTip, middleDistal + segment * along)
     }
 
-    var pinchDistance: Float { simd_distance(thumbTip, indexTip) }
+    /// Wrist to middle tip: shrinks when the middle finger flexes into the palm, grows when it stretches.
+    var middleReach: Float { simd_distance(wrist, middleTip) }
 }
 
 /// The pineapple's chop: a hand coming down fast through the fruit (ported from the fruit lab prototype).
@@ -89,94 +98,118 @@ struct ChopDetector {
     }
 }
 
-/// The kalash's twist: thumb and index pinched, the wrist rolls like turning a key, while the player looks at
-/// the kalash. Fires once the roll reaches `minimumRoll` within `window` seconds; `progress` tells the player how
-/// far they are.
-struct TwistDetector {
+/// The finger snap that brews the elixir: thumb pressed on the middle finger's pad, then, in a flash, the middle
+/// finger slides off the thumb and flexes into the palm while the thumb flies away from it.
+///
+/// Hand tracking runs at 30–90 Hz and the snap itself takes a few hundredths of a second (the fast finger is
+/// often reported a frame late, or estimated), so the detector does not follow the finger: it compares the two
+/// poses on either side of the snap, each against the player's own hand, never against absolute hand sizes.
+/// 1. **Loaded**: the thumb tip within `contactDistance` of the middle finger's last phalanx
+///    (`thumbToMiddlePad`), and not pinching the index (thumb and index is the system's tap).
+/// 2. **Released**, within `window` of the last loaded reading, compared with that reading:
+///    - thumb and middle tips at least `separation` farther apart, opened at `minimumSpeed` or faster;
+///    - the middle tip at least `curl` closer to the wrist (it flexed into the palm). Simply opening the fingers
+///      stretches it instead, so it does not count.
+/// Each hand has a `cooldown` after a snap.
+struct SnapDetector {
     struct Settings {
-        /// Thumb tip to index tip below this distance = pinching (m).
-        var pinchDistance: Float = 0.025
-        /// Roll of the wrist needed (radians, either direction).
-        var minimumRoll: Float = 45 * .pi / 180
-        /// The roll must happen within this time (s).
-        var window: TimeInterval = 1.5
-        /// Samples further apart than this restart the gesture (s).
-        var maxSampleGap: TimeInterval = 0.15
+        /// Thumb tip to the middle finger's last phalanx below this = loaded (m). Joint centres: a firm press
+        /// reads 1–2 cm.
+        var contactDistance: Float = 0.03
+        /// Thumb tip to index tip above this while loaded (m): not a pinch.
+        var pinchClearance: Float = 0.02
+        /// Thumb and middle tips at least this much farther apart than when loaded (m); a snap opens ~4–7 cm.
+        var separation: Float = 0.03
+        /// The middle tip at least this much closer to the wrist than when loaded (m); a snap flexes it ~3–6 cm.
+        var curl: Float = 0.012
+        /// Longest time from the last loaded reading to the released one (s): a snap plus a late frame or two.
+        var window: TimeInterval = 0.3
+        /// The thumb–middle gap must open at least this fast (m/s); a snap opens it at 1 m/s or more.
+        var minimumSpeed: Float = 0.5
+        /// After a snap the same hand cannot snap again for this long (s).
+        var cooldown: TimeInterval = 0.6
+    }
+
+    /// What the last released pose measured against its loaded pose (for tuning on the headset).
+    struct Attempt: Equatable {
+        var separation: Float
+        var curl: Float
+        var speed: Float
+        var isSnap: Bool
+    }
+
+    private struct Loaded {
+        var time: TimeInterval
+        var gap: Float
+        var reach: Float
     }
 
     private struct HandState {
-        var last: HandSample?
-        /// Roll accumulated since the pinch started, with the time of each step.
-        var history: [(time: TimeInterval, roll: Float)] = []
-        /// How far this hand's twist is (0…1).
-        var progress: Float = 0
+        var loaded: Loaded?
+        /// The latest reading was in the loaded pose.
+        var isLoadedNow = false
+        var lastTime: TimeInterval?
+        var cooldownUntil: TimeInterval = 0
     }
 
     let settings: Settings
     private var hands: [HandSample.Chirality: HandState] = [:]
-
-    /// How far the best hand's twist is (0 = not twisting, 1 = done).
-    var progress: Float { hands.values.map(\.progress).max() ?? 0 }
+    /// The latest reading after a loaded pose (within `window`): how close it came to a snap.
+    private(set) var lastAttempt: Attempt?
+    /// Thumb to middle pad of the closest hand, at the latest readings (m).
+    private(set) var closestContact: Float?
 
     init(settings: Settings = Settings()) {
         self.settings = settings
     }
 
-    /// Feeds one hand reading; `isLooking` is whether the player looks at the kalash right now.
-    /// Returns true when the twist is complete (then the hand starts over).
-    mutating func process(_ sample: HandSample, isLooking: Bool) -> Bool {
-        var state = hands[sample.chirality] ?? HandState()
-        defer { hands[sample.chirality] = state }
-        guard isLooking, sample.pinchDistance < settings.pinchDistance else {
-            state = HandState()
-            return false
-        }
-        // The same reading again (the frame is faster than the hand tracking): nothing new.
-        if let previous = state.last, sample.timestamp == previous.timestamp { return false }
-        guard let previous = state.last, sample.timestamp > previous.timestamp,
-              sample.timestamp - previous.timestamp <= settings.maxSampleGap else {
-            state = HandState(last: sample, history: [(sample.timestamp, 0)])
-            return false
-        }
-        state.last = sample
-        let step = Self.roll(from: previous.palmNormal, to: sample.palmNormal, around: sample.handAxis)
-        let total = (state.history.last?.roll ?? 0) + step
-        state.history.append((sample.timestamp, total))
-        state.history.removeAll { sample.timestamp - $0.time > settings.window }
+    /// A hand holds the loaded pose right now: the label tells the player to snap.
+    var isLoaded: Bool { hands.values.contains { $0.isLoadedNow } }
 
-        let rolls = state.history.map(\.roll)
-        guard let lowest = rolls.min(), let highest = rolls.max() else { return false }
-        let roll = max(total - lowest, highest - total)
-        if roll >= settings.minimumRoll {
-            state = HandState()
-            return true
+    /// Feeds one hand reading; returns true when this reading completes a snap.
+    mutating func process(_ sample: HandSample) -> Bool {
+        var state = hands[sample.chirality] ?? HandState()
+        defer {
+            hands[sample.chirality] = state
+            closestContact = min(closestContact ?? .infinity, sample.thumbToMiddlePad)
         }
-        state.progress = roll / settings.minimumRoll
-        return false
+        // The same reading again (the frame is faster than the tracking), or an older one: nothing new.
+        if let last = state.lastTime, sample.timestamp <= last { return false }
+        state.lastTime = sample.timestamp
+
+        let isPinching = simd_distance(sample.thumbTip, sample.indexTip) < settings.pinchClearance
+        if sample.thumbToMiddlePad < settings.contactDistance && !isPinching {
+            state.loaded = Loaded(time: sample.timestamp, gap: sample.snapGap, reach: sample.middleReach)
+            state.isLoadedNow = true
+            return false
+        }
+        state.isLoadedNow = false
+        guard let loaded = state.loaded else { return false }
+        let elapsed = sample.timestamp - loaded.time
+        guard elapsed <= settings.window else {
+            state.loaded = nil
+            return false
+        }
+        let separation = sample.snapGap - loaded.gap
+        let curl = loaded.reach - sample.middleReach
+        let speed = separation / Float(max(elapsed, 1e-3))
+        let isSnap = separation >= settings.separation && curl >= settings.curl && speed >= settings.minimumSpeed
+            && sample.timestamp >= state.cooldownUntil
+        lastAttempt = Attempt(separation: separation, curl: curl, speed: speed, isSnap: isSnap)
+        guard isSnap else { return false }
+        state.loaded = nil
+        state.cooldownUntil = sample.timestamp + settings.cooldown
+        return true
+    }
+
+    /// Call once per frame before feeding the hands: `closestContact` then describes this frame's readings.
+    mutating func beginFrame() {
+        closestContact = nil
     }
 
     /// Forgets the hands.
     mutating func reset() {
         hands = [:]
-    }
-
-    /// Signed angle (radians) the palm normal turned around `axis`: both normals are projected on the plane
-    /// perpendicular to the axis, so bending the wrist or moving the arm does not count as a twist.
-    static func roll(from old: SIMD3<Float>, to new: SIMD3<Float>, around axis: SIMD3<Float>) -> Float {
-        let oldFlat = old - simd_dot(old, axis) * axis
-        let newFlat = new - simd_dot(new, axis) * axis
-        guard simd_length(oldFlat) > 1e-4, simd_length(newFlat) > 1e-4 else { return 0 }
-        let from = simd_normalize(oldFlat)
-        let to = simd_normalize(newFlat)
-        return atan2(simd_dot(simd_cross(from, to), axis), simd_dot(from, to))
-    }
-
-    /// Whether a head looking along `forward` from `eyes` looks at `target`, within `maximumAngle` (radians).
-    /// Generous: visionOS gives the head's direction, not the eyes', and the kalash sits low by the hip.
-    static func isLooking(from eyes: SIMD3<Float>, forward: SIMD3<Float>, at target: SIMD3<Float>,
-                          maximumAngle: Float = 45 * .pi / 180) -> Bool {
-        let direction = target - eyes
-        guard simd_length(direction) > 1e-4, simd_length(forward) > 1e-4 else { return false }
-        return simd_dot(simd_normalize(direction), simd_normalize(forward)) >= cos(maximumAngle)
+        closestContact = nil
     }
 }
