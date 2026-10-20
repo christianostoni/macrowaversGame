@@ -188,24 +188,111 @@ struct ElixirTests {
         #expect(elixir.state == .delivered)
     }
 
-    @Test func fusionCurvesHaveNoJumps() {
+    /// An elixir with every ingredient in orbit, `seconds` after the snap.
+    private func brewing(seconds: Float) -> Elixir {
         var elixir = Elixir()
-        #expect(elixir.displayScale == 0 && elixir.ingredientScale == 1)
         for _ in 0..<Elixir.ingredientCount { _ = elixir.collect() }
         elixir.brew()
-        // The elixir grows out of the ingredients, with no jump when it is brewed.
-        elixir.update(deltaTime: Elixir.fusingDuration * 0.999, canFly: true)
-        let endOfFusion = elixir.displayScale
-        elixir.update(deltaTime: Elixir.fusingDuration * 0.002, canFly: true)
-        #expect(elixir.state == .brewed)
-        #expect(abs(elixir.displayScale - endOfFusion) < 0.02)
-        #expect(abs(elixir.ingredientScale - 0.3) < 1e-4)
-        // It pops past its size, then settles at 1.
-        elixir.update(deltaTime: Elixir.popDuration * 0.6, canFly: false)
-        #expect(elixir.displayScale > 1)
-        elixir.update(deltaTime: Elixir.popDuration, canFly: false)
+        elixir.update(deltaTime: seconds, canFly: true)
+        return elixir
+    }
+
+    @Test func theFlaskAppearsWithTheFirstIngredientAndWobblesWhenOneArrives() {
+        var elixir = Elixir()
+        #expect(elixir.displayScale == 0)
+        _ = elixir.collect()
+        elixir.update(deltaTime: Elixir.appearDuration, canFly: true)
         #expect(abs(elixir.displayScale - 1) < 1e-4)
+        // Still flying from its fruit: nothing yet. Once it reaches the orbit the glass glows and the flask wobbles.
+        #expect(elixir.arrivalGlow == 0 && elixir.wobble == 0)
+        elixir.update(deltaTime: Elixir.joinDuration - Elixir.appearDuration + 0.05, canFly: true)
+        #expect(elixir.arrivalGlow > 0.8 && elixir.wobble != 0)
+        elixir.update(deltaTime: 3, canFly: true)
+        #expect(elixir.arrivalGlow < 0.01 && abs(elixir.wobble) < 0.01)
+    }
+
+    @Test func theCorkPopsBeforeTheFirstDiveAndGoesBackOnAfterTheLast() {
+        #expect(brewing(seconds: 0).corkOut == 0)
+        let popped = brewing(seconds: Elixir.Timeline.corkPop)
+        #expect(abs(popped.corkOut - 1) < 1e-4)
+        #expect(popped.diveProgress(slot: 0) == 0)
+        let lastLanding = Elixir.Timeline.firstDive + 2 * Elixir.Timeline.diveSpacing + Elixir.Timeline.diveDuration
+        #expect(lastLanding <= Elixir.Timeline.recorkStart)
+        #expect(brewing(seconds: lastLanding).corkOut == 1)
+        #expect(brewing(seconds: Elixir.Timeline.recorkEnd).corkOut == 0)
+    }
+
+    @Test func theIngredientsDiveOneAtATimeInOrder() {
+        for time in stride(from: Float(0), through: Elixir.fusingDuration, by: 0.01) {
+            let elixir = brewing(seconds: time)
+            let diving = (0..<Elixir.ingredientCount).filter {
+                elixir.diveProgress(slot: $0) > 0 && elixir.diveProgress(slot: $0) < 1
+            }
+            #expect(diving.count <= 1)
+            // Never one before the previous has landed.
+            for slot in 1..<Elixir.ingredientCount where elixir.diveProgress(slot: slot) > 0 {
+                #expect(elixir.diveProgress(slot: slot - 1) == 1)
+            }
+        }
+        let brewed = brewing(seconds: Elixir.fusingDuration)
+        #expect(brewed.landedCount == Elixir.ingredientCount)
+        #expect((0..<Elixir.ingredientCount).allSatisfy { brewed.ingredientScale(slot: $0) == 0 })
+    }
+
+    @Test func theLiquidRisesByAThirdPerIngredientAndTurnsBlue() {
+        var previous: Float = 0
+        for time in stride(from: Float(0), through: Elixir.fusingDuration, by: 0.01) {
+            let level = brewing(seconds: time).fillLevel
+            #expect(level >= previous - 1e-6)
+            previous = level
+        }
+        let afterFirst = brewing(seconds: Elixir.Timeline.firstDive + Elixir.Timeline.diveDuration
+                                 + Elixir.Timeline.rise + 0.01)
+        #expect(abs(afterFirst.fillLevel - 1.0 / 3) < 1e-4)
+        #expect(simd_distance(afterFirst.liquidColor, Elixir.ingredientColor(slot: 0)) < 1e-4)
+        let brewed = brewing(seconds: Elixir.fusingDuration)
+        #expect(abs(brewed.fillLevel - 1) < 1e-4)
+        #expect(simd_distance(brewed.liquidColor, Elixir.elixirColor) < 1e-4)
+        #expect(abs(brewed.liquidGlow - 1) < 1e-4)
+    }
+
+    @Test func theSloshDiesDown() {
+        let firstLanding = Elixir.Timeline.firstDive + Elixir.Timeline.diveDuration
+        let peak = (0..<20).map { abs(brewing(seconds: firstLanding + Float($0) * 0.02).slosh) }.max() ?? 0
+        #expect(peak > 0.1)
+        var elixir = brewing(seconds: Elixir.fusingDuration)
+        elixir.update(deltaTime: 3, canFly: false)
+        #expect(abs(elixir.slosh) < 0.01)
+    }
+
+    @Test func noJumpsBetweenStates() {
+        // End of the brew → brewed: same size, same colour, cork in.
+        let end = brewing(seconds: Elixir.fusingDuration * 0.9999)
+        let brewed = brewing(seconds: Elixir.fusingDuration)
+        #expect(brewed.state == .brewed)
+        #expect(abs(end.displayScale - brewed.displayScale) < 0.01)
+        #expect(simd_distance(end.liquidColor, brewed.liquidColor) < 0.01)
+        #expect(end.corkOut < 0.01 && brewed.corkOut == 0)
+        // The pop swells and settles back.
+        var popping = brewed
+        popping.update(deltaTime: Elixir.popDuration / 2, canFly: false)
+        #expect(popping.displayScale > 1)
+        popping.update(deltaTime: Elixir.popDuration, canFly: false)
+        #expect(abs(popping.displayScale - 1) < 1e-4)
         #expect(Elixir.smootherstep(0) == 0 && Elixir.smootherstep(1) == 1 && Elixir.smootherstep(0.5) == 0.5)
+    }
+
+    @Test func theFlaskPoursOverTheDragonThenFades() {
+        var elixir = brewing(seconds: Elixir.fusingDuration)
+        elixir.update(deltaTime: Elixir.brewedHold, canFly: true)
+        #expect(elixir.state == .flying && elixir.pourTilt == 0 && !elixir.isPouring)
+        elixir.delivered()
+        #expect(abs(elixir.displayScale - 1) < 1e-4 && elixir.corkOut == 0)
+        elixir.update(deltaTime: 0.7, canFly: true)
+        #expect(elixir.isPouring && elixir.pourTilt == 1 && elixir.corkOut == 1)
+        #expect(elixir.fillLevel < 1)
+        elixir.update(deltaTime: Elixir.pourDuration, canFly: true)
+        #expect(elixir.isFinished && !elixir.isPouring && elixir.displayScale == 0 && elixir.fillLevel == 0)
     }
 }
 
@@ -296,14 +383,23 @@ struct ElixirOrbitTests {
         #expect(abs(orbit.center.y - resting) < 0.01)
     }
 
-    @Test func fusionSpiralsIntoTheCentre() {
+    @Test func anIngredientDivesFromItsPlaceIntoTheNeck() {
         let orbit = placedOrbit()
+        let base = orbit.center + SIMD3(0.02, 0.06, 0)
+        let top = orbit.center + SIMD3(0.04, 0.11, 0)
+        let axis = simd_normalize(top - base)
         for slot in 0..<3 {
-            #expect(simd_distance(orbit.fusionPosition(slot: slot, progress: 0), orbit.point(slot: slot)) < 1e-5)
-            #expect(simd_distance(orbit.fusionPosition(slot: slot, progress: 1), orbit.center) < 1e-5)
+            let start = orbit.divePosition(slot: slot, progress: 0, neckTop: top, neckBase: base)
+            #expect(simd_distance(start, orbit.point(slot: slot)) < 1e-5)
+            // Above the open neck, then inside the flask, below the neck.
+            let above = orbit.divePosition(slot: slot, progress: ElixirOrbit.diveArc, neckTop: top, neckBase: base)
+            #expect(simd_distance(above, top + axis * ElixirOrbit.diveClearance) < 1e-5)
+            let inside = orbit.divePosition(slot: slot, progress: 1, neckTop: top, neckBase: base)
+            #expect(simd_distance(inside, base - axis * ElixirOrbit.diveDepth) < 1e-5)
+            // A smooth path: no step longer than a few centimetres per 1 % of the dive.
+            let path = (0...100).map { orbit.divePosition(slot: slot, progress: Float($0) / 100, neckTop: top, neckBase: base) }
+            #expect(zip(path, path.dropFirst()).allSatisfy { simd_distance($0, $1) < 0.02 })
         }
-        let halfway = orbit.fusionPosition(slot: 1, progress: 0.5)
-        #expect(simd_distance(halfway, orbit.center) < simd_distance(orbit.point(slot: 1), orbit.center))
     }
 }
 
