@@ -224,6 +224,12 @@ into the same asset contract the code has always used, so no Swift code changed 
 - **Plain material colours**, no textures and no vertex colours (nothing to bake): exported as UsdPreviewSurface,
   matte (roughness 0.85); the tree's anonymous materials become `Tree_Bark` and `Tree_Leaves`. 220 KB, validated
   with `usdchecker --arkit`.
+- **Inside-out meshes turned the right way:** the source's rock body (`Island_RockBody`) has its faces wound
+  inwards (signed volume −564). Blender draws both sides of every face, so it looks fine there; RealityKit culls
+  back faces, so the rock looked hollow from the outside, its far inner walls showing through. Every closed mesh
+  (≤ 5 % open edges, `MAX_OPEN_EDGES`) with a negative signed volume gets its faces recalculated outwards and its
+  normals recomputed; open meshes (petals, grass cards) are left alone, their volume's sign means nothing.
+  Ask the design team to check *Face Orientation* (Viewport Overlays: blue outside, red inside) on new assets.
 - **Origin moved to the base of the trunk, on the grass:** the code uses the origin as the orbit centre with no
   offsets.
 - **Scaled to the previous asset's size** (`TARGET_WIDTH`, island 2.5 m wide): `IslandPlacement.standard`, the

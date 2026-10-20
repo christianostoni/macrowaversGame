@@ -15,6 +15,11 @@ dome light). The app expects the same asset contract as before, so the code need
   the dragon's orbit, the fruit sizes and the floor occluder all stay as they were).
 - Adds empty objects `fruit_01` ... `fruit_06` on the outside of the canopy, found by casting rays at the
   foliage: the code hangs the fruit there (designers can move them in Blender).
+- Turns inside-out meshes the right way: the source's rock body (`Island_RockBody`) has its faces wound
+  inwards. Blender draws both sides so it looks fine there, but RealityKit culls back faces: the rock looked
+  hollow, its far inner walls showing through. Any closed mesh (`MAX_OPEN_EDGES`) with a negative signed volume
+  gets its faces recalculated outwards. Open meshes (petals, grass) are left alone: their volume's sign only
+  depends on where the origin is.
 - The colours are plain material colours (no textures, no vertex colours): they are exported as
   UsdPreviewSurface, matte (roughness 0.85), the tree's materials get readable names.
 - Exports a Y-up USDZ (rotation on the file root, so the code never overwrites the loaded entity's transform).
@@ -23,6 +28,7 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
 from mathutils import Vector
 
@@ -41,6 +47,9 @@ FRUIT_OFFSET = 0.045
 # Readable names for the source's anonymous materials.
 MATERIAL_NAMES = {"Material_002": "Tree_Bark", "Material_003": "Tree_Leaves"}
 ROUGHNESS = 0.85
+# Share of open edges (used by one face only) up to which a mesh counts as closed: the rock body has 1.7 %, the
+# flowers' petals 40 %.
+MAX_OPEN_EDGES = 0.05
 
 
 def part_of(item):
@@ -83,6 +92,21 @@ for item in meshes:
 for item in list(bpy.context.scene.objects):
     if item not in meshes:
         bpy.data.objects.remove(item)
+
+# --- Faces wound inwards -> outwards ---------------------------------------------------------------------
+for item in meshes:
+    mesh = bmesh.new()
+    mesh.from_mesh(item.data)
+    open_edges = sum(1 for edge in mesh.edges if len(edge.link_faces) < 2)
+    if open_edges <= MAX_OPEN_EDGES * len(mesh.edges) and mesh.calc_volume(signed=True) < 0:
+        bmesh.ops.recalc_face_normals(mesh, faces=mesh.faces)
+        mesh.to_mesh(item.data)
+        # Imported normals would still point inwards: let Blender compute them from the new winding.
+        if item.data.has_custom_normals:
+            bpy.context.view_layer.objects.active = item
+            bpy.ops.mesh.customdata_custom_splitnormals_clear()
+        print(f"Faces turned outwards: {item.name}")
+    mesh.free()
 
 # --- Origin at the base of the trunk, on the grass; island at its real size ---------------------------
 tree_points = [vertex.co.copy() for item in meshes if parts[item] == "Tree" for vertex in item.data.vertices]
