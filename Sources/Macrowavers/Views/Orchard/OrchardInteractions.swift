@@ -25,7 +25,7 @@ struct OrchardInteractions: ViewModifier {
             .simultaneousGesture(catchWormGesture)
             .simultaneousGesture(openPomegranateGesture)
             .simultaneousGesture(dragSeedGesture)
-            .simultaneousGesture(peelBananaGesture)
+            .simultaneousGesture(peelOrangeGesture)
             .simultaneousGesture(chopPineappleGesture)
             .simultaneousGesture(tapOrbGesture)
             // The elixir flies to the dragon (and the ingredients take the pinch) only while it circles the tree.
@@ -105,15 +105,15 @@ struct OrchardInteractions: ViewModifier {
             }
     }
 
-    /// Pinch a strip of the banana's peel and pull it outwards and down: the strip follows the hand.
-    private var peelBananaGesture: some Gesture {
+    /// Pinch a petal of the orange's peel and pull it outwards and down: the petal follows the hand.
+    private var peelOrangeGesture: some Gesture {
         DragGesture(minimumDistance: 0)
-            .targetedToEntity(where: .has(BananaPeelComponent.self))
+            .targetedToEntity(where: .has(OrangePeelComponent.self))
             .onChanged { value in
-                guard let strip = value.entity.components[BananaPeelComponent.self]?.strip else { return }
+                guard let petal = value.entity.components[OrangePeelComponent.self]?.petal else { return }
                 let hand = value.convert(value.location3D, from: .local, to: .scene)
-                guard let progress = BananaRig.peelProgress(of: value.entity, handPosition: hand) else { return }
-                orchard.setBananaPeel(strip: strip, progress: progress)
+                guard let progress = OrangeRig.peelProgress(of: value.entity, handPosition: hand) else { return }
+                orchard.setOrangePeel(petal: petal, progress: progress)
             }
     }
 
