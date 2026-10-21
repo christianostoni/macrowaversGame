@@ -243,19 +243,22 @@ extension OrchardSceneBuilder {
                                                                       axis: SIMD3(0, 1, 0))
     }
 
-    /// Shine: a coloured crystal, almost no roughness, a clear coat and full specular for the highlights on its
-    /// facets, a little see-through. Glow: it shines in its own colour.
+    /// The design team's crystal material, tinted: what makes it read as a gem is that it is mostly see-through and
+    /// double-sided (the facets at the back show through the ones at the front) and lit facet by facet. So it stays
+    /// ~30 % opaque with no face culling, and glows only faintly: a strong emission would light every facet the same
+    /// and flatten it. Shine: full specular and a clear coat for the highlights. The glow is the billboard behind.
     private static func gemMaterial(color: UIColor) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
         material.baseColor = .init(tint: color)
-        material.roughness = 0.06
+        material.roughness = 0.15
         material.metallic = 0.0
         material.specular = .init(floatLiteral: 1)
         material.clearcoat = .init(floatLiteral: 1)
-        material.clearcoatRoughness = .init(floatLiteral: 0.02)
+        material.clearcoatRoughness = .init(floatLiteral: 0.03)
         material.emissiveColor = .init(color: color)
-        material.emissiveIntensity = 1.6
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.82))
+        material.emissiveIntensity = 0.35
+        material.faceCulling = .none
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.3))
         return material
     }
 

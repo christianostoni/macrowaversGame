@@ -13,7 +13,9 @@ points to an .exr that is not shipped. What the script does, and why:
 - Centres it and scales it to `HEIGHT` (6 cm tall, ~3.5 cm wide: the size of the old 5 cm orb), origin at its
   centre, so it spins on itself and dives into the flask's neck tip first.
 - Flat faces: the facets catch the light one by one as it turns.
-- A plain placeholder material: the app gives every gem its ingredient's colour, shine and glow in code.
+- Keeps the design team's material (`CRYSTAL`: pale, 20 % opaque, IOR 1.7) and the double-sided faces: what makes
+  it a gem is seeing the back facets through the front ones. It has no texture. The app tints it per ingredient in
+  code, keeping those traits, and adds the glow.
 - Exports a Y-up USDZ (rotation on the file root, so the code never overwrites the loaded entity's transform).
 """
 import os
@@ -33,7 +35,7 @@ HEIGHT = 0.06
 
 # Empty scene, then import (Blender converts to Z-up). Camera and lights stay out.
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.wm.usd_import(filepath=SOURCE, import_materials=False, import_cameras=False, import_lights=False)
+bpy.ops.wm.usd_import(filepath=SOURCE, import_materials=True, import_cameras=False, import_lights=False)
 
 meshes = [item for item in bpy.context.scene.objects if item.type == "MESH"]
 if len(meshes) != 1:
@@ -60,16 +62,11 @@ for vertex in gem.data.vertices:
 for polygon in gem.data.polygons:
     polygon.use_smooth = False
 
-# --- Placeholder material -----------------------------------------------------------------------------------
-material = bpy.data.materials.new("GemCrystal")
-material.use_nodes = True
-shader = next(node for node in material.node_tree.nodes if node.type == "BSDF_PRINCIPLED")
-shader.inputs["Base Color"].default_value = (0.9, 0.9, 0.9, 1)
-shader.inputs["Roughness"].default_value = 0.1
-shader.inputs["Metallic"].default_value = 0
-shader.inputs["Alpha"].default_value = 0.6
-gem.data.materials.clear()
-gem.data.materials.append(material)
+# --- The design team's material, double-sided ---------------------------------------------------------------
+if not gem.data.materials or gem.data.materials[0] is None:
+    raise SystemExit(f"{SOURCE}: the crystal has no material: is it the right file?")
+for material in gem.data.materials:
+    material.use_backface_culling = False
 
 size = (high - low) * factor
 print(f"Gem: {len(gem.data.polygons)} faces, size {tuple(round(value, 4) for value in size)} m")

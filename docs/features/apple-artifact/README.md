@@ -246,9 +246,13 @@ elixir's flight (`OrchardComponent.flight`).
   that always faces the player; glints sparkling around it; and the trail while it flies and orbits. Its colour is
   warm white while it is still in its fruit, then its slot's (`Elixir.ingredientColors`: pomegranate red, saffron
   gold, pistachio green) once it joins the orbit:
-  - **shine:** the gem's material (`gemMaterial`) has almost no roughness (0.06), full specular and a clear coat,
-    and is 82 % opaque: the room's light draws highlights on the facets;
-  - **glow:** the gem is emissive in its colour (1.6), and a 12 cm billboard quad behind it carries a radial
+  - **the gem look** comes from the design team's material, which has no texture: mostly see-through (the source
+    is 20 % opaque) and double-sided, so the facets at the back show through the ones at the front, each lit
+    differently. `gemMaterial` keeps that, tinted: ~30 % opaque, no face culling, roughness 0.15. RealityKit has
+    no refraction, so the source's IOR (1.7) has no effect;
+  - **shine:** full specular and a clear coat draw the room's highlights on the facets;
+  - **glow:** the gem glows only faintly in its colour (0.35: a strong emission would light every facet the same
+    and flatten it into a coloured blob), and a 12 cm billboard quad behind it carries a radial
     gradient (white at the centre, fading out; made once in code, `makeGlowTexture`) tinted in the same colour.
     A sort group draws the glow first, then the gem, so the two transparent layers never swap;
   - **glints:** a particle emitter around the gem (7 per second, 4 mm, quick fade in and out, additive), in its
@@ -308,7 +312,8 @@ The source (`GEMF.usdc` from the design team, Z-up) is a faceted crystal: a stre
 ~1.9 × 1.8 × 3.3 units, a pale 20 % opaque material, a camera, two area lights and a dome light pointing to an
 .exr that is not shipped. The script keeps only the crystal (`Gem`), drops the object's framing rotation so its
 long axis is vertical (it spins around it in the game), centres it, scales it to 6 cm tall, keeps its faces flat
-and gives it a plain placeholder material (the app colours it in code). It exports a Y-up USDZ.
+and keeps the design team's `CRYSTAL` material, double-sided (the app tints it per ingredient in code, keeping its
+transparency). It exports a Y-up USDZ.
 
 ### The flask's pipeline
 
