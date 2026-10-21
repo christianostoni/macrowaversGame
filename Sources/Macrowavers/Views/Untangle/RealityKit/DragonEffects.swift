@@ -32,10 +32,16 @@ final class DragonEffects {
         }
     }
 
-    /// `nostrils` and `mouth` are where smoke and fire come out (children of the head).
+    /// `nostrils` and `mouth` are where smoke and fire come out (children of the head). `voice` is the head
+    /// itself, snout towards +Z: the sounds come from it and the smoke and fire leave along its snout.
     func attach(nostrils: Entity, mouth: Entity, voice: Entity) {
         nostrils.addChild(smoke)
         mouth.addChild(fire)
+        // The asset's markers inherit the export's Z-up → Y-up rotation: their own +Z points out of the top of
+        // the head. The emitters face the snout instead, whatever the axes of the markers.
+        let snout = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
+        smoke.setOrientation(snout, relativeTo: voice)
+        fire.setOrientation(snout, relativeTo: voice)
         voiceSource = voice
         if !sounds.isEmpty {
             voice.components.set(SpatialAudioComponent(gain: -6))
@@ -128,7 +134,11 @@ final class DragonEffects {
     private static func fireEmitter() -> ParticleEmitterComponent {
         var emitter = ParticleEmitterComponent()
         emitter.emitterShape = .point
+        // `.local`: along `emissionDirection` (the snout). The default, `.normal`, ignores it and fires upwards.
+        emitter.birthDirection = .local
         emitter.emissionDirection = SIMD3(0, 0, 1)
+        // The flames move with the head while it roars, so they keep coming out of the mouth.
+        emitter.particlesInheritTransform = true
         emitter.speed = 0.6
         emitter.speedVariation = 0.15
         emitter.mainEmitter.birthRate = 0
