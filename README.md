@@ -17,7 +17,7 @@ The game plays in mixed reality, in the player's room:
 3. **The fruit.** Apples, a pomegranate, a banana and a pineapple hang on the tree. Pick one and it comes close:
    pull the apple's stem to open its spiral cut and catch the worms guarding it, pull the pomegranate apart with
    two hands, peel the banana strip by strip, chop the pineapple. Every fruit frees a glowing ingredient that
-   joins a small orbit in front of you.
+   joins a small orbit on your right.
 4. **The elixir.** With three ingredients in orbit, snap your fingers: they dive one by one into the flask in the
    middle of the orbit. The flask flies to the dragon and pours the elixir over its head.
 5. **Untangle the dragon.** Soothed, the dragon comes to you and settles with its long body tied in a knot. Pinch

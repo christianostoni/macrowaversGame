@@ -2,7 +2,7 @@
 
 The fruit hanging on the floating island's tree. The player picks a fruit and it comes close. They open it
 and a **glowing orb**, an **ingredient** of the elixir, rises out of it. A moment later it flies off and joins
-a small **elliptic orbit in front of the player**, just below their eyes. With three ingredients in orbit, the player
+a small **elliptic orbit to the player's right**, just below their eyes, clear of the fruit in front of them. With three ingredients in orbit, the player
 **snaps their fingers**: the ingredients dive one by one into the **flask** waiting in the middle of the orbit and
 brew the **elixir**. The flask flies to the dragon and pours the elixir over its head, which soothes it. The dragon comes to the player and the untangling puzzle starts
 ([Untangle the Dragon](../untangle-dragon/README.md)).
@@ -32,7 +32,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
    | Banana | Pinch each of the 4 strips of peel and pull it outwards and down |
    | Pineapple | Chop down through it with the edge of your hand, or tap it |
 
-4. The orb rises out of the fruit and, after a moment, flies into the orbit in front of you (tap it to send it at
+4. The orb rises out of the fruit and, after a moment, flies into the orbit on your right (tap it to send it at
    once). The fruit goes back to its branch.
 5. With 3 ingredients in orbit, **snap your fingers**: press the thumb on the middle finger's pad (the label
    then says "Now snap!") and snap, either hand. Without hand
@@ -48,7 +48,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | Open it | Apple: the spiral slices lift (Metal compute shader) and 3 worms guard the orb. Pomegranate: the halves open like a book and 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Pineapple: the halves fall open towards the player and the crown tips away |
 | Ingredient found | The orb rises out of the fruit (1.2 s), glowing and pulsing, and floats there for 0.6 s (or until tapped) |
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
-| In orbit | The ingredients go round a small ellipse (48 × 28 cm) 60 cm in front of the player, a little below their eyes, its far side tilted up so they see it whole; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). While a fruit is close it rises above it and its panel, then comes back down. A small label under the orbit counts them |
+| In orbit | The ingredients go round a small ellipse (26 × 28 cm) 60 cm away, 30° to the player's right and a little below their eyes, facing them, its far side tilted up so they see it whole: always between ~18° and ~42° to the right, never in the middle of the view where the fruit comes close; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). A small label under the orbit counts them |
 | Orbit complete | The label says "Press your thumb on your middle finger and snap to brew the elixir.", and "Now snap!" while the thumb is pressed |
 | The flask | With the first ingredient found, an empty, corked glass flask appears in the middle of the orbit (0.6 s) and turns slowly there; the ingredients go round it. Each time one reaches the orbit the flask wobbles and its glass glows in that ingredient's colour |
 | Snap (3.6 s) | The cork pops out and tumbles above the neck (0.4 s). The ingredients dive in **one at a time** (0.75 s each): each leaves its place in an arc up above the neck, drops down into the flask, shrinking, and lands with a burst of bubbles; the liquid rises by a third, sloshes and takes its colour (red, then mixed with gold, then with green). The cork goes back on (2.7–3.2 s) and the liquid swirls into the elixir's glowing blue (3.2–3.6 s) |
@@ -66,38 +66,48 @@ Every fruit holds one ingredient, so no choice is wrong: any 3 of the 6 fruits m
 `ElixirOrbit` (pure maths) keeps the orbit; the `OrchardSystem` feeds it the player's head every frame.
 
 **Where it is.** Not around the player (they would only ever see part of it, and a wide ellipse runs through
-their body and arms) but around a centre `O` close in front of them, small enough to be seen whole. It lives in
-the frame of the player's body: `forward` and `right` come from a yaw `ψ` (`forward = (−sin ψ, 0, −cos ψ)`,
-`right = (cos ψ, 0, −sin ψ)`), never from the head's pitch, so looking down at it does not move it.
+their body and arms) but around a centre `O` close to them, small enough to be seen whole, and **to the side**:
+the middle of the view belongs to the fruit the player picks (it comes 0.5 m from the eyes in the direction of
+the fruit, within ~±10°, plus its own size and its panel): an orbit in front ran through them. It lives in the
+frame of the player's body: `forward` and `right` come from a yaw `ψ` (`forward = (−sin ψ, 0, −cos ψ)`,
+`right = (cos ψ, 0, −sin ψ)`), never from the head's pitch, so looking down at it does not move it. `towards`
+and `across` turn them by the bearing `α`, so the ellipse faces the eyes instead of being seen at an angle.
 
 ```
-O     = eyes + forward · distance + up · (lift − drop)
-depth = forward · cos β + up · sin β              the plane tilted by β, far side up: it faces the eyes
-φ     = θ + 2π k / 3                              slot k, evenly spaced; φ = 0 on the far side
-P     = O + right · a sin φ + depth · b cos φ
+towards = forward · cos α + right · sin α           from the eyes to the orbit, seen from above
+across  = right · cos α − forward · sin α           side to side, as the player sees the orbit
+O       = eyes + towards · distance − up · drop
+depth   = towards · cos β + up · sin β              the plane tilted by β, far side up: it faces the eyes
+φ       = θ + 2π k / 3                              slot k, evenly spaced; φ = 0 on the far side
+P       = O + across · a sin φ + depth · b cos φ
 θ(t + Δt) = θ(t) + ω · spin · Δt,   ω = 2π / period
 ```
 
 | Symbol | Value | Why |
 |---|---|---|
+| `α` (`bearing`) | 30° to the right | clear of the fruit in front of the player and of the island panel (50° to the left) |
 | `distance` | 0.60 m | within the comfortable focus range (0.5–1 m), beyond the hands snapping in front of the chest |
 | `drop` | 0.18 m | centre ~17° below the line of sight: the comfortable band for looking down without bending the neck |
-| `a` | 0.24 m | ±22° to the sides: the whole orbit in the central field of view, no head turn needed |
+| `a` | 0.13 m | ±12° around `α`: the whole orbit between ~18° and ~42° to the right, inside the field of view with no head turn; the flask (~15 cm wide, in the middle) still fits between the two sides |
 | `b` | 0.14 m | half-depth in the tilted plane: the near side stays ~0.49 m from the eyes, ~0.3 m in front of the chest |
 | `β` | 35° | seen from ~17° above, a flat orbit would look like a line; tilted it reads as an open ellipse (≈ 2 : 1) |
 | `period` | 9 s | ~0.13 m/s along the ellipse: calm, alive |
-| `lift` | 0, or 0.28 m while a fruit is close | the focused fruit (0.5 m, just below the eyes) and its panel sit where the orbit is: the orbit rises above them and comes back down (`1 − e^(−4 Δt)`) |
 
-Over a whole turn every ingredient stays ≥ 0.45 m in front of the eyes, within 25° to the sides and 5–35° below
-the eyes (test `thePlayerSeesAllOfItClearOfTheirBody`). Three ingredients on a ~1.2 m perimeter are ~40 cm apart:
-the 12 cm glows never touch.
+Over a whole turn every ingredient stays 0.55–0.72 m from the eyes, 17.6°–42.4° to the right and 8°–28° below
+the eyes; the flask is at 30° to the right, 17° below (test `thePlayerSeesAllOfItToTheSideClearOfTheFruitAndTheirBody`:
+≥ 0.45 m away, 17°–45° to the right, 5°–35° below). Three ingredients on a ~0.85 m perimeter are ~28 cm apart: the
+12 cm glows never touch. The orbit used to sit 60 cm straight ahead and rose 28 cm above a close fruit; to the
+side it no longer needs to.
 
 **Lazy follow (comfort).** Content locked to the head moves with every glance and tires the player; content
 locked to the world is left behind when they walk. The orbit is in between:
 - `eyes ← eyes + (head − eyes) · (1 − e^(−3 Δt))`: it follows the player smoothly (walking, sitting down).
-- The yaw `ψ` stays put while the head looks within 30° of the orbit's front (glancing at an ingredient, at a
-  fruit). Past that the player has turned: `ψ` eases towards the head's yaw (`1 − e^(−2 Δt)` per frame) until
-  within 5°.
+- The yaw `ψ` stays put while the head looks anywhere from 30° to the left of the orbit's front to 30° past the
+  orbit on the right (`bearing + turnDeadZone`, 60°): glancing at a fruit, at the flask, at an ingredient. Past
+  that the player has turned: `ψ` eases towards the head's yaw (`1 − e^(−2 Δt)` per frame) until within 5°, and the
+  orbit settles 30° to the right of where they now face. The dead zone is asymmetric because the orbit is to the
+  right: with ±30° around the front, turning the head to look at the orbit (30° right) crossed it, the orbit
+  moved further right, and the player chased it out of view (test `lookingAtTheOrbitDoesNotPushItAway`).
 
 **The brew** (`Elixir.Timeline`, seconds from the snap). The flask sits at `O`; its neck runs from `neck_base` to
 `neck_top` (the cork's two ends, axis `n`, tilted 20°).
@@ -166,7 +176,7 @@ Sources/Macrowavers/
 │   ├── WormSwarm.swift                    Worm behaviour: crawl, burrow, speed up, hide when closed
 │   ├── Elixir.swift                       Ingredients in orbit, brew timeline, fusing → brewed → flying → delivered,
 │   │                                      the flask's curves (cork, dives, liquid, colours, slosh, pour)
-│   ├── ElixirOrbit.swift                  The ellipse in front of the player, lazy follow, the dive into the neck, ElixirFlight
+│   ├── ElixirOrbit.swift                  The ellipse to the player's right, lazy follow, the dive into the neck, ElixirFlight
 │   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
 │   └── OrchardViewModel.swift             @Observable: fruit focus, openings, worms, one ingredient per fruit, elixir
 └── Views/Orchard/
@@ -226,7 +236,7 @@ elixir's flight (`OrchardComponent.flight`).
   attachments under the fruit and under the orbit (hidden in SwiftUI while a fruit is close: the fruit's panel
   speaks then).
 - **No container to carry.** The player never drags an ingredient anywhere. The orbit keeps what they found in
-  sight, in front of them, without a gesture: finding an ingredient is the reward, not carrying it.
+  sight, beside them, without a gesture: finding an ingredient is the reward, not carrying it.
 - **Every gesture targets its own component.** The components are `FruitTapTargetComponent`, `AppleStemComponent`, `WormComponent`,
   `PomegranateBodyComponent`, `SeedComponent`, `BananaPeelComponent`, `PineappleBodyComponent` and `OrbComponent`.
   `.targetedToAnyEntity()` would steal the pinch from the dragon's tap and grabs, and from spinning the island.
@@ -281,9 +291,9 @@ elixir's flight (`OrchardComponent.flight`).
 | `Elixir` | `ingredientColors`, `elixirColor`, `dampedWave` | ingredient and elixir colours, how the liquid sloshes and the flask wobbles |
 | `ElixirOrbit` | `diveArc`, `diveClearance`, `diveLift`, `diveDepth` | the dive's shape |
 | `ElixirRig` | `flaskScale`, `pourAngle`, `corkRise`, `corkSide`, `pourHeight` | the flask's size in the orbit, how it pours, how far the cork flies |
-| `ElixirOrbit.Settings` | `distance`, `drop`, `lateralRadius`, `depthRadius`, `tilt`, `period` | where the orbit is, its size, tilt and speed |
+| `ElixirOrbit.Settings` | `bearing`, `distance`, `drop`, `lateralRadius`, `depthRadius`, `tilt`, `period` | where the orbit is (side, distance, height), its size, tilt and speed |
 | `ElixirOrbit.Settings` | `followResponsiveness`, `turnDeadZone`, `turnSettled`, `turnResponsiveness` | how the orbit follows the player |
-| `ElixirOrbit.Settings` | `roomLift`, `liftResponsiveness`, `fusionSpin`, `hintDrop` | how it makes room for a fruit, how the ingredients whirl, where the label floats |
+| `ElixirOrbit.Settings` | `fusionSpin`, `hintDrop` | how the ingredients whirl, where the label floats |
 | `ElixirFlight` | `speed`, `minimumDuration` | how fast the elixir flies |
 | `Elixir` | `joinDuration` | how long an ingredient takes from its fruit to the orbit (`OrbComponent` uses it) |
 | `ChopDetector.Settings` | `speed`, `cooldown` | how fast the hand must come down |
@@ -355,8 +365,9 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   fingers that do not curl, a pinch, repeated readings, cooldown, one hand at a time); the elixir's slots and
   timing; the flask appearing and wobbling when an ingredient arrives, the cork popping before the first dive and
   going back on after the last, the dives one at a time in order, the liquid rising by thirds and turning blue,
-  the slosh dying down, no jumps between states, the pour and the fade; the orbit's shape, period, lazy follow
-  and the dive into the neck; the flight's arc and arrival.
+  the slosh dying down, no jumps between states, the pour and the fade; the orbit's place to the right and its
+  shape (always seen whole, to the side, clear of the fruit), period, lazy follow and the dive into the neck; the
+  flight's arc and arrival.
 
 ## Known limits
 
@@ -367,7 +378,9 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   the side turns it too.
 - **Hand height, not the apple.** Pulling the stem uses the hand's height: if the player moves their head a lot while
   pulling, the opening follows the hand.
-- **The orbit ignores the room.** 0.5–0.75 m in front of the eyes it can sink into a table the player sits at.
+- **The orbit ignores the room.** 0.55–0.72 m from the eyes, to the right, it can sink into a table the player sits
+  at or into a wall on their right.
+- **Right side only.** The orbit is always on the right (`bearing`); a left-handed setting would flip its sign.
 - **The flight ignores the canopy.** The elixir's arc rises above the straight line but may still cross the tree.
 - **Transparent glass in mixed reality.** Glass, liquid and the gems' glows are all transparent: the fixed
   order keeps liquid and glass right, but an ingredient diving through the neck may sort oddly for a frame.

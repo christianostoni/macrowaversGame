@@ -19,7 +19,7 @@ Status: on `main`, playable with a temporary Sketchfab dragon (see
 3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island panel): the
    dragon turns with it. The side of the island facing you follows your hand, wherever you look on the rock.
 4. Look at the dragon and pinch (tap): it gets angry for ~3 s. It won't come near you until it is soothed.
-5. Pick fruit on the tree and open them: each frees an **ingredient** that joins a small orbit in front of you (see
+5. Pick fruit on the tree and open them: each frees an **ingredient** that joins a small orbit on your right (see
    [The tree's fruit](../apple-artifact/README.md)). With three in orbit, snap your fingers (or tap one): they
    dive one by one into the flask in the orbit's middle and brew the **elixir**; the flask flies to the dragon and
    pours the elixir over its head (`callDragon()`): it flies to you, stops to look at you and settles tangled in

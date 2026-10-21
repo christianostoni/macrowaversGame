@@ -41,7 +41,7 @@ struct PomegranateBodyComponent: Component {}
 struct SeedComponent: Component {}
 
 /// The glowing orb of a fruit (`fruitID`), an ingredient of the elixir: it rises out of the open fruit and flies
-/// to the orbit in front of the player. Also remembers that journey, which only the RealityKit layer draws.
+/// to the orbit at the player's side. Also remembers that journey, which only the RealityKit layer draws.
 struct OrbComponent: Component {
     let fruitID: Int
     /// Orbit slot whose colour the orb wears (nil = not found yet, neutral colour).
@@ -130,7 +130,7 @@ struct OrchardComponent: Component {
     var time: Float = 0
     var chop = ChopDetector()
     var snap = SnapDetector()
-    /// The small ellipse in front of the player the ingredients go round on.
+    /// The small ellipse at the player's side the ingredients go round on.
     var orbit = ElixirOrbit()
     /// The elixir's flight to the dragon, once it has left.
     var flight: ElixirFlight?
