@@ -10,8 +10,9 @@ brew the **elixir**. The flask flies to the dragon and pours the elixir over its
 Origins:
 - The apple and pomegranate come from Isadora's AppleSpiral prototype: a spiral-cut apple deformed by a Metal shader, with worms.
   The prototype's own Xcode project was removed once ported; it is still in the git history.
-- The banana and pineapple come from the fruit lab prototype (`fruit_test_2`), a separate project that is not in
-  this repo: only its exported `Banana.usdz` and `Pineapple.usdz` are.
+- The pineapple comes from the fruit lab prototype (`fruit_test_2`), a separate project that is not in this repo:
+  only its exported `Pineapple.usdz` is.
+- The orange is generated in code (`OrangeRig`); it replaced the fruit lab's banana.
 
 Status: playable with placeholder ingredients (RealityKit spheres in three colours) and the design team's flask
 (`ElixirFlask.usdz`).
@@ -29,7 +30,7 @@ Status: playable with placeholder ingredients (RealityKit spheres in three colou
    |---|---|
    | Apple | Pull the stem up (pinch and drag upwards), then tap the worms |
    | Pomegranate | Pull it apart with both hands (in the simulator hold Option) |
-   | Banana | Pinch each of the 4 strips of peel and pull it outwards and down |
+   | Orange | Pinch each of the 6 petals of peel and pull it outwards and down |
    | Pineapple | Chop down through it with the edge of your hand, or tap it |
 
 4. The orb rises out of the fruit and, after a moment, flies into the orbit in front of you (tap it to send it at
@@ -44,9 +45,9 @@ Status: playable with placeholder ingredients (RealityKit spheres in three colou
 
 | Moment | Behaviour |
 |---|---|
-| On the tree | 3 apples, 1 pomegranate, 1 banana and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
+| On the tree | 3 apples, 1 pomegranate, 1 orange and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
 | Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close |
-| Open it | Apple: the spiral slices lift (Metal compute shader) and 3 worms guard the orb. Pomegranate: the halves open like a book and 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Pineapple: the halves fall open towards the player and the crown tips away |
+| Open it | Apple: the spiral slices lift (Metal compute shader) and 3 worms guard the orb. Pomegranate: the halves open like a book and 40 seeds burst out. Orange: each petal of peel turns on its hinge and hangs down like a flower opening. Pineapple: the halves fall open towards the player and the crown tips away |
 | Ingredient found | The orb rises out of the fruit (1.2 s), glowing and pulsing, and floats there for 0.6 s (or until tapped) |
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
 | In orbit | The ingredients go round a small ellipse (48 × 28 cm) 60 cm in front of the player, a little below their eyes, its far side tilted up so they see it whole; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). While a fruit is close it rises above it and its panel, then comes back down. A small label under the orbit counts them |
@@ -183,7 +184,7 @@ Sources/Macrowavers/
         ├── AppleRig.swift                   LowLevelMesh + Metal compute pipeline, stem, worms
         ├── AppleSpiral.metal                `deformApple` kernel (one thread per vertex)
         ├── PomegranateRig.swift             Halves, crown, seed burst
-        ├── BananaRig.swift                  Banana.usdz, peel strips on hinges
+        ├── OrangeRig.swift                  Procedural orange, peel petals on hinges
         └── PineappleRig.swift               Pineapple.usdz, halves and crown opening
 ```
 
@@ -228,7 +229,7 @@ elixir's flight (`OrchardComponent.flight`).
 - **No container to carry.** The player never drags an ingredient anywhere. The orbit keeps what they found in
   sight, in front of them, without a gesture: finding an ingredient is the reward, not carrying it.
 - **Every gesture targets its own component.** The components are `FruitTapTargetComponent`, `AppleStemComponent`, `WormComponent`,
-  `PomegranateBodyComponent`, `SeedComponent`, `BananaPeelComponent`, `PineappleBodyComponent` and `OrbComponent`.
+  `PomegranateBodyComponent`, `SeedComponent`, `OrangePeelComponent`, `PineappleBodyComponent` and `OrbComponent`.
   `.targetedToAnyEntity()` would steal the pinch from the dragon's tap and grabs, and from spinning the island.
 - **Two view models, connected by the view.** `OrchardViewModel` knows nothing about the dragon. The immersive
   view tells it whether the dragon is still on the island (`isDragonOnIsland`). The elixir only flies then, and the
@@ -256,8 +257,8 @@ elixir's flight (`OrchardComponent.flight`).
 
 | Where | Parameter | Effect |
 |---|---|---|
-| `OrchardViewModel.init` | `apples`, `pomegranates`, `bananas`, `pineapples` | how many fruits hang on the tree (the island has 6 hang points; more fruits share them) |
-| `OrchardViewModel` | `peeledStrip`, `burstOpening` | when a banana counts as peeled, when the pomegranate bursts |
+| `OrchardViewModel.init` | `apples`, `pomegranates`, `oranges`, `pineapples` | how many fruits hang on the tree (the island has 6 hang points; more fruits share them) |
+| `OrchardViewModel` | `orangePetals`, `peeledPetal`, `burstOpening` | how many petals the orange's peel has, when it counts as peeled, when the pomegranate bursts |
 | `OrchardViewModel` | `orbRiseDuration`, `orbOrbitDelay` | how long an ingredient rises, how long it floats before joining the orbit |
 | `Elixir` | `ingredientCount`, `brewedHold`, `popDuration`, `appearDuration`, `pourDuration` | ingredients needed, how long the elixir waits before flying, the flask's pop, appearance and pour |
 | `Elixir.Timeline` | `corkPop`, `firstDive`, `diveSpacing`, `diveDuration`, `rise`, `recorkStart`, `recorkEnd`, `swirlEnd` | the brew's rhythm (`fusingDuration` = `swirlEnd`) |
@@ -278,12 +279,11 @@ elixir's flight (`OrchardComponent.flight`).
 
 | Asset | Where it comes from |
 |---|---|
-| `Banana.usdz` | Poly Haven `bananas` (CC0), cut into four peel strips by the fruit lab's `build_fruits.py` (external, not in this repo). Prims: `peelPivot_N/peel_N`, `peelBase`, `core`; the prototype's `stand` and `item` are removed at load |
-| `Pineapple.usdz` | Procedural, from the same script. Prims: `pineapple_1`, `pineapple_2`, `crown`; `item` removed at load |
+| `Pineapple.usdz` | Procedural, from the fruit lab's `build_fruits.py` (external, not in this repo). Prims: `pineapple_1`, `pineapple_2`, `crown`; `item` removed at load |
 | Ingredients (missing) | RealityKit spheres for now (`OrchardSceneBuilder.makeOrbTemplate`): 5 cm core, 7.6 cm halo, origin at the centre |
 | `ElixirFlask.usdz` | The design team's flask, `Assets/Blender/elixir-flask/elixir_flask.usdc`, prepared headless by `make_flask_asset.py` (below). Prims: `Glass`, `Liquid` (origin at its bottom), `Cork` (origin at its centre), `neck_top`, `neck_base`. Without it a glowing blue orb stands in and the brew still plays |
 
-Apples and pomegranate are generated in code (the apple must stay procedural: the shader cuts it).
+Apples, pomegranate and orange are generated in code (the apple must stay procedural: the shader cuts it).
 
 ### The flask's pipeline
 
