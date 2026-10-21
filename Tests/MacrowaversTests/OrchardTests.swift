@@ -105,8 +105,8 @@ struct OrchardViewModelTests {
         switch orchard.focusedFruit?.kind {
         case .apple: clearWorms(orchard)
         case .pomegranate: orchard.setPomegranateOpening(1)
-        case .banana:
-            for strip in 0..<OrchardViewModel.bananaStrips { orchard.setBananaPeel(strip: strip, progress: 1) }
+        case .orange:
+            for petal in 0..<OrchardViewModel.orangePetals { orchard.setOrangePeel(petal: petal, progress: 1) }
         case .pineapple: orchard.chopPineapple()
         case nil: break
         }
@@ -125,7 +125,7 @@ struct OrchardViewModelTests {
 
     @Test func treeHasEveryKindOfFruit() {
         let orchard = OrchardViewModel()
-        #expect(orchard.fruits.map(\.kind) == [.apple, .apple, .apple, .pomegranate, .banana, .pineapple])
+        #expect(orchard.fruits.map(\.kind) == [.apple, .apple, .apple, .pomegranate, .orange, .pineapple])
         #expect(orchard.orbs.allSatisfy { $0 == .sealed })
     }
 
@@ -150,14 +150,14 @@ struct OrchardViewModelTests {
         #expect(orchard.pomegranateBurst && orchard.orbs[pomegranate] == .revealed)
         orchard.back()
 
-        let banana = id(of: .banana, in: orchard)
-        orchard.focus(fruit: banana)
-        for strip in 0..<(OrchardViewModel.bananaStrips - 1) { orchard.setBananaPeel(strip: strip, progress: 1) }
-        // Three strips out of four: still closed.
-        #expect(orchard.orbs[banana] == .sealed && !orchard.isFocusedFruitExplored)
-        orchard.setBananaPeel(strip: OrchardViewModel.bananaStrips - 1, progress: OrchardViewModel.peeledStrip)
-        #expect(orchard.orbs[banana] == .revealed && orchard.isFocusedFruitExplored)
-        // Other fruits' gestures do nothing to a banana.
+        let orange = id(of: .orange, in: orchard)
+        orchard.focus(fruit: orange)
+        for petal in 0..<(OrchardViewModel.orangePetals - 1) { orchard.setOrangePeel(petal: petal, progress: 1) }
+        // Five petals out of six: still closed.
+        #expect(orchard.orbs[orange] == .sealed && !orchard.isFocusedFruitExplored)
+        orchard.setOrangePeel(petal: OrchardViewModel.orangePetals - 1, progress: OrchardViewModel.peeledPetal)
+        #expect(orchard.orbs[orange] == .revealed && orchard.isFocusedFruitExplored)
+        // Other fruits' gestures do nothing to an orange.
         orchard.setAppleOpening(1)
         orchard.chopPineapple()
         #expect(orchard.appleOpening == 0 && !orchard.pineappleChopped)
@@ -188,18 +188,18 @@ struct OrchardViewModelTests {
 
     @Test func foundIngredientRisesThenJoinsTheOrbitAndTheFruitGoesBack() {
         let orchard = OrchardViewModel()
-        let banana = id(of: .banana, in: orchard)
-        orchard.focus(fruit: banana)
+        let orange = id(of: .orange, in: orchard)
+        orchard.focus(fruit: orange)
         // Not out yet: it cannot be tapped into orbit.
-        #expect(!orchard.collectOrb(fruit: banana))
+        #expect(!orchard.collectOrb(fruit: orange))
         open(orchard)
-        #expect(!orchard.collectOrb(fruit: banana))
+        #expect(!orchard.collectOrb(fruit: orange))
         // Risen: the player sees it float above the fruit for a moment.
         run(orchard, seconds: OrchardViewModel.orbRiseDuration + 0.05)
-        #expect(orchard.orbs[banana] == .revealed && orchard.focusedFruitID == banana)
+        #expect(orchard.orbs[orange] == .revealed && orchard.focusedFruitID == orange)
         // Then it joins the orbit by itself and the fruit goes back to the tree.
         run(orchard, seconds: OrchardViewModel.orbOrbitDelay)
-        #expect(orchard.orbs[banana] == .orbiting(slot: 0))
+        #expect(orchard.orbs[orange] == .orbiting(slot: 0))
         #expect(orchard.elixir.orbitingCount == 1)
         #expect(orchard.focusedFruitID == nil)
     }
@@ -217,12 +217,12 @@ struct OrchardViewModelTests {
 
     @Test func ingredientFreedJustBeforeGoingBackStillJoins() {
         let orchard = OrchardViewModel()
-        let banana = id(of: .banana, in: orchard)
-        orchard.focus(fruit: banana)
+        let orange = id(of: .orange, in: orchard)
+        orchard.focus(fruit: orange)
         open(orchard)
         orchard.back()
         run(orchard, seconds: OrchardViewModel.orbRiseDuration + OrchardViewModel.orbOrbitDelay + 0.1)
-        #expect(orchard.orbs[banana] == .orbiting(slot: 0))
+        #expect(orchard.orbs[orange] == .orbiting(slot: 0))
     }
 
     @Test func emptyFruitStaysUntilThePlayerSendsItBack() {
@@ -255,7 +255,7 @@ struct OrchardViewModelTests {
 
     @Test func elixirNeedsThreeIngredientsThenFliesToTheDragon() {
         let orchard = OrchardViewModel()
-        harvest(id(of: .banana, in: orchard), into: orchard)
+        harvest(id(of: .orange, in: orchard), into: orchard)
         harvest(id(of: .pineapple, in: orchard), into: orchard)
         #expect(!orchard.brewElixir())
         harvest(id(of: .pomegranate, in: orchard), into: orchard)
@@ -289,7 +289,7 @@ struct OrchardViewModelTests {
     @Test func brewingSendsTheCloseFruitBack() {
         let orchard = OrchardViewModel()
         for fruit in 0..<Elixir.ingredientCount { harvest(fruit, into: orchard) }
-        orchard.focus(fruit: id(of: .banana, in: orchard))
+        orchard.focus(fruit: id(of: .orange, in: orchard))
         #expect(orchard.brewElixir())
         #expect(orchard.focusedFruitID == nil)
     }

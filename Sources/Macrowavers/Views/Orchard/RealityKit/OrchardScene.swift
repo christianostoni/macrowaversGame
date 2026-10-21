@@ -95,7 +95,7 @@ struct OrchardFruit {
     enum Rig {
         case apple(AppleRig)
         case pomegranate(PomegranateRig)
-        case banana(BananaRig)
+        case orange(OrangeRig)
         case pineapple(PineappleRig)
     }
 
@@ -157,7 +157,7 @@ struct OrchardSystem: System {
         WormComponent.registerComponent()
         PomegranateBodyComponent.registerComponent()
         SeedComponent.registerComponent()
-        BananaPeelComponent.registerComponent()
+        OrangePeelComponent.registerComponent()
         PineappleBodyComponent.registerComponent()
         OrbComponent.registerComponent()
         FocusComponent.registerComponent()
@@ -204,8 +204,8 @@ struct OrchardSystem: System {
         case .pomegranate(let rig):
             rig.ease(towards: isFocused ? viewModel.pomegranateOpening : 0,
                      burst: isFocused && viewModel.pomegranateBurst, deltaTime: deltaTime)
-        case .banana(let rig):
-            rig.ease(towards: isFocused ? viewModel.bananaPeel : rig.displayedPeel.map { _ in 0 }, deltaTime: deltaTime)
+        case .orange(let rig):
+            rig.ease(towards: isFocused ? viewModel.orangePeel : rig.displayedPeel.map { _ in 0 }, deltaTime: deltaTime)
         case .pineapple(let rig):
             rig.ease(towards: isFocused && viewModel.pineappleChopped ? 1 : 0, deltaTime: deltaTime)
         }
@@ -304,8 +304,8 @@ enum OrchardSceneBuilder {
     static let appleSizeFocused: Float = 0.2
     static let pomegranateSizeOnTree: Float = 0.08
     static let pomegranateSizeFocused: Float = 0.14
-    static let bananaSizeOnTree: Float = 0.1
-    static let bananaSizeFocused: Float = 0.22
+    static let orangeSizeOnTree: Float = 0.08
+    static let orangeSizeFocused: Float = 0.18
     static let pineappleSizeOnTree: Float = 0.09
     static let pineappleSizeFocused: Float = 0.18
 
@@ -383,11 +383,11 @@ enum OrchardSceneBuilder {
             return RigBuild(rig: .pomegranate(pomegranate), root: pomegranate.root, size: pomegranate.radius * 2,
                             tapShape: .generateSphere(radius: pomegranate.radius * 1.8),
                             treeSize: pomegranateSizeOnTree, focusedSize: pomegranateSizeFocused)
-        case .banana:
-            guard let banana = await BananaRig() else { return nil }
-            return RigBuild(rig: .banana(banana), root: banana.root, size: banana.size,
-                            tapShape: .generateSphere(radius: banana.size * 0.6),
-                            treeSize: bananaSizeOnTree, focusedSize: bananaSizeFocused)
+        case .orange:
+            guard let orange = OrangeRig() else { return nil }
+            return RigBuild(rig: .orange(orange), root: orange.root, size: orange.size,
+                            tapShape: .generateSphere(radius: orange.size * 0.7),
+                            treeSize: orangeSizeOnTree, focusedSize: orangeSizeFocused)
         case .pineapple:
             guard let pineapple = await PineappleRig() else { return nil }
             return RigBuild(rig: .pineapple(pineapple), root: pineapple.root, size: pineapple.size,
@@ -433,7 +433,7 @@ extension OrchardFruit {
         switch rig {
         case .apple(let rig): rig.core
         case .pomegranate(let rig): rig.orbAnchor
-        case .banana(let rig): rig.orbAnchor
+        case .orange(let rig): rig.orbAnchor
         case .pineapple(let rig): rig.orbAnchor
         }
     }
@@ -444,7 +444,7 @@ extension OrchardFruit {
         switch rig {
         case .apple(let rig): rig.shape.height / 2 + viewModel.appleOpening * rig.shape.maxLift + 0.07
         case .pomegranate(let rig): rig.radius * 0.9 + 0.07
-        case .banana(let rig): rig.heightAboveAnchor + 0.05
+        case .orange(let rig): rig.heightAboveAnchor + 0.05
         case .pineapple(let rig): rig.size / 2 + 0.07
         }
     }
@@ -461,7 +461,7 @@ extension OrchardFruit {
         switch rig {
         case .apple(let rig): rig.setInteractive(isInteractive)
         case .pomegranate(let rig): rig.setInteractive(isInteractive)
-        case .banana(let rig): rig.setInteractive(isInteractive)
+        case .orange(let rig): rig.setInteractive(isInteractive)
         case .pineapple(let rig): rig.setInteractive(isInteractive)
         }
     }

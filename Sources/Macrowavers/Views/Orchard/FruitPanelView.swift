@@ -54,7 +54,7 @@ struct FruitPanelView: View {
         switch orchard.focusedFruit?.kind {
         case .apple: "An apple from the tree"
         case .pomegranate: "A pomegranate from the tree"
-        case .banana: "A banana from the tree"
+        case .orange: "An orange from the tree"
         case .pineapple: "A pineapple from the tree"
         case nil: ""
         }
@@ -83,8 +83,8 @@ struct FruitPanelView: View {
                 : "Only worms in this one. Put it back on the tree."
         case .pomegranate:
             return orchard.pomegranateBurst ? "Drag the seeds around for fun." : "Pull it apart with both hands."
-        case .banana:
-            return "Pinch a strip of the peel and pull it outwards and down. Peel all four."
+        case .orange:
+            return "Pinch a petal of the peel and pull it outwards and down. Peel all six."
         case .pineapple:
             return orchard.isHandTrackingAvailable
                 ? "Chop down through it with the edge of your hand, or tap it."
