@@ -377,8 +377,6 @@ extension OrchardSystem {
         defer {
             let isLoaded = orchard.snap.isLoaded
             if viewModel.isSnapLoaded != isLoaded { viewModel.isSnapLoaded = isLoaded }
-            let debug = snapDebug(orchard.snap)
-            if viewModel.snapDebug != debug { viewModel.snapDebug = debug }
         }
         guard viewModel.elixir.state == .ready else {
             orchard.snap.reset()
@@ -391,18 +389,6 @@ extension OrchardSystem {
             snapped = true
         }
         if snapped { viewModel.brewElixir() }
-    }
-
-    /// "pad 2.5 cm · last +3.0/1.0 cm 0.8 m/s ✗", rounded to half centimetres (changes now and then, not every frame).
-    private static func snapDebug(_ snap: SnapDetector) -> String {
-        func centimetres(_ metres: Float) -> String {
-            ((metres * 200).rounded() / 2).formatted(.number.precision(.fractionLength(1)))
-        }
-        let contact = snap.closestContact.map { "pad \(centimetres($0)) cm" } ?? "no hands"
-        guard let attempt = snap.lastAttempt else { return contact }
-        let speed = ((attempt.speed * 2).rounded() / 2).formatted(.number.precision(.fractionLength(1)))
-        return "\(contact) · last +\(centimetres(attempt.separation))/\(centimetres(attempt.curl)) cm "
-            + "\(speed) m/s \(attempt.isSnap ? "✓" : "✗")"
     }
 
     /// Draws the flask: appearing in the middle of the orbit with the first ingredient, turning slowly there,

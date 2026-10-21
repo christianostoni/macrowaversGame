@@ -5,7 +5,7 @@ enum DragonPhase: Equatable {
     /// Captive on the island: circles the tree and waits for the player to tap it.
     case captive
     /// Tapped while on the island: it gets angry (glares, growls, smoke) and circles faster for a while.
-    /// The dragon panel shows its state; the artifact from the tree's fruit is what calms it.
+    /// The elixir brewed from the tree's fruit is what calms it.
     case alerted
     /// Soothed: flies to the player and stops in front of them.
     case approaching

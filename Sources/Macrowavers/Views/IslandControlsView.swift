@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// Island panel, inside the immersive space (a RealityView attachment, to the player's left): story status,
-/// island rotation, dragon panel toggle and Restart Game, which closes the space and goes back to the launch
-/// window.
+/// island rotation and Restart Game, which closes the space and goes back to the launch window.
 struct IslandControlsView: View {
     static let attachmentID = "IslandControls"
 
@@ -33,10 +32,6 @@ struct IslandControlsView: View {
                 Text("Drag the island's rock to spin it, or rotate it with both hands.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-            }
-
-            Button(viewModel.isDragonPanelVisible ? "Hide Dragon Panel" : "Show Dragon Panel", systemImage: "lizard") {
-                viewModel.isDragonPanelVisible.toggle()
             }
 
             Divider()

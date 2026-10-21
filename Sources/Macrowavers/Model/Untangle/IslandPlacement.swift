@@ -20,6 +20,22 @@ struct IslandPlacement: Equatable {
     static let grassHeight: Float = 0.6
     /// Step of the rotation buttons.
     static let yawStep: Float = .pi / 8
+    /// Hand movement across the player's view (m) that turns the island by one radian.
+    static let spinDistance: Float = 0.4
+
+    /// Turn (radians) for a hand that moved by `handMovement` (scene space), seen from `viewer`: the side of the
+    /// island facing the player follows the hand, wherever the pinch landed on the rock. The angle the hand drew
+    /// around the trunk depended on that point: from the far side of the rock the island turned the other way,
+    /// and near the trunk it jumped.
+    func spinAngle(handMovement: SIMD3<Float>, viewer: SIMD3<Float>) -> Float {
+        var towardsViewer = SIMD2(viewer.x - position.x, viewer.z - position.z)
+        // Player right above the trunk: no side faces them, take the standard one.
+        if simd_length(towardsViewer) < 1e-3 { towardsViewer = SIMD2(0, 1) }
+        let facing = simd_normalize(towardsViewer)
+        // Where the facing side moves for a positive yaw (a turn around +Y): to the player's right.
+        let right = SIMD2(facing.y, -facing.x)
+        return simd_dot(SIMD2(handMovement.x, handMovement.z), right) / Self.spinDistance
+    }
 
     var rotation: simd_quatf {
         simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))

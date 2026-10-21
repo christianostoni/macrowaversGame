@@ -11,9 +11,7 @@ import SwiftUI
 struct DragonImmersiveView: View {
     static let spaceID = "DragonSpace"
 
-    /// Turntable: how much the island turns compared to the angle the hand draws around the trunk.
-    private static let spinGain: Float = 2
-    /// Side panels: 0.9 m from the player, 50° to the left / right, a little below a seated player's eyes.
+    /// Side panel: 0.9 m from the player, 50° to the left, a little below a seated player's eyes.
     /// Outside everything that moves: the island (±20°), the dragon's approach (~1 m straight ahead), the knot
     /// and the fruit in front of the player, the farewell circles (≥ 1.1 m).
     private static let panelDistance: Float = 0.9
@@ -24,15 +22,17 @@ struct DragonImmersiveView: View {
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(StoryViewModel.self) private var story
     @Environment(\.openWindow) private var openWindow
-    /// Rotation of the island when the current gesture started.
-    @State private var islandYawStart: Float?
+    /// Rotation of the island and the hand's position (scene) when the current drag started.
+    @State private var islandSpinStart: (yaw: Float, location: SIMD3<Float>)?
+    /// Rotation of the island when the current two-hand rotation started (nil: not rotating).
+    @State private var islandRotateYawStart: Float?
     /// Subscriptions to the grab events on the dragon: they must stay alive as long as the view exists.
     @State private var subscriptions: [EventSubscription] = []
     /// Position of the player's head: the dragon looks at the knight.
     @State private var viewer = ViewerTracker()
     /// The player's hands: chopping the pineapple, snapping the fingers to brew the elixir.
     @State private var hands = HandTracker()
-    /// The island, the dragon and their panels: built at once, added to the scene when the story reveals them.
+    /// The island, the dragon and the island panel: built at once, added to the scene when the story reveals them.
     @State private var world = HiddenWorld()
 
     var body: some View {
@@ -58,12 +58,9 @@ struct DragonImmersiveView: View {
                 viewModel: orchard, player: .init(viewer: viewer, hands: hands), island: island,
                 deliveryTarget: dragonHead, background: background)
             world.entities.append(orchardRoot)
-            // Island panel on the left, dragon panel on the right.
+            // Island panel on the left.
             if let islandPanel = attachments.entity(for: IslandControlsView.attachmentID) {
                 world.entities.append(Self.placeSidePanel(islandPanel, angle: -Self.panelAngle))
-            }
-            if let dragonPanel = attachments.entity(for: DragonPanelView.attachmentID) {
-                world.entities.append(Self.placeSidePanel(dragonPanel, angle: Self.panelAngle))
             }
             // The story's words: in front of the player, or above the dragon when it speaks.
             if let storyPanel = attachments.entity(for: StoryPanelView.attachmentID) {
@@ -120,11 +117,6 @@ struct DragonImmersiveView: View {
                     .environment(viewModel)
                     .environment(orchard)
             }
-            Attachment(id: DragonPanelView.attachmentID) {
-                DragonPanelView()
-                    .environment(viewModel)
-                    .environment(orchard)
-            }
         }
         .gesture(tapDragonGesture)
         .orchardInteractions()
@@ -160,14 +152,13 @@ struct DragonImmersiveView: View {
 
     // MARK: - Dragon
 
-    /// Look at the dragon circling the tree and pinch: it gets angry and its panel opens.
+    /// Look at the dragon circling the tree and pinch: it gets angry.
     /// Only the colliders with `DragonTapTargetComponent` answer (that is, only while it is on the island).
     private var tapDragonGesture: some Gesture {
         SpatialTapGesture()
             .targetedToEntity(where: .has(DragonTapTargetComponent.self))
             .onEnded { _ in
                 viewModel.tapDragon()
-                viewModel.isDragonPanelVisible = true
             }
     }
 
@@ -184,22 +175,28 @@ struct DragonImmersiveView: View {
 
     // MARK: - Island
 
-    /// Drag the island's rock: it spins like a turntable around the trunk.
+    /// Drag the island's rock: it spins like a turntable around the trunk, its side facing the player following
+    /// the hand (see `IslandPlacement.spinAngle`).
     private var spinIslandGesture: some Gesture {
         DragGesture()
             .targetedToEntity(where: .has(IslandHandleComponent.self))
             .onChanged { value in
-                let start = islandYawStart ?? viewModel.islandPlacement.yaw
-                islandYawStart = start
-                let center = viewModel.islandPlacement.position
-                let from = value.convert(value.startLocation3D, from: .local, to: .scene)
-                let to = value.convert(value.location3D, from: .local, to: .scene)
-                // Angle drawn by the hand around the trunk (same direction as a rotation around +Y).
-                let turn = atan2(to.x - center.x, to.z - center.z) - atan2(from.x - center.x, from.z - center.z)
-                viewModel.setIslandYaw(start + Self.spinGain * atan2(sin(turn), cos(turn)))
+                let location = value.convert(value.location3D, from: .local, to: .scene)
+                // Both hands rotating: the two-hand gesture drives the island. The drag goes on from here afterwards.
+                guard islandRotateYawStart == nil else {
+                    islandSpinStart = (yaw: viewModel.islandPlacement.yaw, location: location)
+                    return
+                }
+                let start = islandSpinStart
+                    ?? (yaw: viewModel.islandPlacement.yaw,
+                        location: value.convert(value.startLocation3D, from: .local, to: .scene))
+                islandSpinStart = start
+                let turn = viewModel.islandPlacement.spinAngle(handMovement: location - start.location,
+                                                               viewer: viewer.viewerPosition())
+                viewModel.setIslandYaw(start.yaw + turn)
             }
             .onEnded { _ in
-                islandYawStart = nil
+                islandSpinStart = nil
             }
     }
 
@@ -208,15 +205,15 @@ struct DragonImmersiveView: View {
         RotateGesture3D(constrainedToAxis: .y)
             .targetedToEntity(where: .has(IslandHandleComponent.self))
             .onChanged { value in
-                let start = islandYawStart ?? viewModel.islandPlacement.yaw
-                islandYawStart = start
+                let start = islandRotateYawStart ?? viewModel.islandPlacement.yaw
+                islandRotateYawStart = start
                 let quaternion = value.rotation.quaternion
                 let angle = Float(2 * atan2(quaternion.imag.y, quaternion.real))
                 // SwiftUI space has y pointing down: opposite sign to RealityKit.
                 viewModel.setIslandYaw(start - angle)
             }
             .onEnded { _ in
-                islandYawStart = nil
+                islandRotateYawStart = nil
             }
     }
 

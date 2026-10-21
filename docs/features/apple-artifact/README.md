@@ -35,8 +35,7 @@ Status: playable with placeholder ingredients (RealityKit spheres in three colou
 4. The orb rises out of the fruit and, after a moment, flies into the orbit in front of you (tap it to send it at
    once). The fruit goes back to its branch.
 5. With 3 ingredients in orbit, **snap your fingers**: press the thumb on the middle finger's pad (the label
-   then says "Now snap!") and snap, either hand. The dragon panel's debug shows what the detector reads
-   (**Snap** row). Without hand
+   then says "Now snap!") and snap, either hand. Without hand
    tracking (simulator) tap one of the orbiting ingredients, or press **Brew the Elixir** on the label under
    the orbit.
 
@@ -153,9 +152,10 @@ Each hand on its own, with a 0.6 s cooldown; repeated readings (the frame is fas
 The snap is read only while the orbit is complete. A tap on an orbiting ingredient does the same, so the game also
 works without hand tracking.
 
-**Tuning on the headset.** The dragon panel's debug has a **Snap** row: `pad` is the closest thumb–pad distance
-now (it must go under 3 cm when the thumb presses), `last +sep/curl cm speed m/s ✓/✗` what the latest release
-measured. A missed snap shows which threshold it failed.
+**Tuning on the headset.** `SnapDetector` keeps what it reads: `closestContact` is the closest thumb–pad distance
+in the current frame (it must go under 3 cm when the thumb presses) and `lastAttempt` the separation, curl and
+speed the latest release measured, and whether it counted as a snap. Log them while tuning: a missed snap shows
+which threshold it failed.
 
 ## Code layout
 
@@ -331,7 +331,7 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
 
 - **The snap and the chop need a headset.** The simulator has no hand tracking: use the taps.
 - **Snap thresholds come from hand proportions, not from recordings:** tune `SnapDetector.Settings` on device
-  with the dragon panel's **Snap** row.
+  with `SnapDetector.closestContact` and `lastAttempt`.
 - **Head, not body.** The orbit turns with the head's yaw past 30° (visionOS gives no torso pose): a long look to
   the side turns it too.
 - **Hand height, not the apple.** Pulling the stem uses the hand's height: if the player moves their head a lot while
