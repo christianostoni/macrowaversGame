@@ -107,10 +107,11 @@ final class UntangleViewModel {
     /// Positions to draw, in the dragon's space: the simulation or, while flying, the flight.
     var displayPositions: [SIMD3<Float>] {
         guard let flight else {
-            guard let settleFrom else { return simulation.positions }
+            let body = simulation.interpolatedPositions
+            guard let settleFrom else { return body }
             let amount = settleTime / settleDuration
             let blend = amount * amount * (3 - 2 * amount)
-            return zip(settleFrom, simulation.positions).map { simd_mix($0, $1, SIMD3(repeating: blend)) }
+            return zip(settleFrom, body).map { simd_mix($0, $1, SIMD3(repeating: blend)) }
         }
         let localFromFlight = worldFromLocal.inverse * worldFromFlight
         return flight.positions.map { Self.transform($0, by: localFromFlight) }
@@ -374,7 +375,7 @@ final class UntangleViewModel {
         }
         simulation.step(deltaTime: deltaTime)
         if freeTime >= takeoffDelay && (!farewellWaitsForPlayer || isFarewellCleared) {
-            let start = simulation.positions.map { Self.transform($0, by: worldFromLocal) }
+            let start = simulation.interpolatedPositions.map { Self.transform($0, by: worldFromLocal) }
             flight = DragonFlight(start: start, segmentLength: config.segmentLength, settings: .farewell,
                                   plan: farewell, viewer: viewer, viewerForward: viewerForward)
             isFlying = true

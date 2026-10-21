@@ -53,6 +53,8 @@ final class TangleSimulation {
     let config: TangleConfig
     private(set) var positions: [SIMD3<Float>]
     private var previous: [SIMD3<Float>]
+    /// The body at the start of the last tick: what is drawn goes from here to `positions`.
+    private var tickStart: [SIMD3<Float>]
     /// Grabbed nodes (even more than one: one per hand) and where to bring them.
     private var grabTargets: [Int: SIMD3<Float>] = [:]
     /// Where each grabbed node is heading: `grabTargets` filtered (see `TangleConfig.grabSmoothing`).
@@ -63,6 +65,7 @@ final class TangleSimulation {
         self.config = config
         self.positions = positions
         self.previous = positions
+        self.tickStart = positions
     }
 
     // MARK: - Interaction
@@ -109,6 +112,7 @@ final class TangleSimulation {
         }
         positions = positions.map(rotate)
         previous = previous.map(rotate)
+        tickStart = tickStart.map(rotate)
         grabTargets = grabTargets.mapValues(rotate)
         smoothedTargets = smoothedTargets.mapValues(rotate)
     }
@@ -124,6 +128,7 @@ final class TangleSimulation {
         accumulator = min(accumulator + deltaTime, 0.1)
         while accumulator >= Self.tick {
             accumulator -= Self.tick
+            tickStart = positions
             for _ in 0..<config.substeps {
                 integrate()
                 moveGrabbedNodes()
@@ -136,6 +141,13 @@ final class TangleSimulation {
                 measureTension()
             }
         }
+    }
+
+    /// The body to draw: between the last two ticks, as far as the time not yet simulated. The headset draws at
+    /// 90 Hz: drawn as is, the 60 Hz body stood still one frame in three. It lags at most one tick behind.
+    var interpolatedPositions: [SIMD3<Float>] {
+        let amount = SIMD3(repeating: accumulator / Self.tick)
+        return zip(tickStart, positions).map { simd_mix($0, $1, amount) }
     }
 
     private static let tick: Float = 1.0 / 60.0

@@ -31,6 +31,8 @@ final class SkeletalDragonRig: DragonRig {
         /// Body radius of the asset once scaled to the simulated length (`THICKNESS` in make_dragon_asset.py).
         /// The rig thickens the body to `TangleConfig.radius`, so what the player sees matches the collisions.
         static let modelledRadius: Float = 0.03
+        /// How fast the body's roll eases back to the artist's (1/s), while that roll is well defined.
+        static let rollRecovery: Float = 2
     }
 
     /// Names of the animations expected in the asset: first the one of the current move, then the mood's.
@@ -71,6 +73,8 @@ final class SkeletalDragonRig: DragonRig {
     private let chainParentMatrix: float4x4
     /// Orientation of `spine_00` in the rest pose (model space): keeps the artist's "roll".
     private let bindRootOrientation: simd_quatf
+    /// Orientation of `spine_00` drawn in the last frame: the roll carries over from it (see `rootOrientation`).
+    private var drawnRootOrientation: simd_quatf?
     /// Direction of each bone in its own local space (towards the child joint).
     private let boneAxes: [SIMD3<Float>]
     /// Distance of each joint from `spine_00` along the chain (model units).
@@ -168,7 +172,8 @@ final class SkeletalDragonRig: DragonRig {
         effects.update(pose: animator.pose, frame: frame)
 
         var transforms = model.jointTransforms
-        poseSpine(along: Self.smoothed(visual).map { model.convert(position: $0, from: entity) }, transforms: &transforms)
+        poseSpine(along: Self.smoothed(visual).map { model.convert(position: $0, from: entity) }, deltaTime: deltaTime,
+                  transforms: &transforms)
         poseWings(&transforms)
         model.jointTransforms = transforms
     }
@@ -186,7 +191,7 @@ final class SkeletalDragonRig: DragonRig {
 
     // MARK: - Spine driven by the simulation
 
-    private func poseSpine(along curve: [SIMD3<Float>], transforms: inout [Transform]) {
+    private func poseSpine(along curve: [SIMD3<Float>], deltaTime: Float, transforms: inout [Transform]) {
         let targets = arcLengths.map { Self.point(on: curve, atArcLength: $0) }
         var previousOrientation = bindRootOrientation
 
@@ -195,9 +200,14 @@ final class SkeletalDragonRig: DragonRig {
             let direction = next - targets[k]
             guard simd_length(direction) > 1e-6 else { continue }
 
-            // Parallel transport: rotates as little as possible relative to the previous bone (no twisting).
-            let currentAxis = previousOrientation.act(boneAxes[k])
-            let orientation = simd_quatf(from: simd_normalize(currentAxis), to: simd_normalize(direction)) * previousOrientation
+            let orientation: simd_quatf
+            if k == 0 {
+                orientation = rootOrientation(along: simd_normalize(direction), deltaTime: deltaTime)
+            } else {
+                // Parallel transport: rotates as little as possible relative to the previous bone (no twisting).
+                let currentAxis = previousOrientation.act(boneAxes[k])
+                orientation = simd_quatf(from: simd_normalize(currentAxis), to: simd_normalize(direction)) * previousOrientation
+            }
 
             var local = bindTransforms[jointIndex]
             if k == 0 {
@@ -216,6 +226,28 @@ final class SkeletalDragonRig: DragonRig {
             transforms[jointIndex] = local
             previousOrientation = orientation
         }
+    }
+
+    /// Orientation of `spine_00` along `direction` (unit length). Turned from the rest pose as before, the roll
+    /// (where the back faces) flipped by up to 180° in one frame whenever the neck pointed almost opposite to the
+    /// rest pose: the dragon turning round, flying. So the roll carries over from the last frame, and eases back
+    /// to the artist's only while that one is well defined.
+    private func rootOrientation(along direction: SIMD3<Float>, deltaTime: Float) -> simd_quatf {
+        let restAxis = simd_normalize(bindRootOrientation.act(boneAxes[0]))
+        guard let last = drawnRootOrientation else {
+            let rest = simd_quatf(from: restAxis, to: direction) * bindRootOrientation
+            drawnRootOrientation = rest
+            return rest
+        }
+        var orientation = simd_quatf(from: simd_normalize(last.act(boneAxes[0])), to: direction) * last
+        // 0 from 120° away from the rest pose (its roll is ambiguous near 180°), 1 within 90°.
+        let trust = max(0, min(1, (simd_dot(restAxis, direction) + 0.5) / 0.5))
+        if trust > 0 {
+            let rest = simd_quatf(from: restAxis, to: direction) * bindRootOrientation
+            orientation = simd_slerp(orientation, rest, trust * (1 - exp(-deltaTime * Asset.rollRecovery)))
+        }
+        drawnRootOrientation = orientation
+        return orientation
     }
 
     /// The head is a rigid piece: if it turns relative to the neck the seam shows. So the first stretch of
@@ -327,7 +359,13 @@ final class SkeletalDragonRig: DragonRig {
             }
             travelled += segment
         }
-        return curve.last!
+        // Past the end (the body drawn a little shorter than the asset's spine): straight on along the last
+        // segment. Stopping at the last point stacked the tail's last joints on it, and they kept a stale pose.
+        guard curve.count > 1 else { return curve.last! }
+        let end = curve[curve.count - 1]
+        let along = end - curve[curve.count - 2]
+        let length = simd_length(along)
+        return length > 1e-6 ? end + along / length * (target - travelled) : end
     }
 }
 
