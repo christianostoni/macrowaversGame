@@ -5,7 +5,6 @@
 | Job | Runner | What |
 |---|---|---|
 | PR title | ubuntu | Conventional Commits format |
-| Branch name | ubuntu | `feature/`, `fix/` or `spike/` naming; spikes cannot merge |
 | Lint | ubuntu (SwiftLint container) | `swiftlint lint --strict` |
 | Build and test | macOS | `xcodebuild test` on the visionOS simulator (the `.xcodeproj` is committed) |
 

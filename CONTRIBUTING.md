@@ -9,13 +9,15 @@ Everything is in English: code, comments, identifiers, scripts, docs, UI text an
 
 Never push directly to `main`: everything goes through a pull request. Branch from a fresh `main`.
 
+Branch names are optional conventions, not rules: nothing checks them. When you can, use:
+
 | Branch | For |
 |---|---|
 | `feature/AR126-<n>-<slug>` | A feature |
 | `fix/AR126-<n>-<slug>` | A bug fix |
 | `spike/AR126-<n>-<slug>` | Throwaway research, never merged. Rename it to `feature/` to keep the work |
 
-The Jira key is optional but links the branch to its ticket. Slugs are lowercase with dashes. CI checks the name.
+The Jira key links the branch to its ticket. Slugs are lowercase with dashes.
 
 ## 2. Pull requests
 
@@ -30,7 +32,7 @@ gh pr create --base main --fill            # or the GitHub UI; fill in the templ
    small, one thing per PR. To catch up with `main`, rebase: `git pull --rebase origin main`.
 2. **A teammate reviews it on their own Mac**: `gh pr checkout <number>`, build and run. The simulator is enough,
    unless the PR touches hands, world sensing, immersion or comfort: then it runs on a Vision Pro.
-3. **CI must be green** (PR title, Branch name, Lint, Build and test). GitHub does not block a merge with a red
+3. **CI must be green** (PR title, Lint, Build and test). GitHub does not block a merge with a red
    check on this repository, so the reviewer checks it.
 4. **The reviewer approves and merges** with "Squash and merge", the only merge method enabled. The PR title becomes
    the commit on `main` and the branch is deleted automatically.
@@ -67,14 +69,3 @@ file under them joins the target automatically, without touching `project.pbxpro
   are not.
 - Sources go in `Assets/`; exports the app loads (`.usdz`, audio) go in `Sources/Macrowavers/Resources/`.
 - Keep single files under 25 MB and textures at 2K unless a close-up needs 4K.
-
-## 7. Releases
-
-At the end of a sprint: bump the version in a small PR (Xcode -> Macrowavers target -> General: Version, Build +1),
-then tag `main`:
-
-```bash
-git switch main && git pull && git tag -a v0.2.0 -m "Sprint 2" && git push origin v0.2.0
-```
-
-The Release workflow turns the tag into a GitHub Release with notes generated from the merged PRs.

@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag like v0.2.0 (done at the end of each sprint, see CONTRIBUTING.md) publishes a GitHub Release
+# Pushing a tag like v0.2.0 publishes a GitHub Release
 # whose notes GitHub generates from the PRs merged since the previous tag (their titles are the squash commits).
 on:
   push:

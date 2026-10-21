@@ -36,28 +36,6 @@ jobs:
             exit 1
           fi
 
-  branch-name:
-    name: Branch name
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Head branch follows the naming rules
-        env:
-          HEAD: ${{ github.head_ref }}
-          BASE: ${{ github.base_ref }}
-        run: |
-          # The Jira key is recommended (it links the branch to the ticket) but not required.
-          ok='^(feature|fix|spike)/(AR126-[0-9]+-)?[a-z0-9-]+$'
-          if ! [[ "$HEAD" =~ $ok ]]; then
-            echo "::error::Branch '$HEAD' must be feature/AR126-<n>-<slug>, fix/AR126-<n>-<slug> or spike/AR126-<n>-<slug> (lowercase, dashes)"
-            exit 1
-          fi
-          if [[ "$HEAD" == spike/* ]]; then
-            echo "::error::Spikes are throwaway. To keep the work, rename the branch: git branch -m feature/${HEAD#spike/}"
-            exit 1
-          fi
-          echo "ok: $HEAD -> $BASE"
-
   lint:
     name: Lint
     runs-on: ubuntu-latest
