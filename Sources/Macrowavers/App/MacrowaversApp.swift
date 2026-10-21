@@ -4,7 +4,7 @@ import SwiftUI
 /// - launch window (plain, the story's Start button): opens the island, then closes so it never overlaps the
 ///   3D content;
 /// - immersive space (.mixed) with the island, its fruit and the dragon. Its controls are panels inside the
-///   space (island panel on the left, dragon panel on the right), placed outside the play area.
+///   space (the island panel on the left), placed outside the play area.
 /// Closing the space (Restart Game or Digital Crown) brings the launch window back.
 @main
 struct MacrowaversApp: App {

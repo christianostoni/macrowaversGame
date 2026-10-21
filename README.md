@@ -27,9 +27,8 @@ The game plays in mixed reality, in the player's room:
 6. **Farewell.** Free, the dragon thanks you, offers to take you to safety and flies away into the sky.
 
 No window covers the game: the launch window steps aside when the immersive space opens. Inside the space,
-panels are attached to the scene: the island panel (left) rotates the island and restarts the game, the dragon
-panel (right, opened by tapping the dragon) shows its state and debug controls, a small panel under the picked
-fruit says what to do, and a label under the ingredients' orbit says how to brew the elixir.
+panels are attached to the scene: the island panel (left) rotates the island and restarts the game, a small panel
+under the picked fruit says what to do, and a label under the ingredients' orbit says how to brew the elixir.
 
 Full documentation, one README per feature:
 

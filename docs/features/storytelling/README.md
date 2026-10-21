@@ -24,7 +24,7 @@ and the narrator's cut-off line ends with an ellipsis. All the text lives in `St
 
 - **State machine** (`Model/Story/`, no SwiftUI or RealityKit): `StoryStep` holds the pages (title, lines,
   anchor, how to move on) and what each step does to the room; `StoryViewModel` moves through them:
-  `begin()` (Start), `advance()` (tap or answer), `dragonFreed()`, `dragonRecaptured()` (Restart Scene puts the
+  `begin()` (Start), `advance()` (tap or answer), `dragonFreed()`, `dragonRecaptured()` (`restartScene()` puts the
   dragon back on the island: its words come again next time), `reset()` (the space closed).
 - **The immersive view connects it to the dragon**: `UntangleViewModel.isSolved` → `dragonFreed()`; the story
   reaching `farewell` → `UntangleViewModel.beginFarewell()`. The app creates the dragon's view model with
@@ -70,7 +70,7 @@ Tests/MacrowaversTests/StoryTests.swift
 
 `StoryTests.swift`:
 - `StoryTests`: the five screens in order (and nothing moving the story before Start or during the game),
-  Restart Scene and closing the space going back, which pages dim the room and where they sit, the island
+  `restartScene()` and closing the space going back, which pages dim the room and where they sit, the island
   hidden until after the chapter's title, no placeholder text left;
 - `FarewellCueTests`: the free dragon waiting for the answer (and taking off on its own without the story).
 

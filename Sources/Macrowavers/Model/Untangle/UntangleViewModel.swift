@@ -16,8 +16,6 @@ final class UntangleViewModel {
     // MARK: - State for the views
 
     var immersiveSpaceState = ImmersiveSpaceState.closed
-    /// The dragon panel is shown in the immersive space (it opens when the dragon is tapped).
-    var isDragonPanelVisible = false
     /// Current chapter of the story.
     private(set) var phase = DragonPhase.captive
     private(set) var crossingCount = 0
@@ -138,8 +136,7 @@ final class UntangleViewModel {
     // MARK: - Dragon actions
 
     /// The player taps the dragon circling the tree: it gets angry (glares, growls, snorts smoke) for
-    /// `alertDuration` seconds, then calms down and keeps circling. Only the artifact (or the debug button in
-    /// the dragon panel) brings it down (`callDragon`).
+    /// `alertDuration` seconds, then calms down and keeps circling. Only the elixir brings it down (`callDragon`).
     func tapDragon() {
         guard phase == .captive else { return }
         phase = .alerted
@@ -192,7 +189,6 @@ final class UntangleViewModel {
     /// Restarts the whole game: dragon scene, island and play area back as at launch.
     func resetGame() {
         restartScene()
-        isDragonPanelVisible = false
         islandPlacement = .standard
         placement = .seated
     }
@@ -250,16 +246,8 @@ final class UntangleViewModel {
 
     // MARK: - Play area actions
 
-    func rotatePlayArea(yaw: Float) {
-        placement.yaw = yaw
-    }
-
     func setTilt(_ tilt: Float) {
         placement.tilt = min(max(tilt, PlayAreaPlacement.tiltRange.lowerBound), PlayAreaPlacement.tiltRange.upperBound)
-    }
-
-    func resetPlacement() {
-        placement = .seated
     }
 
     // MARK: - Game loop

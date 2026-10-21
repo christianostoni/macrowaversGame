@@ -75,4 +75,53 @@ struct IslandPlacementTests {
             #expect(columns.allSatisfy { abs(simd_length(SIMD3($0.x, $0.y, $0.z)) - scale) < 1e-5 })
         }
     }
+
+    /// Where the point of the island facing `viewer` goes after a turn.
+    private func facingSide(after turn: Float, of placement: IslandPlacement, viewer: SIMD3<Float>) -> SIMD3<Float> {
+        var offset = viewer - placement.position
+        offset.y = 0
+        return simd_quatf(angle: turn, axis: SIMD3(0, 1, 0)).act(simd_normalize(offset))
+    }
+
+    @Test func theSideFacingThePlayerFollowsTheHand() {
+        let placement = IslandPlacement.standard
+        let viewer = SIMD3<Float>(0, 1.15, 0)   // seated player at the origin
+        let right = SIMD3<Float>(0.1, 0, 0)
+        let turn = placement.spinAngle(handMovement: right, viewer: viewer)
+
+        #expect(turn > 0)
+        // The front of the island moves right, with the hand.
+        #expect(facingSide(after: turn, of: placement, viewer: viewer).x > 0)
+        #expect(abs(placement.spinAngle(handMovement: -right, viewer: viewer) + turn) < 1e-6)
+        #expect(abs(turn - 0.1 / IslandPlacement.spinDistance) < 1e-5)
+    }
+
+    @Test func handMovementTowardsTheIslandOrUpDoesNotTurnIt() {
+        let placement = IslandPlacement.standard
+        let viewer = SIMD3<Float>(0, 1.15, 0)   // seated player at the origin
+        #expect(abs(placement.spinAngle(handMovement: SIMD3(0, 0, -0.2), viewer: viewer)) < 1e-6)
+        #expect(abs(placement.spinAngle(handMovement: SIMD3(0, 0.2, 0), viewer: viewer)) < 1e-6)
+    }
+
+    @Test func fromAnySideOfTheIslandTheFacingSideFollowsTheHand() {
+        let placement = IslandPlacement.standard
+        // The player walks around the island: to its left, behind it, to its right.
+        for viewer in [SIMD3<Float>(-2.5, 1.2, -2.8), SIMD3(0, 1.2, -5.5), SIMD3(2.5, 1.2, -2.8)] {
+            var towardsIsland = placement.position - viewer
+            towardsIsland.y = 0
+            // The player's right: forward × up.
+            let playersRight = simd_normalize(simd_cross(towardsIsland, SIMD3(0, 1, 0)))
+            let turn = placement.spinAngle(handMovement: 0.1 * playersRight, viewer: viewer)
+
+            #expect(turn > 0)
+            #expect(simd_dot(facingSide(after: turn, of: placement, viewer: viewer), playersRight) > 0)
+        }
+    }
+
+    @Test func aPlayerAboveTheTrunkStillGetsAFiniteTurn() {
+        var viewer = IslandPlacement.standard.position
+        viewer.y += 1
+        let turn = IslandPlacement.standard.spinAngle(handMovement: SIMD3(0.1, 0, 0), viewer: viewer)
+        #expect(turn.isFinite)
+    }
 }

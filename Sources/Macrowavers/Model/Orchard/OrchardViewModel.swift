@@ -71,9 +71,6 @@ final class OrchardViewModel {
     /// A hand holds the thumb on the middle finger, ready to snap: the elixir's label says "Now snap!".
     /// Set by the `OrchardSystem`.
     var isSnapLoaded = false
-    /// What the snap detector reads (closest thumb–middle contact, last attempt), for the dragon panel's debug.
-    /// Set by the `OrchardSystem`, rounded so it changes only now and then.
-    var snapDebug = "–"
 
     // MARK: - Model
 
