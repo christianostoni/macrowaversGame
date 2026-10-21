@@ -19,7 +19,7 @@ struct Fruit: Identifiable, Equatable {
 enum OrbState: Equatable {
     /// Still inside its fruit.
     case sealed
-    /// The fruit is open: the orb rises out of it, then joins the orbit in front of the player by itself.
+    /// The fruit is open: the orb rises out of it, then joins the orbit at the player's side by itself.
     case revealed
     /// Orbiting the player, at this slot of the orbit.
     case orbiting(slot: Int)
@@ -36,7 +36,7 @@ enum OrbState: Equatable {
 }
 
 /// View model of the tree's fruit: the player picks a fruit, it comes close (zoom-in), they open it and free its
-/// glowing orb, an ingredient, which rises and joins an orbit in front of the player. Three ingredients and a snap of
+/// glowing orb, an ingredient, which rises and joins an orbit at the player's side. Three ingredients and a snap of
 /// the fingers brew the elixir, which flies to the dragon. Does not know RealityKit or SwiftUI. The immersive view
 /// connects it to the dragon (`UntangleViewModel`).
 ///

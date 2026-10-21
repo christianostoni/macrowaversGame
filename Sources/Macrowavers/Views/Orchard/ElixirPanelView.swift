@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Small label under the ingredients' orbit, in front of the player (a RealityView attachment): how many
+/// Small label under the ingredients' orbit, at the player's side (a RealityView attachment): how many
 /// ingredients orbit, and how to brew the elixir.
 struct ElixirPanelView: View {
     static let attachmentID = "ElixirPanel"

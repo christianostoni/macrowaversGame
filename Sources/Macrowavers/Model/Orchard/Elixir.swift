@@ -9,7 +9,7 @@ enum ElixirState: Equatable {
     case ready
     /// The cork pops, the ingredients dive into the flask one by one, the cork goes back on.
     case fusing
-    /// The elixir glows in its flask in front of the player for a moment.
+    /// The elixir glows in its flask beside the player for a moment.
     case brewed
     /// The flask flies to the dragon's head.
     case flying
@@ -28,7 +28,7 @@ struct Elixir: Equatable {
     static let ingredientCount = 3
     /// Seconds from the snap to the elixir brewed (`Timeline`).
     static let fusingDuration: Float = Timeline.swirlEnd
-    /// Seconds the elixir floats in front of the player before it flies (they see what they made).
+    /// Seconds the elixir floats beside the player before it flies (they see what they made).
     static let brewedHold: Float = 1.2
     /// Seconds the brewed flask swells and settles back (a soft "pop").
     static let popDuration: Float = 0.45
@@ -39,7 +39,7 @@ struct Elixir: Equatable {
     /// Seconds the flask pours the elixir over the dragon's head, then fades.
     static let pourDuration: Float = 1.6
 
-    /// Colours of the ingredients, in the order they join the orbit (placeholders until the design team's assets):
+    /// Colours of the ingredients' gems, in the order they join the orbit:
     /// pomegranate red, saffron gold, pistachio green. RGB in 0...1.
     static let ingredientColors: [SIMD3<Float>] = [SIMD3(0.9, 0.18, 0.3), SIMD3(1, 0.72, 0.15), SIMD3(0.35, 0.85, 0.4)]
     /// The brewed elixir's blue.
@@ -95,7 +95,7 @@ struct Elixir: Equatable {
     }
 
     /// Advances the animations. The elixir leaves for the dragon only when `canFly` (the dragon is still on the
-    /// island): otherwise it keeps floating in front of the player.
+    /// island): otherwise it keeps floating beside the player.
     mutating func update(deltaTime: Float, canFly: Bool) {
         stateTime += deltaTime
         sinceCollected += deltaTime

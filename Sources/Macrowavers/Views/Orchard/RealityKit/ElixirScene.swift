@@ -12,7 +12,7 @@ final class ElixirRig {
     static let elixirName = "Elixir"
     static let hintAnchorName = "ElixirHintAnchor"
     static let flaskAssetName = "ElixirFlask"
-    /// Size of the flask in front of the player: the asset is real size (~21 cm wide); smaller, it fits in the
+    /// Size of the flask in the orbit: the asset is real size (~21 cm wide); smaller, it fits in the
     /// orbit (28 cm deep) without touching the ingredients going round it.
     static let flaskScale: Float = 0.7
     /// How far the flask leans over the dragon's head to pour (radians): the neck points down.
@@ -354,8 +354,7 @@ final class ElixirRig {
 // MARK: - System
 
 extension OrchardSystem {
-    /// The orbit follows the player (lazily) and turns; faster while the elixir brews; above the fruit while
-    /// one is in front of the player.
+    /// The orbit follows the player (lazily) and turns; faster while the elixir brews.
     @MainActor
     static func updateOrbit(_ orchard: inout OrchardComponent, deltaTime: Float) {
         let viewModel = orchard.viewModel
@@ -364,8 +363,7 @@ extension OrchardSystem {
             ? 1 + orchard.orbit.settings.fusionSpin * Elixir.smootherstep(elixir.fusionProgress)
             : 1
         let viewer = orchard.viewer.viewerPose()
-        orchard.orbit.follow(eyes: viewer.position, forward: viewer.forward, deltaTime: deltaTime, spin: spin,
-                             makesRoom: viewModel.focusedFruitID != nil)
+        orchard.orbit.follow(eyes: viewer.position, forward: viewer.forward, deltaTime: deltaTime, spin: spin)
         orchard.elixir.hintAnchor.position = orchard.orbit.hintPoint
     }
 

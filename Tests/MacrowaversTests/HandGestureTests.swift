@@ -317,26 +317,31 @@ struct ElixirOrbitTests {
         return points
     }
 
-    @Test func centreIsInFrontBelowTheEyesAndTheFarSideIsUp() {
+    @Test func centreIsToTheRightBelowTheEyesAndTheFarSideIsUp() {
         let orbit = placedOrbit()
         let settings = orbit.settings
-        #expect(simd_distance(orbit.center, SIMD3(0, 1.6 - settings.drop, -settings.distance)) < 1e-5)
-        // Slot 0 at phase 0: the far side, higher than the centre (the plane faces the eyes).
+        let expected = SIMD3(settings.distance * sin(settings.bearing), 1.6 - settings.drop,
+                             -settings.distance * cos(settings.bearing))
+        #expect(simd_distance(orbit.center, expected) < 1e-5)
+        #expect(orbit.center.x > 0)
+        // Slot 0 at phase 0: the far side, farther from the eyes and higher than the centre (the plane faces them).
         let far = orbit.point(slot: 0, count: 1)
-        #expect(abs(far.x) < 1e-5)
-        #expect(far.z < orbit.center.z && far.y > orbit.center.y)
+        #expect(simd_distance(SIMD2(far.x, far.z), SIMD2(eyes.x, eyes.z))
+                > simd_distance(SIMD2(orbit.center.x, orbit.center.z), SIMD2(eyes.x, eyes.z)))
+        #expect(far.y > orbit.center.y)
     }
 
-    @Test func thePlayerSeesAllOfItClearOfTheirBody() {
+    @Test func thePlayerSeesAllOfItToTheSideClearOfTheFruitAndTheirBody() {
         for point in wholeOrbit(placedOrbit()) {
             let offset = point - eyes
             let ahead = -offset.z
             // In front, never closer than 0.45 m: beyond the chest and the hands snapping in front of it.
-            #expect(ahead >= 0.45)
-            // Inside the comfortable field of view: within 25° to the sides, between 5° and 35° below the eyes.
-            let side = atan2(abs(offset.x), ahead) * 180 / .pi
+            #expect(simd_length(SIMD2(offset.x, offset.z)) >= 0.45 && ahead > 0)
+            // To the right, inside the field of view, never in the middle: the fruit the player picks comes within
+            // ~17° of their line of sight. Between 5° and 35° below the eyes.
+            let side = atan2(offset.x, ahead) * 180 / .pi
             let below = atan2(-offset.y, simd_length(SIMD2(offset.x, offset.z))) * 180 / .pi
-            #expect(side <= 25)
+            #expect(side >= 17 && side <= 45)
             #expect(below >= 5 && below <= 35)
         }
     }
@@ -348,10 +353,11 @@ struct ElixirOrbitTests {
             orbit.follow(eyes: eyes, forward: SIMD3(0, 0, -1), deltaTime: 1.0 / 60)
         }
         #expect(simd_distance(orbit.point(slot: 0), start) < 0.01)
-        // A quarter turn later the first slot is on the right.
+        // A quarter turn later the first slot is on the orbit's right side, as the player sees it.
         var quarter = placedOrbit()
         quarter.follow(eyes: eyes, forward: SIMD3(0, 0, -1), deltaTime: quarter.settings.period / 4)
-        #expect(abs(quarter.point(slot: 0).x - quarter.settings.lateralRadius) < 1e-3)
+        let side = simd_dot(quarter.point(slot: 0) - quarter.center, quarter.across)
+        #expect(abs(side - quarter.settings.lateralRadius) < 1e-3)
     }
 
     @Test func followsTheBodyLazily() {
@@ -366,21 +372,26 @@ struct ElixirOrbitTests {
         #expect(orbit.yaw > 0 && orbit.yaw < 0.1)
         for _ in 0..<300 { orbit.follow(eyes: eyes, forward: turned, deltaTime: 1.0 / 60) }
         #expect(abs(orbit.yaw - .pi / 2) < orbit.settings.turnSettled + 0.01)
-        #expect(orbit.center.x < -orbit.settings.distance + 0.05)
+        // Facing −X: the orbit is ahead of the player and to their right (towards −Z).
+        #expect(orbit.center.x < -orbit.settings.distance * cos(orbit.settings.bearing) + 0.05)
+        #expect(orbit.center.z < -0.2)
         // Walking: it follows the eyes without jumping.
         orbit.follow(eyes: SIMD3(1, 1.6, 0), forward: turned, deltaTime: 1.0 / 60)
         #expect(orbit.eyes.x > 0 && orbit.eyes.x < 0.1)
     }
 
-    @Test func risesAboveACloseFruitAndComesBack() {
+    @Test func lookingAtTheOrbitDoesNotPushItAway() {
         var orbit = placedOrbit()
-        let resting = orbit.center.y
-        for _ in 0..<120 { orbit.follow(eyes: eyes, forward: SIMD3(0, 0, -1), deltaTime: 1.0 / 60, makesRoom: true) }
-        #expect(abs(orbit.center.y - resting - orbit.settings.roomLift) < 0.01)
-        // The label stays down (it hides while a fruit is close anyway).
-        #expect(orbit.hintPoint.y < resting)
-        for _ in 0..<120 { orbit.follow(eyes: eyes, forward: SIMD3(0, 0, -1), deltaTime: 1.0 / 60) }
-        #expect(abs(orbit.center.y - resting) < 0.01)
+        // The head turns right to the flask, then to the orbit's outer edge (~42°), and stays there.
+        for angle: Float in [-orbit.settings.bearing, -45 * .pi / 180] {
+            let look = simd_quatf(angle: angle, axis: SIMD3(0, 1, 0)).act(SIMD3<Float>(0, 0, -1))
+            for _ in 0..<300 { orbit.follow(eyes: eyes, forward: look, deltaTime: 1.0 / 60) }
+            #expect(abs(orbit.yaw) < 1e-5)
+        }
+        // Turning the body well past it (90° right) brings it round to the player's right again.
+        let turned = simd_quatf(angle: -.pi / 2, axis: SIMD3(0, 1, 0)).act(SIMD3<Float>(0, 0, -1))
+        for _ in 0..<300 { orbit.follow(eyes: eyes, forward: turned, deltaTime: 1.0 / 60) }
+        #expect(abs(orbit.yaw + .pi / 2) < orbit.settings.turnSettled + 0.01)
     }
 
     @Test func anIngredientDivesFromItsPlaceIntoTheNeck() {
