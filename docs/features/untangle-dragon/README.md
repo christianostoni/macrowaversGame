@@ -5,7 +5,7 @@ room, and a dragon is coiled around the tree. The player taps the dragon, which 
 the air in front of them, tangled in a knot. The player grabs the body with their hands and untangles it.
 Once free, the dragon thanks the player and flies away into the sky.
 
-Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary Sketchfab dragon (see
+Status: on `main`, playable with a temporary Sketchfab dragon (see
 [Temporary asset](#temporary-asset)); the code-generated placeholder is used when the asset is not in the bundle.
 
 ## How to try it
@@ -22,8 +22,9 @@ Branch: `feature/AR126-100-untangle-dragon`. Status: playable with a temporary S
    with its state and debug info. It won't come near you until it is soothed.
 5. Pick fruit on the tree and open them: each frees an **ingredient** that joins a small orbit in front of you (see
    [The tree's fruit](../apple-artifact/README.md)). With three in orbit, snap your fingers (or tap one): they
-   fuse into the **elixir**, which flies to the dragon; it flies to you, stops to look at you and settles
-   tangled in front of you. (**Call It Now** in the dragon panel skips the elixir, for testing.)
+   dive one by one into the flask in the orbit's middle and brew the **elixir**; the flask flies to the dragon and
+   pours the elixir over its head (`callDragon()`): it flies to you, stops to look at you and settles tangled in
+   front of you. (**Call It Now** in the dragon panel skips the elixir, for testing.)
 6. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
@@ -33,13 +34,13 @@ uses a seated eye height of 1.15 m.
 
 | Moment | Behaviour |
 |---|---|
-| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or window buttons) and the dragon turns with it |
-| Tap the dragon | For ~3 s it gets angry: circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling. The dragon panel opens with "The dragon is getting angry!" and debug info (phase, mood, action, crossings, restlessness, strain) |
-| The elixir reaches it (or **Call It Now** in the panel) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
+| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or the island panel's buttons) and the dragon turns with it |
+| Tap the dragon | For ~3 s it gets angry (`DragonPhase.alerted`): circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling. The dragon panel opens with "The dragon is getting angry!", the **Call It Now** debug button and debug info (phase, mood, action, crossings, restlessness, strain, hands, fruit, elixir, snap) |
+| The flask pours the elixir over it (or **Call It Now** in the panel) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
 | Grab | The part you look at glows; pinch to grab, one part per hand: left and right hand hold and drag two parts independently (the debug info shows which hand holds which node, e.g. "L 20 · R 63"); a part can pass from one hand to the other without being dropped. The body follows the hand smoothly (no shaking with a shaky hand, no flicker when pulled taut); the dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard |
-| No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils, red eyes. Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Turns gold and **speaks**: the room darkens, the island fades back and its words float above it ("Thank you…", then "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Scene** puts it back on the island |
+| No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils (the placeholder's eyes turn red). Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
+| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, spreads its wings (the placeholder also turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Scene** puts it back on the island |
 | Play area | Invisible: the knot floats at knee/table height in front of the player. Rotate it with the panel buttons, tilt it with the slider, reset it. Default is tuned for a seated player |
 
 Everything is in English: user-facing text, code comments and tooling.
@@ -49,28 +50,29 @@ Everything is in English: user-facing text, code comments and tooling.
 ```
 Sources/Macrowavers/
 ├── App/MacrowaversApp.swift          Scenes: launch window, ImmersiveSpace (.mixed)
-├── Views/IslandControlsView.swift    Island panel (attachment): status, rotation, Restart Game
+├── Views/IslandControlsView.swift    Island panel (attachment): status, rotation, dragon panel toggle, Restart Game
 ├── Views/ContentView.swift           Launch window: the story's Start button
 ├── Model/Story/, Views/Story/        Storytelling screens (see ../storytelling/README.md)
+├── Model/SceneFocus.swift            Focus mode: what fades back (none / fruit / dragon)
 ├── Model/Untangle/                   Pure game logic: Foundation + simd only, unit-tested
 │   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet) and crossing count
 │   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight, loop)
 │   ├── DragonBehavior.swift            Difficulty: idle timer → fit (choreography of DragonAction), DragonMood
 │   ├── DragonFlight.swift              Flights (orbit, approach, landing, farewell) with a "follow the leader" body
 │   ├── DragonFlightSettings.swift      Manoeuvres and flight tuning (default and `.farewell`)
-│   ├── DragonPhase.swift               Story chapters (captive → approaching → landing → untangling → free → gone)
+│   ├── DragonPhase.swift               Story chapters (captive ⇄ alerted → approaching → landing → untangling → free → gone)
 │   ├── HandGrabs.swift                 Which hand holds which node, from the manipulation events
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
 │   └── UntangleViewModel.swift         @Observable @MainActor view model shared by panel and immersive space
 └── Views/Untangle/
-    ├── DragonPanelView.swift           Dragon panel: state, debug info, Call the Dragon, puzzle controls, Restart Scene
-    ├── DragonImmersiveView.swift       RealityView, island, grab events, tap on the dragon
+    ├── DragonPanelView.swift           Dragon panel: state, debug info, Call It Now (debug), puzzle controls, Restart Scene
+    ├── DragonImmersiveView.swift       RealityView, island, side panels, island spin, grab events, tap on the dragon
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers
         ├── DragonJourney.swift           Story ECS: OrbitComponent, DetanglingStateComponent, DragonTapTargetComponent
         ├── IslandScene.swift             Floating island (asset), tree anchor, floor occluder, FloatingComponent/System,
-        │                                 FocusDimmingComponent/System (applies `SceneFocus`)
+        │                                 TurntableComponent/System, FocusDimmingComponent/System (applies `SceneFocus`)
         ├── DragonRig.swift               DragonRig protocol, DragonFrame, DragonPose, DragonLifeAnimator
         ├── DragonEffects.swift           Smoke, fire, optional spatial audio, placeholder wings
         ├── ViewerTracker.swift           Player head position and gaze (ARKit world tracking, no permission needed)
@@ -79,7 +81,7 @@ Sources/Macrowavers/
 Sources/Macrowavers/Resources/DragonBody.usdz, DragonHead.usdz   Temporary dragon asset (Git LFS)
 Sources/Macrowavers/Resources/FloatingIsland.usdz                 Floating island with the tree (Git LFS)
 Assets/Blender/untangle-dragon/       Blender scripts that generate the assets (not in the app)
-Tests/MacrowaversTests/UntangleTests.swift
+Tests/MacrowaversTests/UntangleTests.swift, SceneFocusTests.swift
 ```
 
 MVVM: the Model does not import SwiftUI or RealityKit; the view model does not import RealityKit;
@@ -95,7 +97,8 @@ SwiftUI views and the RealityKit layer only read state and forward user actions.
 4. moves the other colliders to the simulated (or flying) positions;
 5. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the red spheres.
 
-Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, subscribed in `DragonImmersiveView`.
+Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/WillEnd`, subscribed in
+`DragonImmersiveView`.
 
 ## Design decisions (and why)
 
@@ -113,7 +116,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
   - the dragon panel appears when the dragon is tapped and can be closed or reopened from the island panel;
   - panels hide themselves in SwiftUI; their attachment entities are **never disabled** (`isEnabled = false`):
     deactivating an entity that hosts SwiftUI while its content changes makes RealityKit abort with "the new
-    parent is currently being removed" (it crashed the app when the fruit's orb reached the dragon);
+    parent is currently being removed" (it crashed the app when the elixir reached the dragon);
   - closing the space in any way (Restart Game or Digital Crown) resets the game and reopens the launch window,
     so there is never more than one window and never a window over the game.
 - **The captive dragon flies in the tree's space (`AnchoredOrbit`).** `OrbitComponent` passes the tree anchor's
@@ -140,7 +143,8 @@ Grab start/end comes from `ManipulationEvents.WillBegin/WillRelease/WillEnd`, su
 - **Landing traces the knot.** After the approach a Bézier takes the head to the knot's tail tip, then the head
   runs along the knot from tail to head; with "follow the leader" the body ends exactly in the puzzle's shape
   (max error ~1 cm, blended into the simulation in 0.5 s). The dragon tangles itself up believably with no
-  hand-made animation, and the simulation restarts at the tap, so no fit timer runs before the puzzle.
+  hand-made animation, and the simulation restarts when the dragon is called (`callDragon()`), so no fit timer
+  runs before the puzzle.
 
 - **The body is a custom rope simulation, not RealityKit physics.** 64 nodes ~3.7 cm apart (2.35 m), 4 cm
   radius; distance, bending, self-collision and friction constraints at a fixed 60 Hz with sub-steps. We need
@@ -268,10 +272,11 @@ into the same asset contract the code has always used, so no Swift code changed 
 `SkeletalDragonRig` is used automatically when `DragonBody` is in the app bundle (put exports under
 `Sources/Macrowavers/Resources/`); otherwise the placeholder is used.
 
-**`DragonBody`** (required; USDZ or Reality Composer Pro scene)
+**`DragonBody`** (required; USDZ loaded from the app bundle)
 - One skinned mesh: neck + body + tail.
 - Bone chain `spine_00` (neck, near the head) … `spine_NN` (tail tip), each child of the previous one,
-  names sortable alphabetically (two digits). 24–48 bones, straight rest pose, equal bone lengths.
+  names sortable alphabetically (two digits). 24–64 bones (the temporary asset has 64), straight rest pose,
+  equal bone lengths.
 - **No animation on the spine bones**: code drives them every frame.
 - Any scale: code scales the asset so the spine matches the simulated body (~2.35 m). Body thickness about
   1/40 of its length (3 cm radius at game size, `SkeletalDragonRig.Asset.modelledRadius`): the rig thickens it
@@ -283,7 +288,7 @@ into the same asset contract the code has always used, so no Swift code changed 
 
 **`DragonHead`** (recommended)
 - Separate head so its animations never fight the spine. Origin at the neck joint, snout towards **+Z**.
-- Named animations (Reality Composer Pro Animation Library or named USD clips).
+- Named animations (an `AnimationLibraryComponent` on the root or named USD clips).
   Looping, per mood: `idle`, `annoyed`, `restless`, `wriggle`, `happy`.
   One-shot, per move: `roar` (~1.6 s, mouth wide open between 35% and 75%), `turn`, `lash`, `coil`.
   Missing clips fall back to `idle`.
@@ -314,10 +319,12 @@ They are generated without opening Blender by the scripts in `Assets/Blender/unt
     -P Assets/Blender/untangle-dragon/make_dragon_asset.py -- <scene.gltf> <output folder>
 ```
 
-The script removes the legs and closes the holes with curved patches (the hole border is unrolled on the
+`make_dragon_asset.py` runs the step scripts `1_prepare_and_remove_legs.py`, `2_detach_head_and_clean.py`,
+`3_rename_spine.py` and `4_material.py` in order (each can also be run by hand from Blender's Scripting tab)
+plus the steps in between. The script removes the legs and closes the holes with curved patches (the hole border is unrolled on the
 body cylinder, triangulated in 2D and wrapped back, so no flat patches), detaches the head, slims the body,
 builds a 64-bone spine with smooth weights (skin that bends instead of kinking), adds `nostrils`/`mouth`,
-fixes the material and exports (USDZ validated with `usdchecker`).
+fixes the material and exports `DragonBody.usdz` and `DragonHead.usdz` (validated with `usdchecker`).
 
 Notes: use the glTF download (Sketchfab's USDZ loses the texture and the bone names); the model's "emissive"
 texture is not its colour (the body uses a solid red); Blender's export with *Convert Orientation* puts a
@@ -352,10 +359,12 @@ one hand pulling taut not locking the other, hand tracking (one node per hand, h
 re-grab, cancelled grab), left and right hands dragging two parts independently through the view model,
 the fit starting with a turn after the delay, the dragon waiting while held, a shaky hand not shaking the body,
 a taut pull not flickering, flight keeping its distance from the player, the orbit never crossing itself, the
-landing matching the knot, the farewell ending, the free dragon staying in front of the player and hovering
-where they look (two gaze directions), the story flow (tap → puzzle), tilt clamping, restart and play again.
+captive dragon turning rigidly with the island, the landing matching the knot, the farewell ending, the free
+dragon staying in front of the player and hovering where they look (two gaze directions), the story flow
+(captive, a tap only makes it angry for `alertDuration`, `callDragon()` → puzzle), tilt clamping, restart and
+play again.
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
-elixir flies, when exploring) and the island's transform (at least the original size, grass at 0.6 m
+elixir flies, when exploring, only landing and untangling focusing on the dragon) and the island's transform (at least the original size, grass at 0.6 m
 whatever the scale, positive uniform scale), and the speaking dragon keeping only itself visible.
 `StoryTests.swift` covers the free dragon waiting for the player's answer (and taking off on its own without the
 story).

@@ -1,91 +1,86 @@
 # Macrowavers
 
-A native visionOS game for Apple Vision Pro inspired by a Persian fairy tale, built in 40 days by a team of five
-for the Arte-1 challenge.
+A native visionOS game for Apple Vision Pro inspired by a Persian fairy tale, built by a team of six for the
+Arte-1 challenge.
 
-Stack: Swift 6, SwiftUI, RealityKit, Reality Composer Pro 3. Target: visionOS 26.5 (deployment target, matching the team's test devices).
+Stack: Swift 6 (strict concurrency), SwiftUI, RealityKit, Metal. Deployment target: visionOS 26.5, matching the
+team's devices. Tracker: Jira project AR126.
 
-## Features
+## The story
 
-### Untangle the Dragon
+The game plays in mixed reality, in the player's room:
 
-Branch `feature/AR126-100-untangle-dragon` · Jira AR126-100 · full docs in
-[docs/features/untangle-dragon/README.md](docs/features/untangle-dragon/README.md)
+1. **Start.** A lone Start button floats in the room. The room dims and the narrator speaks: "What are you
+   searching for?", then "Chapter I". Tap the text to go on.
+2. **The island.** A floating island fades in, with a dragon bound to the tree at its centre, circling it. Tap the
+   dragon and it gets angry for a moment.
+3. **The fruit.** Apples, a pomegranate, a banana and a pineapple hang on the tree. Pick one and it comes close:
+   pull the apple's stem to open its spiral cut and catch the worms guarding it, pull the pomegranate apart with
+   two hands, peel the banana strip by strip, chop the pineapple. Every fruit frees a glowing ingredient that
+   joins a small orbit in front of you.
+4. **The elixir.** With three ingredients in orbit, snap your fingers: they dive one by one into the flask in the
+   middle of the orbit. The flask flies to the dragon and pours the elixir over its head.
+5. **Untangle the dragon.** Soothed, the dragon comes to you and settles with its long body tied in a knot. Pinch
+   and drag any part of it, even two at once (one per hand), and lift it over or under the rest until no crossing
+   is left. Stop making progress and the dragon warns you, then has a fit: it rears up, roars fire, lashes its
+   tail and adds new crossings.
+6. **Farewell.** Free, the dragon thanks you, offers to take you to safety and flies away into the sky.
 
-A mixed-reality chapter of the tale. A floating island appears in the room with a dragon bound to the tree at its
-centre. The player spins the island, finds the artifact hidden in an apple to soothe the dragon, and it settles in front
-of them with its long body tied in a knot. The player has to set it free:
+No window covers the game: the launch window steps aside when the immersive space opens. Inside the space,
+panels are attached to the scene: the island panel (left) rotates the island and restarts the game, the dragon
+panel (right, opened by tapping the dragon) shows its state and debug controls, a small panel under the picked
+fruit says what to do, and a label under the ingredients' orbit says how to brew the elixir.
 
-- **Untangle it with your hands.** Pinch and drag any part of the body, even two parts at once (one per hand), and
-  lift them to pass them over or under the rest. The part you look at glows; red pulsing spheres mark every
-  crossing and the panel counts how many are left.
-- **The dragon fights back.** If you stop making progress it warns you (it stares at you, growls, smoke rises
-  from its nostrils), then it has a fit: it turns around, rears up and roars with a burst of fire, lashes its tail
-  and coils. Every fit adds at least one new crossing, and fits come sooner each time.
-- **Set it free.** At zero crossings the dragon turns gold, celebrates, circles you, roars its thanks and flies
-  away into the sky.
-- **No window over the game.** The launch window opens the island and steps aside; inside the space an island
-  panel (left) spins the island and restarts the game, and a dragon panel (right, opened by tapping the dragon)
-  shows its state and debug info.
+Full documentation, one README per feature:
 
-### The Tree's Fruit
-
-Full docs in [docs/features/apple-artifact/README.md](docs/features/apple-artifact/README.md). Apples and a
-pomegranate hang on the island's tree. Pick one and it comes close: pull the apple's stem to open its spiral cut
-(a Metal shader), catch the worms that crawl and burrow between the slices, and the artifact rises out. Tapped,
-it flies to the dragon and soothes it. The pomegranate bursts into seeds you can play with.
-
-Open it from the launch window with **Open the Island**. It uses a placeholder dragon built in code until the
-design team's asset (`DragonBody` / `DragonHead`) is added; the asset specification is in the feature docs.
+| Feature | Docs |
+|---|---|
+| The floating island and the dragon: orbit, flight, untangling puzzle, farewell | [docs/features/untangle-dragon](docs/features/untangle-dragon/README.md) |
+| The tree's fruit, the ingredients' orbit, the flask and the elixir | [docs/features/apple-artifact](docs/features/apple-artifact/README.md) |
+| The story screens: Start, the narrator, the dragon's words | [docs/features/storytelling](docs/features/storytelling/README.md) |
 
 ## Requirements
 
-- macOS 26 or later, Xcode 27 with a visionOS 26.5 (or later) simulator runtime
-- Xcode's Metal Toolchain: `xcodebuild -downloadComponent MetalToolchain` (for the apple's shader)
-- Reality Composer Pro 3 (separate beta download from Apple)
-- Homebrew (for `brew bundle`: GitHub CLI, Git LFS, SwiftLint)
-- Vision Pro in Developer Mode, paired in Xcode's Device Hub, for anything with hands, room sensing or comfort
+- macOS 26 or later, Xcode 26.6 or later with the visionOS 26.5 (or later) simulator runtime
+- Xcode's Metal Toolchain, for the apple's shader: `xcodebuild -downloadComponent MetalToolchain`
+- Git LFS and SwiftLint: `brew install git-lfs swiftlint` (the GitHub CLI, `gh`, is optional)
+- A Vision Pro in Developer Mode, paired in Xcode, for anything with hands or comfort. The simulator has no hand
+  tracking: there a tap chops the pineapple and a panel button brews the elixir instead of the finger snap
 
 ## Quick start
 
 ```bash
-git clone <repo-url> game && cd game
-brew bundle                                   # gh, git-lfs, swiftlint
-git lfs install && git lfs pull               # binary assets
+git clone https://github.com/christianostoni/macrowaversGame.git && cd macrowaversGame
+git lfs install && git lfs pull               # binary assets (.usdz, .usdc)
 git config core.hooksPath .githooks           # commit message, LFS and SwiftLint checks
 git config pull.rebase true && git config fetch.prune true && git config push.autoSetupRemote true
 cp Configs/Local.xcconfig.example Configs/Local.xcconfig   # then set DEVELOPMENT_TEAM for device builds
 open Macrowavers.xcodeproj
 ```
 
-Then: Cmd-U runs the unit tests on the simulator and `swiftlint lint --strict` runs SwiftLint like CI does.
-New files under `Sources/` and `Tests/` join the targets automatically (synced folders, see `docs/decisions/0004`).
+Then run the `Macrowavers` scheme. Cmd-U runs the unit tests on the simulator and `swiftlint lint --strict` runs
+SwiftLint like CI does. New files under `Sources/` and `Tests/` join the targets automatically (synced folders).
 
 ## How we work
 
-Feature branches merged into `main` through reviewed PRs, one tagged release per sprint.
-**Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first branch.** In short:
+Feature branches merged into `main` through pull requests. **Read [CONTRIBUTING.md](CONTRIBUTING.md) before your
+first branch.** In short:
 
-```
-main      ──●──────●──────●──────●──●──   always builds; tag v0.1.0, v0.2.0 ... v1.0.0 at each sprint end
-             \    /        \    /
-feature/      ●──●          ●──●           feature/AR126-12-orbit-gesture or fix/..., squash-merged
-```
-
-- Branch from `main`: `git switch main && git pull && git switch -c feature/AR126-12-orbit-gesture`
-- Open a PR into `main`. CI must be green and one teammate approves. Squash merge.
-- Sprint end: bump the version in a small PR, then tag `main` (`v0.2.0`).
-- Tracker: Jira project AR126. GitHub Issues are off on purpose.
+- Branch from `main`: `git switch main && git pull && git switch -c feature/AR126-12-slug`.
+- Open a PR into `main`. A teammate pulls the branch, runs it on their Mac or on a Vision Pro, checks that CI is
+  green, approves and squash-merges it.
+- CI ([docs/ci.md](docs/ci.md)) checks the PR title, the branch name, SwiftLint and builds and tests the app on the
+  visionOS simulator.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `Macrowavers.xcodeproj` | Committed Xcode project; `Sources/Macrowavers` and `Tests/` are synced folders |
-| `Sources/Macrowavers/` | App code: `App/`, `Model/` (testable game rules), `Views/`, `Resources/` (`.reality` exports, asset catalogs) |
-| `Tests/` | Unit tests (Swift Testing) |
-| `RealityComposerPro/` | RCP 3 projects, one owner per scene at a time, stored in Git LFS |
-| `Assets/` | Blender, texture and audio sources, stored in Git LFS |
-| `Configs/` | `Local.xcconfig.example`: copy holds your signing team, gitignored |
-| `.github/` | CI, release automation, PR template, CODEOWNERS, `rulesets/` (branch protection definitions) |
-| `docs/` | `ci.md` (runner setup), `decisions/` (why we work this way), `features/` (one README per feature) |
+| `Macrowavers.xcodeproj` | Committed Xcode project; `Sources/Macrowavers` and `Tests/MacrowaversTests` are synced folders |
+| `Sources/Macrowavers/` | App code: `App/`, `Model/` (game rules, no SwiftUI or RealityKit), `Views/` (SwiftUI and RealityKit), `Resources/` (`.usdz` assets) |
+| `Tests/MacrowaversTests/` | Unit tests of the game rules (Swift Testing) |
+| `Assets/` | Asset sources and the headless Blender scripts that export them, stored in Git LFS |
+| `Configs/` | `Base.xcconfig` and `Local.xcconfig.example`: your copy holds your signing team, gitignored |
+| `.github/` | CI and release workflows, PR template |
+| `.githooks/` | `commit-msg` and `pre-commit` checks |
+| `docs/` | `ci.md` (the CI jobs), `features/` (one README per feature) |

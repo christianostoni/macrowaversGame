@@ -68,10 +68,11 @@ Tests/MacrowaversTests/StoryTests.swift
 
 ## Tests
 
-`StoryTests.swift`: the five screens in order (and nothing moving the story before Start or during the game),
-Restart Scene and closing the space going back, which pages dim the room and where they sit, the island hidden
-until after the chapter's title, no placeholder text left, the free dragon waiting for the answer (and taking
-off on its own without the story).
+`StoryTests.swift`:
+- `StoryTests`: the five screens in order (and nothing moving the story before Start or during the game),
+  Restart Scene and closing the space going back, which pages dim the room and where they sit, the island
+  hidden until after the chapter's title, no placeholder text left;
+- `FarewellCueTests`: the free dragon waiting for the answer (and taking off on its own without the story).
 
 ## Known limits
 

@@ -1,6 +1,6 @@
 # How we work
 
-Five people, one Vision Pro each. `main` is the merge of the finished features: it always builds and always runs.
+Six people. `main` is the merge of the finished features: it always builds and always runs.
 Ask in the team chat if anything here is unclear, then fix this document in a PR.
 
 Everything is in English: code, comments, identifiers, scripts, docs, UI text and commits (team decision, 2026-10-14).
