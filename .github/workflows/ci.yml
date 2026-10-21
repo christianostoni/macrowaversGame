@@ -32,7 +32,7 @@ jobs:
           if [[ "$TITLE" =~ $pattern ]]; then
             echo "ok: $TITLE"
           else
-            echo "::error::PR title must look like 'type(scope): summary', e.g. 'feat(orbit): snap moons to a stable orbit'"
+            echo "::error::PR title must look like 'type(scope): summary', e.g. 'feat(orchard): peel the banana strip by strip'"
             exit 1
           fi
 
@@ -69,10 +69,8 @@ jobs:
 
   build-test:
     name: Build and test
-    # GitHub's hosted macOS image ships Xcode 26.x (checked 2026-09-29), which cannot build a visionOS 27
-    # project. The team's self-hosted runner has Xcode 27. Switch with the repository variable
-    # CI_MACOS_RUNNER=self-hosted (see docs/ci.md). Unset it to return to hosted runners later.
-    runs-on: ${{ vars.CI_MACOS_RUNNER || 'macos-26' }}
+    # GitHub's hosted image ships Xcode 26.6 with visionOS simulators up to 26.5, the deployment target.
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
@@ -91,7 +89,7 @@ jobs:
       - name: Pull LFS objects
         run: git lfs pull
 
-      - name: Select Xcode 27
+      - name: Select Xcode
         run: |
           xc="$(ls -d /Applications/Xcode_27*.app /Applications/Xcode.app 2>/dev/null | sort -V | tail -n 1)"
           [ -n "$xc" ] || { echo "::error::No Xcode found on this runner"; exit 1; }

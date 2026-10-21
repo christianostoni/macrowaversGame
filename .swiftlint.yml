@@ -2,16 +2,10 @@
 included:
   - Sources
   - Tests
-excluded:
-  - DerivedData
-  - .build
-  - RealityComposerPro
-  - Assets
 
 disabled_rules:
   - todo                     # TODOs are fine; Jira holds the real backlog
-  - trailing_comma
-  - opening_brace            # Xcode's formatter disagrees with this one
+  - trailing_comma           # Trailing commas in multi-line literals keep diffs small
 
 opt_in_rules:
   - empty_count
@@ -29,26 +23,19 @@ opt_in_rules:
 line_length:
   warning: 140
   error: 200
-  ignores_comments: true
-  ignores_urls: true
 
 identifier_name:
   min_length: 2
-  excluded: [x, y, z, w, i, j, k, dt, id, up]   # 3D math and RealityKit vocabulary
+  excluded: [x, y, z, w, i, j, k]   # 3D math and loop indices
 
 type_body_length:
   warning: 300
   error: 500
 
 file_length:
-  warning: 500
+  warning: 600
   error: 800
 
 function_body_length:
   warning: 60
   error: 100
-
-nesting:
-  type_level: 2
-
-reporter: xcode

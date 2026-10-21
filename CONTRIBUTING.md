@@ -60,9 +60,9 @@ under 72 characters. The `commit-msg` hook checks this locally and CI checks PR 
 | `refactor` | Code change with no behaviour change |
 | `test`, `docs`, `style`, `build`, `ci`, `chore` | The usual |
 
-Scopes are free-form but keep them consistent: `orbit`, `input`, `scene`, `audio`, `ui`, `rcp`, `assets`.
-Examples: `feat(orbit): snap released moons to a stable orbit`, `fix(input): ignore pinches while paused`,
-`perf(scene): share planet materials`, `chore(rcp): re-export solar_system.reality`.
+Scopes are free-form but keep them consistent: `untangle`, `dragon`, `orchard`, `story`, `sky`, `ui`, `assets`.
+Examples: `feat(orchard): peel the banana strip by strip`, `fix(dragon): breathe fire out of the mouth`,
+`perf(untangle): share the body segment material`, `chore(assets): re-export FloatingIsland.usdz`.
 
 Commit messages describe the change; the PR describes the why and how to test.
 
@@ -83,11 +83,10 @@ sprint day:
 
 1. Freeze `main` for the afternoon: only `fix/` PRs merge until the demo build is tagged.
 2. Open a small PR `chore(release): 0.2.0` from `feature/AR126-<n>-release-0-2-0` that bumps the version
-   (Xcode -> Macrowavers target -> General: Version 0.2.0, Build +1) and moves the `Unreleased` notes in
-   `CHANGELOG.md` under `## [0.2.0] - <date>`. Merge it.
+   (Xcode -> Macrowavers target -> General: Version 0.2.0, Build +1). Merge it.
 3. Build `main` on every headset. The sprint review demo runs from this build.
 4. Tag `main`: `git switch main && git pull && git tag -a v0.2.0 -m "Sprint 2" && git push origin v0.2.0`.
-   The Release workflow turns the tag into a GitHub Release with the changelog notes.
+   The Release workflow turns the tag into a GitHub Release with notes generated from the merged PRs.
 5. Hand the captain role to the next person.
 
 **Fix after the tag**: something in the demo build is broken. Branch `fix/AR126-<n>-<slug>` from `main`, fix, PR,
@@ -105,19 +104,14 @@ so files never have to be added to the project by hand and feature branches do n
 - Signing team: in `Configs/Local.xcconfig` (copied from the example, gitignored). Never in the project file.
 - Per-user state (`xcuserdata/`, `*.xcuserstate`) is gitignored and refused by the `pre-commit` hook.
 
-## 6. Assets, Git LFS and Reality Composer Pro
+## 6. Assets and Git LFS
 
 Every binary format in `.gitattributes` is stored in Git LFS. The `pre-commit` hook blocks files over 5 MB that
 are not. Clone size stays small and history stays fast.
 
 - Keep single files under 25 MB. Textures at 2K by default. Ask before adding a 4K texture or a long audio file.
-- Sources go in `Assets/` (Blender, PSD, WAV). Exports the app loads go in `Sources/Macrowavers/Resources/`.
-- **RCP 3 projects cannot be merged.** The bundle holds an opaque store. The rule is one owner per scene at a
-  time: write "editing SolarSystem scene" on the Jira ticket or in chat before you open it, commit and push in
-  your own PR when done, then release it. If two people need the same scene, split it into two scenes.
-- RCP 3 remembers the Xcode project by absolute path. Re-link on your own Mac; never commit link files.
-- Default hand-off from RCP to Xcode is exporting `.reality` files into `Resources/`. If the team prefers the
-  "linked project" route, RCP writes into the committed `.xcodeproj`: review that diff like any other.
+- Sources go in `Assets/` (Blender sources and the headless scripts that export them, textures, audio). Exports
+  the app loads (`.usdz`) go in `Sources/Macrowavers/Resources/`.
 - Designers commit too. The Quick start in README.md sets everything up, and the PR template applies to art PRs
   as well.
 
@@ -130,7 +124,6 @@ A PR can be merged when:
 - Ran on a headset if it touches hands, world sensing, immersive spaces, or anything that could cause discomfort.
 - No new warnings. Frame time still 90 fps on device for anything in the render loop (RealityKit Trace).
 - Game rules under `Model/` have unit tests. Views and RealityKit code are tested by running them.
-- `CHANGELOG.md` has a line under `Unreleased` for anything a player or the team would notice.
 
 ## 8. Everyday commands
 

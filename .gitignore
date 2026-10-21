@@ -31,12 +31,6 @@ Configs/Local.xcconfig
 *.cer
 *.certSigningRequest
 
-# --- Reality Composer Pro 3 ---
-# RCP 3 stores the Xcode link as an absolute path; keep machine-specific link files out.
-# Adjust once the first RCP project is committed and we can see what it writes.
-**/*.realitycomposerpro/.link
-**/*.realitycomposerpro/Cache/
-
 # --- Blender ---
 *.blend1
 *.blend2

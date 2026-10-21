@@ -9,6 +9,7 @@ brew the **elixir**. The flask flies to the dragon and pours the elixir over its
 
 Origins:
 - The apple and pomegranate come from Isadora's AppleSpiral prototype: a spiral-cut apple deformed by a Metal shader, with worms.
+  The prototype's own Xcode project was removed once ported; it is still in the git history.
 - The banana and pineapple come from the fruit lab prototype (`fruit_test_2`).
 
 Status: playable with placeholder ingredients (RealityKit spheres in three colours) and the design team's flask

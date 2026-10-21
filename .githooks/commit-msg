@@ -9,7 +9,7 @@ if ! [[ "$subject" =~ $pattern ]]; then
   cat >&2 <<MSG
 ✗ Commit subject does not follow Conventional Commits:
     $subject
-  Expected:  type(scope): summary           e.g.  feat(orbit): snap moons to a stable orbit
+  Expected:  type(scope): summary           e.g.  feat(orchard): peel the banana strip by strip
   Types:     feat fix chore docs refactor perf test build ci style revert
   Keep the summary under 72 characters. Details: CONTRIBUTING.md
 MSG
