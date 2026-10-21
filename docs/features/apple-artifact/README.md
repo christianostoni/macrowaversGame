@@ -246,15 +246,16 @@ elixir's flight (`OrchardComponent.flight`).
   that always faces the player; glints sparkling around it; and the trail while it flies and orbits. Its colour is
   warm white while it is still in its fruit, then its slot's (`Elixir.ingredientColors`: pomegranate red, saffron
   gold, pistachio green) once it joins the orbit:
-  - **the gem look** comes from the design team's material, which has no texture: mostly see-through (the source
-    is 20 % opaque) and double-sided, so the facets at the back show through the ones at the front, each lit
-    differently. `gemMaterial` keeps that, tinted: ~30 % opaque, no face culling, roughness 0.15. RealityKit has
-    no refraction, so the source's IOR (1.7) has no effect;
+  - **the gem look** comes from its flat facets, each lit differently as it spins. The design team's material has
+    no texture; it is 20 % opaque and double-sided, but see-through the tinted gem looked washed out in the room
+    and could sort wrongly against the flask's glass, so `gemMaterial` is opaque (roughness 0.15). RealityKit has
+    no refraction, so the source's IOR (1.7) would have no effect anyway;
   - **shine:** full specular and a clear coat draw the room's highlights on the facets;
-  - **glow:** the gem glows only faintly in its colour (0.35: a strong emission would light every facet the same
+  - **glow:** the gem glows only a little in its colour (0.5: a strong emission would light every facet the same
     and flatten it into a coloured blob), and a 12 cm billboard quad behind it carries a radial
     gradient (white at the centre, fading out; made once in code, `makeGlowTexture`) tinted in the same colour.
-    A sort group draws the glow first, then the gem, so the two transparent layers never swap;
+    The glow writes no depth: its corners are invisible, but writing depth there they hid the flask's glass
+    behind them (a see-through square crossing the flask). A sort group draws the glow first, then the gem;
   - **glints:** a particle emitter around the gem (7 per second, 4 mm, quick fade in and out, additive), in its
     colour.
   Without the asset a sphere stands in for the gem, with the same glow.
@@ -368,7 +369,7 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   pulling, the opening follows the hand.
 - **The orbit ignores the room.** 0.5–0.75 m in front of the eyes it can sink into a table the player sits at.
 - **The flight ignores the canopy.** The elixir's arc rises above the straight line but may still cross the tree.
-- **Transparent glass in mixed reality.** Glass, liquid, the gems and their glows are all transparent: the fixed
+- **Transparent glass in mixed reality.** Glass, liquid and the gems' glows are all transparent: the fixed
   order keeps liquid and glass right, but an ingredient diving through the neck may sort oddly for a frame.
 - **Eyeballed values.** The flask's glow light (1800 at full), the glass and liquid opacity, bubble rates and the
   stream need checking on device.

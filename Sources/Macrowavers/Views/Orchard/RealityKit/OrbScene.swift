@@ -243,10 +243,10 @@ extension OrchardSceneBuilder {
                                                                       axis: SIMD3(0, 1, 0))
     }
 
-    /// The design team's crystal material, tinted: what makes it read as a gem is that it is mostly see-through and
-    /// double-sided (the facets at the back show through the ones at the front) and lit facet by facet. So it stays
-    /// ~30 % opaque with no face culling, and glows only faintly: a strong emission would light every facet the same
-    /// and flatten it. Shine: full specular and a clear coat for the highlights. The glow is the billboard behind.
+    /// The design team's crystal, tinted and opaque: a see-through gem looked washed out in the room, and its
+    /// transparent faces could sort wrongly against the flask's glass. What keeps it a gem is its flat facets, each
+    /// lit differently as it spins (no emission strong enough to light them all the same). Shine: full specular and
+    /// a clear coat for the highlights. The glow is the billboard behind.
     private static func gemMaterial(color: UIColor) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
         material.baseColor = .init(tint: color)
@@ -256,13 +256,13 @@ extension OrchardSceneBuilder {
         material.clearcoat = .init(floatLiteral: 1)
         material.clearcoatRoughness = .init(floatLiteral: 0.03)
         material.emissiveColor = .init(color: color)
-        material.emissiveIntensity = 0.35
-        material.faceCulling = .none
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.3))
+        material.emissiveIntensity = 0.5
         return material
     }
 
-    /// A soft round light behind the gem, brightest at its centre. Without the texture, a faint disc.
+    /// A soft round light behind the gem, brightest at its centre. Without the texture, a faint disc. It writes no
+    /// depth: its quad is invisible at the corners, but writing depth there it hid the flask's glass behind it (a
+    /// see-through square crossing the flask).
     @MainActor
     private static func glowMaterial(color: UIColor) -> UnlitMaterial {
         var material = UnlitMaterial(color: color)
@@ -272,6 +272,7 @@ extension OrchardSceneBuilder {
         } else {
             material.blending = .transparent(opacity: .init(floatLiteral: 0.2))
         }
+        material.writesDepth = false
         return material
     }
 
