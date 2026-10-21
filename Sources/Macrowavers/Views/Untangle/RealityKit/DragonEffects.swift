@@ -12,7 +12,7 @@ import AppKit
 /// `DragonWhoosh` (m4a/wav/mp3/caf) they play as spatial audio from the head.
 @MainActor
 final class DragonEffects {
-    private static let soundNames = ["DragonGrowl", "DragonRoar", "DragonRumble", "DragonWhoosh"]
+    nonisolated static let soundNames = ["DragonGrowl", "DragonRoar", "DragonRumble", "DragonWhoosh"]
 
     private let smoke = Entity()
     private let fire = Entity()
@@ -105,10 +105,7 @@ final class DragonEffects {
     /// A sound missing from the bundle stays silent.
     private func loadSounds() async {
         for name in Self.soundNames {
-            let file = ["m4a", "wav", "mp3", "caf"].map { name + "." + $0 }
-                .first { Bundle.main.url(forResource: $0, withExtension: nil) != nil }
-            guard let file, let sound = try? await AudioFileResource(named: file) else { continue }
-            sounds[name] = sound
+            if let sound = await GameAudio.load(name) { sounds[name] = sound }
         }
     }
 

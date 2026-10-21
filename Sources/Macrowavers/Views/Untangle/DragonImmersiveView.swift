@@ -34,9 +34,12 @@ struct DragonImmersiveView: View {
     @State private var hands = HandTracker()
     /// The island, the dragon and their panels: built at once, added to the scene when the story reveals them.
     @State private var world = HiddenWorld()
+    /// The story's music, in the player's ears.
+    @State private var music = GameMusic()
 
     var body: some View {
         RealityView { content, attachments in
+            content.add(music.entity)
             // The island first: the dragon is born already circling its tree, the fruit hangs from it.
             let island = await IslandSceneBuilder.makeIsland(placement: viewModel.islandPlacement)
             let playArea = await DragonSceneBuilder.makePlayArea(viewModel: viewModel, viewer: viewer,
@@ -140,6 +143,12 @@ struct DragonImmersiveView: View {
             // The player answered "I'm Ready": the dragon takes off.
             if step == .farewell { viewModel.beginFarewell() }
         }
+        // The music follows the story and steps back while the dragon roars.
+        .onChange(of: MusicTrack.playing(story: story.step, dragon: viewModel.phase), initial: true) { _, track in
+            music.play(track)
+        }
+        .onChange(of: viewModel.action == .rearUp) { _, roars in music.duck(roars) }
+        .task { await music.load() }
         .task { await viewer.start() }
         .task {
             orchard.isHandTrackingAvailable = await hands.start()
