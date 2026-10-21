@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v0.2.0 (done at the end of each sprint, see CONTRIBUTING.md) publishes a GitHub Release
-# whose notes are that version's section of CHANGELOG.md.
+# Pushing a tag like v0.2.0 publishes a GitHub Release
+# whose notes GitHub generates from the PRs merged since the previous tag (their titles are the squash commits).
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
@@ -14,14 +14,7 @@ jobs:
     name: GitHub release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - name: Notes from CHANGELOG.md
-        run: |
-          v="${GITHUB_REF_NAME#v}"
-          awk -v v="$v" '/^## \[/ { p = ($0 ~ "\\[" v "\\]") } p' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "See CHANGELOG.md" > notes.md
-          cat notes.md
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

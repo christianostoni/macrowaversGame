@@ -1,47 +1,20 @@
 # CI
 
-`.github/workflows/ci.yml` runs on every PR into `main` and on every push to `main`:
+`.github/workflows/ci.yml` runs on every PR into `main` and on every push to `main`, on GitHub's Linux runners:
 
-| Job | Runner | What |
-|---|---|---|
-| PR title | ubuntu | Conventional Commits format |
-| Branch name | ubuntu | `feature/`, `fix/` or `spike/` naming; spikes cannot merge |
-| Lint | ubuntu (SwiftLint container) | `swiftlint lint --strict` |
-| Build and test | macOS | `xcodebuild test` on the visionOS simulator (the `.xcodeproj` is committed) |
+| Job | What |
+|---|---|
+| PR title | Conventional Commits format (the title becomes the squash commit on `main`) |
+| Lint | `swiftlint lint --strict` in the SwiftLint container |
 
-`.github/workflows/release.yml` turns a `vX.Y.Z` tag into a GitHub Release with that version's CHANGELOG section.
+CI does not build the app or run the tests: macOS runners cost ten times the free minutes of a private repository.
+The author and the reviewer build the PR and run the unit tests (Cmd-U) on their own Mac (see CONTRIBUTING.md).
 
-## The macOS runner problem (as of 2026-09-29)
+`.github/workflows/release.yml` turns a `vX.Y.Z` tag into a GitHub Release with notes generated from the PRs merged
+since the previous tag.
 
-GitHub's hosted `macos-26` image ships Xcode 26.6 and visionOS simulators up to 26.5. It cannot build a project
-targeting visionOS 27. Until the image adds Xcode 27, the build job runs on a **self-hosted runner** on one of the
-team's Macs. Check the image status at
-https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md.
+## The checks do not block merges
 
-Hosted minutes, for later: macOS minutes count 10x. GitHub Free gives 2,000 minutes per month on private repos,
-so about 200 macOS minutes, roughly 20 to 40 builds. Public repositories get unlimited minutes.
-
-## Self-hosted runner setup (about 10 minutes, one Mac)
-
-Pick a Mac that stays on and plugged in during work hours. Xcode 27, the visionOS 27 simulator runtime and Homebrew
-must be installed. `git-lfs` should be installed too (`brew install git-lfs`).
-
-1. GitHub: repository **Settings → Actions → Runners → New self-hosted runner**, choose macOS / ARM64.
-2. Run the shown commands in a terminal: download, `./config.sh --url ... --token ...` (accept the default labels
-   `self-hosted, macOS, ARM64`), then install it as a service so it survives reboots:
-   ```bash
-   ./svc.sh install && ./svc.sh start
-   ```
-3. Keep the Mac awake: System Settings → Energy → prevent sleeping when the display is off, or run
-   `caffeinate -s` in a terminal during work hours.
-4. Point CI at it with the repository variable: `gh variable set CI_MACOS_RUNNER --body self-hosted`.
-   Until a runner is registered, the **Build and test** job waits in the queue, and PRs cannot merge.
-5. Open a test PR and watch **Build and test** run on the machine.
-
-To go back to hosted runners once they have Xcode 27: `gh variable delete CI_MACOS_RUNNER`.
-
-Notes:
-- Only trusted people can open PRs on this repository, which is what makes a self-hosted runner acceptable.
-  GitHub advises against self-hosted runners on public repositories that accept PRs from forks.
-- The runner builds in its own working folder; it does not touch the developer's checkout on that Mac.
-- If the Mac is also someone's dev machine, builds slow it down for a minute or two. Fine for a team of five.
+GitHub enforces branch rules (required checks, required approvals) on a private repository only on a paid plan or
+when the repository is public. Here a red check does not block a merge: the reviewer checks that CI is green before
+merging. The repository settings allow only squash merges and delete merged branches.

@@ -1,28 +1,15 @@
 # --- Xcode project ---
-# Macrowavers.xcodeproj is committed and uses synced folders (docs/decisions/0004). Only per-user state stays out
+# Macrowavers.xcodeproj is committed and uses synced folders. Only per-user state stays out
 # (xcuserdata/ and *.xcuserstate below).
 
-# --- Xcode / Swift build output ---
+# --- Xcode build output ---
 build/
 DerivedData/
-.build/
-.swiftpm/
 *.xcuserstate
 xcuserdata/
-*.xccheckout
-*.moved-aside
-*.hmap
-*.ipa
-*.dSYM
-*.dSYM.zip
-*.xcresult
-timeline.xctimeline
-playground.xcworkspace
 
 # --- Local, per-developer settings (never shared) ---
 Configs/Local.xcconfig
-.env
-.env.*
 
 # --- Signing material (never in git) ---
 *.mobileprovision
@@ -31,23 +18,10 @@ Configs/Local.xcconfig
 *.cer
 *.certSigningRequest
 
-# --- Reality Composer Pro 3 ---
-# RCP 3 stores the Xcode link as an absolute path; keep machine-specific link files out.
-# Adjust once the first RCP project is committed and we can see what it writes.
-**/*.realitycomposerpro/.link
-**/*.realitycomposerpro/Cache/
-
-# --- Blender ---
+# --- Blender backups ---
 *.blend1
 *.blend2
 
 # --- macOS ---
 .DS_Store
 ._*
-.Spotlight-V100
-.Trashes
-
-# --- Editors ---
-.idea/
-.vscode/
-*.swp

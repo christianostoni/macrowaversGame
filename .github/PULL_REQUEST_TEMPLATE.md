@@ -1,4 +1,4 @@
-<!-- Title = squash commit on main. Format: type(scope): summary   e.g. feat(orbit): snap moons to a stable orbit -->
+<!-- Title = squash commit on main. Format: type(scope): summary   e.g. feat(orchard): peel the banana strip by strip -->
 
 ## What
 
@@ -23,4 +23,3 @@ Jira: AR126-
 - [ ] `swiftlint lint --strict` and the unit tests (Cmd-U) pass locally
 - [ ] Project changes (targets, settings, capabilities) are intended; no `xcuserdata` committed
 - [ ] New binary assets show up in `git lfs ls-files`
-- [ ] RCP scene edits: I was the scene's owner and said so in the ticket
