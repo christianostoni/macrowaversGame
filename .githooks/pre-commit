@@ -28,7 +28,7 @@ if command -v swiftlint >/dev/null 2>&1; then
     swiftlint lint --strict --quiet $swift_files || { echo "✗ SwiftLint failed. Try: swiftlint --fix" >&2; fail=1; }
   fi
 else
-  echo "! swiftlint not installed; skipping lint (run brew bundle)" >&2
+  echo "! swiftlint not installed; skipping lint (brew install swiftlint)" >&2
 fi
 
 exit $fail

@@ -1,5 +1,5 @@
 # --- Xcode project ---
-# Macrowavers.xcodeproj is committed and uses synced folders (docs/decisions/0004). Only per-user state stays out
+# Macrowavers.xcodeproj is committed and uses synced folders. Only per-user state stays out
 # (xcuserdata/ and *.xcuserstate below).
 
 # --- Xcode / Swift build output ---

@@ -8,7 +8,8 @@ Working files that are not loaded by the app directly. Binary formats here are s
 | `Textures/` | Source textures, HDRIs | `bark_albedo_2k.png`, `sky_hdri_4k.exr` |
 | `Audio/` | Source audio before conversion | `dragon_roar.wav` |
 
-How to run each script, and what it produces, is in the feature docs under `docs/features/`.
+How to run each script, and what it produces, is in the feature docs under `docs/features/`. `Textures/` and
+`Audio/` do not exist yet: create them with the first file.
 
 Guidelines: keep single files under 25 MB, textures at 2K unless a close-up needs 4K, and share materials between
 entities. Many unique materials and large textures are the most common frame-rate killers on Vision Pro.

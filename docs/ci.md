@@ -22,10 +22,8 @@ Hosted minutes: macOS minutes count 10x. GitHub Free gives 2,000 minutes per mon
 macOS minutes. Every PR runs the build once, and once more when it merges into `main`. Public repositories get
 unlimited minutes.
 
-## The checks are not enforced yet
+## The checks do not block merges
 
-`.github/rulesets/` holds the intended rules for `main` (PRs only, CI green, one approval, squash merges) and for
-release tags. GitHub applies rulesets to a private repository only on a paid plan (Pro for a personal account, Team
-for an organization) or when the repository is public. Until then a red check does not block a merge: reviewers
-check that CI is green before merging. To turn them on: repository **Settings → Rules → Rulesets → New ruleset →
-Import a ruleset**, once per JSON file.
+GitHub enforces branch rules (required checks, required approvals) on a private repository only on a paid plan or
+when the repository is public. Here a red check does not block a merge: the reviewer checks that CI is green before
+merging (see CONTRIBUTING.md). The repository settings allow only squash merges and delete merged branches.
