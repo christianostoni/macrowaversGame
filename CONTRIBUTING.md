@@ -30,9 +30,10 @@ gh pr create --base main --fill            # or the GitHub UI; fill in the templ
 
 1. **The author** opens the PR into `main` and fills in the template: what changes and how to test it. Keep it
    small, one thing per PR. To catch up with `main`, rebase: `git pull --rebase origin main`.
-2. **A teammate reviews it on their own Mac**: `gh pr checkout <number>`, build and run. The simulator is enough,
-   unless the PR touches hands, world sensing, immersion or comfort: then it runs on a Vision Pro.
-3. **CI must be green** (PR title, Lint, Build and test). GitHub does not block a merge with a red
+2. **A teammate reviews it on their own Mac**: `gh pr checkout <number>`, build, run the unit tests (Cmd-U) and
+   run the app. CI does not build or test, so this is the only build check. The simulator is enough, unless the PR
+   touches hands, world sensing, immersion or comfort: then it runs on a Vision Pro.
+3. **CI must be green** (PR title, Lint). GitHub does not block a merge with a red
    check on this repository, so the reviewer checks it.
 4. **The reviewer approves and merges** with "Squash and merge", the only merge method enabled. The PR title becomes
    the commit on `main` and the branch is deleted automatically.

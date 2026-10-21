@@ -69,8 +69,8 @@ first branch.** In short:
 - Branch from `main`: `git switch main && git pull && git switch -c feature/AR126-12-slug`.
 - Open a PR into `main`. A teammate pulls the branch, runs it on their Mac or on a Vision Pro, checks that CI is
   green, approves and squash-merges it.
-- CI ([docs/ci.md](docs/ci.md)) checks the PR title and SwiftLint, and builds and tests the app on the visionOS
-  simulator.
+- CI ([docs/ci.md](docs/ci.md)) checks the PR title and SwiftLint. It does not build: the reviewer builds the app
+  and runs the unit tests on their Mac.
 
 ## Layout
 

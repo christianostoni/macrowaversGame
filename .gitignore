@@ -7,7 +7,6 @@ build/
 DerivedData/
 *.xcuserstate
 xcuserdata/
-*.xcresult
 
 # --- Local, per-developer settings (never shared) ---
 Configs/Local.xcconfig
