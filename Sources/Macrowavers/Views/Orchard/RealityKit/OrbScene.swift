@@ -15,6 +15,7 @@ extension OrchardSystem {
         for fruit in orchard.fruits {
             let id = fruit.fruit.id
             guard let orb = orchard.orbs[id], viewModel.orbs.indices.contains(id) else { continue }
+            if orb.isEnabled { OrchardSceneBuilder.spinGem(orb, time: orchard.time, phase: Float(id) * 1.3) }
             let isFocused = id == viewModel.focusedFruitID
             switch viewModel.orbs[id] {
             case .sealed:
@@ -126,12 +127,22 @@ extension OrchardSystem {
 // MARK: - Building
 
 extension OrchardSceneBuilder {
-    static let orbCoreName = "OrbCore"
+    static let orbSpinName = "OrbSpin"
     static let orbHaloName = "OrbHalo"
+    static let orbGlintsName = "OrbGlints"
     static let orbTrailName = "OrbTrail"
+    /// The design team's gem (`Assets/Blender/ingredient-gem`): 6 cm tall, origin at its centre, long axis up.
+    static let gemAssetName = "IngredientGem"
+    /// Turns per second of the gem around its long axis: its facets catch the light one by one.
+    static let gemSpinSpeed: Float = 0.2
+    /// Width of the glow around the gem (m).
+    static let glowSize: Float = 0.12
 
     /// Warm white: an orb not found yet.
     static let sealedColor = UIColor(red: 1, green: 0.9, blue: 0.7, alpha: 1)
+
+    /// The glow drawn behind the gem, the gem over it.
+    private static let orbSortGroup = ModelSortGroup()
 
     /// Colour of each ingredient once it orbits the player (`Elixir.ingredientColors`).
     static func ingredientColor(slot: Int) -> UIColor {
@@ -142,18 +153,44 @@ extension OrchardSceneBuilder {
         UIColor(red: CGFloat(rgb.x), green: CGFloat(rgb.y), blue: CGFloat(rgb.z), alpha: alpha)
     }
 
-    /// The orb found in every fruit, an ingredient of the elixir: a glowing RealityKit sphere with a halo
-    /// (placeholder), about 5 cm wide, origin at its centre, and a trail of sparks while it orbits. Cloned for
-    /// every fruit.
+    /// The orb found in every fruit, an ingredient of the elixir: the design team's crystal gem, spinning slowly,
+    /// with a soft glow that always faces the player, glints sparkling around it and a trail of sparks while it
+    /// orbits. Origin at its centre. Cloned for every fruit. Without its asset, a sphere stands in for the gem.
     @MainActor
-    static func makeOrbTemplate() -> Entity {
+    static func makeOrbTemplate() async -> Entity {
         let orb = Entity()
-        let core = ModelEntity(mesh: .generateSphere(radius: 0.025), materials: [])
-        core.name = orbCoreName
-        orb.addChild(core)
-        let halo = ModelEntity(mesh: .generateSphere(radius: 0.038), materials: [])
+        let spin = Entity()
+        spin.name = orbSpinName
+        orb.addChild(spin)
+        if let gem = try? await Entity(named: gemAssetName, in: .main) {
+            spin.addChild(gem)
+        } else {
+            print("⚠️ \(gemAssetName).usdz not found: a sphere stands in for the ingredient gem")
+            spin.addChild(ModelEntity(mesh: .generateSphere(radius: 0.025), materials: []))
+        }
+        for model in models(in: spin) {
+            model.components.set(ModelSortGroupComponent(group: orbSortGroup, order: 1))
+        }
+
+        let halo = ModelEntity(mesh: .generatePlane(width: glowSize, height: glowSize), materials: [])
         halo.name = orbHaloName
+        halo.components.set(BillboardComponent())
+        halo.components.set(ModelSortGroupComponent(group: orbSortGroup, order: 0))
         orb.addChild(halo)
+
+        let glints = Entity()
+        glints.name = orbGlintsName
+        var sparkle = ParticleEmitterComponent()
+        sparkle.emitterShape = .sphere
+        sparkle.emitterShapeSize = SIMD3(repeating: 0.022)
+        sparkle.speed = 0.002
+        sparkle.mainEmitter.birthRate = 7
+        sparkle.mainEmitter.lifeSpan = 0.45
+        sparkle.mainEmitter.size = 0.004
+        sparkle.mainEmitter.opacityCurve = .quickFadeInOut
+        sparkle.mainEmitter.blendMode = .additive
+        glints.components.set(sparkle)
+        orb.addChild(glints)
 
         let trail = Entity()
         trail.name = orbTrailName
@@ -167,6 +204,7 @@ extension OrchardSceneBuilder {
         sparks.mainEmitter.size = 0.003
         trail.components.set(sparks)
         orb.addChild(trail)
+        glowTexture = await makeGlowTexture()
         tint(orb, color: sealedColor)
 
         // Generous: it may be tapped while it moves.
@@ -176,26 +214,89 @@ extension OrchardSceneBuilder {
         return orb
     }
 
-    /// Colours the orb's core, halo and trail.
+    /// Colours the gem, its glow, its glints and its trail.
     @MainActor
     static func tint(_ orb: Entity, color: UIColor) {
-        if let core = orb.findEntity(named: orbCoreName) as? ModelEntity {
-            var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(tint: color)
-            material.emissiveColor = .init(color: color)
-            material.emissiveIntensity = 2.5
-            material.metallic = 0.6
-            material.roughness = 0.2
-            core.model?.materials = [material]
+        if let spin = orb.findEntity(named: orbSpinName) {
+            let material = gemMaterial(color: color)
+            for model in models(in: spin) {
+                // One material per part of the mesh (the stand-in sphere starts with none).
+                let count = max(model.components[ModelComponent.self]?.materials.count ?? 1, 1)
+                model.components[ModelComponent.self]?.materials = Array(repeating: material, count: count)
+            }
         }
         if let halo = orb.findEntity(named: orbHaloName) as? ModelEntity {
-            var material = UnlitMaterial(color: color)
-            material.blending = .transparent(opacity: .init(floatLiteral: 0.25))
-            halo.model?.materials = [material]
+            halo.model?.materials = [glowMaterial(color: color)]
         }
-        if let trail = orb.findEntity(named: orbTrailName), var sparks = trail.components[ParticleEmitterComponent.self] {
-            sparks.mainEmitter.color = .constant(.single(color))
-            trail.components.set(sparks)
+        for name in [orbGlintsName, orbTrailName] {
+            if let emitter = orb.findEntity(named: name), var particles = emitter.components[ParticleEmitterComponent.self] {
+                particles.mainEmitter.color = .constant(.single(color))
+                emitter.components.set(particles)
+            }
         }
+    }
+
+    /// Turns the gem slowly around its long axis (each orb starts at its own angle).
+    @MainActor
+    static func spinGem(_ orb: Entity, time: Float, phase: Float) {
+        orb.findEntity(named: orbSpinName)?.orientation = simd_quatf(angle: 2 * .pi * gemSpinSpeed * time + phase,
+                                                                      axis: SIMD3(0, 1, 0))
+    }
+
+    /// Shine: a coloured crystal, almost no roughness, a clear coat and full specular for the highlights on its
+    /// facets, a little see-through. Glow: it shines in its own colour.
+    private static func gemMaterial(color: UIColor) -> PhysicallyBasedMaterial {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: color)
+        material.roughness = 0.06
+        material.metallic = 0.0
+        material.specular = .init(floatLiteral: 1)
+        material.clearcoat = .init(floatLiteral: 1)
+        material.clearcoatRoughness = .init(floatLiteral: 0.02)
+        material.emissiveColor = .init(color: color)
+        material.emissiveIntensity = 1.6
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.82))
+        return material
+    }
+
+    /// A soft round light behind the gem, brightest at its centre. Without the texture, a faint disc.
+    @MainActor
+    private static func glowMaterial(color: UIColor) -> UnlitMaterial {
+        var material = UnlitMaterial(color: color)
+        if let glowTexture {
+            material.color = .init(tint: color, texture: .init(glowTexture))
+            material.blending = .transparent(opacity: .init(floatLiteral: 0.9))
+        } else {
+            material.blending = .transparent(opacity: .init(floatLiteral: 0.2))
+        }
+        return material
+    }
+
+    /// Shared by every orb's glow: made once, with the first template.
+    @MainActor private static var glowTexture: TextureResource?
+
+    /// White at the centre, fading to nothing at the edge (premultiplied alpha), so the tint gives its colour.
+    @MainActor
+    private static func makeGlowTexture() async -> TextureResource? {
+        if let glowTexture { return glowTexture }
+        let size = 128
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let gradient = CGGradient(colorsSpace: space,
+                                        colors: [CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1),
+                                                 CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.35),
+                                                 CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0)] as CFArray,
+                                        locations: [0, 0.3, 1]) else { return nil }
+        let centre = CGPoint(x: size / 2, y: size / 2)
+        context.drawRadialGradient(gradient, startCenter: centre, startRadius: 0, endCenter: centre,
+                                   endRadius: CGFloat(size) / 2, options: [])
+        guard let image = context.makeImage() else { return nil }
+        return try? await TextureResource(image: image, options: .init(semantic: .color))
+    }
+
+    @MainActor
+    private static func models(in entity: Entity) -> [Entity] {
+        (entity.components.has(ModelComponent.self) ? [entity] : []) + entity.children.flatMap { models(in: $0) }
     }
 }

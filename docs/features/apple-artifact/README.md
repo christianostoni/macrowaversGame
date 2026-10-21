@@ -13,7 +13,7 @@ Origins:
 - The banana and pineapple come from the fruit lab prototype (`fruit_test_2`), a separate project that is not in
   this repo: only its exported `Banana.usdz` and `Pineapple.usdz` are.
 
-Status: playable with placeholder ingredients (RealityKit spheres in three colours) and the design team's flask
+Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in three colours) and flask
 (`ElixirFlask.usdz`).
 
 ## How to try it
@@ -90,7 +90,7 @@ P     = O + right · a sin φ + depth · b cos φ
 
 Over a whole turn every ingredient stays ≥ 0.45 m in front of the eyes, within 25° to the sides and 5–35° below
 the eyes (test `thePlayerSeesAllOfItClearOfTheirBody`). Three ingredients on a ~1.2 m perimeter are ~40 cm apart:
-the 7.6 cm halos never touch.
+the 12 cm glows never touch.
 
 **Lazy follow (comfort).** Content locked to the head moves with every glance and tires the player; content
 locked to the world is left behind when they walk. The orbit is in between:
@@ -176,7 +176,7 @@ Sources/Macrowavers/
     │                                      pomegranate, drag seeds) and the link elixir → dragon
     └── RealityKit/
         ├── OrchardScene.swift               Components, OrchardSystem, FocusSystem, builder, per-fruit drawing
-        ├── OrbScene.swift                   The ingredients: sphere template, colours, trail, where each one is every frame
+        ├── OrbScene.swift                   The ingredients: gem template (shine, glow, glints), colours, trail, where each one is every frame
         ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, stream, glow); orbit,
         │                                    snap, flight and pour in the system
         ├── HandTracker.swift                ARKit hand tracking → HandSample
@@ -240,8 +240,20 @@ elixir's flight (`OrchardComponent.flight`).
   - **Taps always work too:** a tap opens the pineapple, a tap on an orbiting ingredient brews the elixir. Without
     hand tracking (simulator, permission denied) they are the only way, and the label shows **Brew the Elixir**.
 - **The orbit is body-locked with lazy follow, not head-locked.** See [The orbit](#the-orbit).
-- **Placeholders are RealityKit spheres.** One template (core, halo, trail) cloned per fruit and tinted per slot,
-  so the real ingredients can replace it in `OrchardSceneBuilder.makeOrbTemplate()` alone.
+- **Every ingredient is the design team's gem, tinted per slot.** One template, cloned per fruit
+  (`OrchardSceneBuilder.makeOrbTemplate()`): the crystal, spinning slowly around its long axis (one turn every 5 s,
+  `gemSpinSpeed`, each orb at its own angle) so its flat facets catch the light one by one; a soft glow behind it
+  that always faces the player; glints sparkling around it; and the trail while it flies and orbits. Its colour is
+  warm white while it is still in its fruit, then its slot's (`Elixir.ingredientColors`: pomegranate red, saffron
+  gold, pistachio green) once it joins the orbit:
+  - **shine:** the gem's material (`gemMaterial`) has almost no roughness (0.06), full specular and a clear coat,
+    and is 82 % opaque: the room's light draws highlights on the facets;
+  - **glow:** the gem is emissive in its colour (1.6), and a 12 cm billboard quad behind it carries a radial
+    gradient (white at the centre, fading out; made once in code, `makeGlowTexture`) tinted in the same colour.
+    A sort group draws the glow first, then the gem, so the two transparent layers never swap;
+  - **glints:** a particle emitter around the gem (7 per second, 4 mm, quick fade in and out, additive), in its
+    colour.
+  Without the asset a sphere stands in for the gem, with the same glow.
 - **The pineapple opens with an eased animation, not physics.** The prototype launched the halves as dynamic bodies.
   There is no floor in front of the player, and the fruit must close again when it goes back to the tree.
 - **Metal with a safety net.** If Metal or the apple kernel is missing, the apple is deformed on the CPU with the
@@ -280,10 +292,23 @@ elixir's flight (`OrchardComponent.flight`).
 |---|---|
 | `Banana.usdz` | Poly Haven `bananas` (CC0), cut into four peel strips by the fruit lab's `build_fruits.py` (external, not in this repo). Prims: `peelPivot_N/peel_N`, `peelBase`, `core`; the prototype's `stand` and `item` are removed at load |
 | `Pineapple.usdz` | Procedural, from the same script. Prims: `pineapple_1`, `pineapple_2`, `crown`; `item` removed at load |
-| Ingredients (missing) | RealityKit spheres for now (`OrchardSceneBuilder.makeOrbTemplate`): 5 cm core, 7.6 cm halo, origin at the centre |
+| `IngredientGem.usdz` | The design team's gem, `Assets/Blender/ingredient-gem/ingredient_gem.usdc`, prepared headless by `make_gem_asset.py` (below). Prim: `Gem` (26 flat faces, 6 cm tall, ~3.5 cm wide, origin at its centre, long axis up). The code colours it |
 | `ElixirFlask.usdz` | The design team's flask, `Assets/Blender/elixir-flask/elixir_flask.usdc`, prepared headless by `make_flask_asset.py` (below). Prims: `Glass`, `Liquid` (origin at its bottom), `Cork` (origin at its centre), `neck_top`, `neck_base`. Without it a glowing blue orb stands in and the brew still plays |
 
 Apples and pomegranate are generated in code (the apple must stay procedural: the shader cuts it).
+
+### The gem's pipeline
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+    -P Assets/Blender/ingredient-gem/make_gem_asset.py -- Assets/Blender/ingredient-gem/ingredient_gem.usdc <output folder>
+```
+
+The source (`GEMF.usdc` from the design team, Z-up) is a faceted crystal: a stretched icosphere with 26 flat faces,
+~1.9 × 1.8 × 3.3 units, a pale 20 % opaque material, a camera, two area lights and a dome light pointing to an
+.exr that is not shipped. The script keeps only the crystal (`Gem`), drops the object's framing rotation so its
+long axis is vertical (it spins around it in the game), centres it, scales it to 6 cm tall, keeps its faces flat
+and gives it a plain placeholder material (the app colours it in code). It exports a Y-up USDZ.
 
 ### The flask's pipeline
 
@@ -338,7 +363,7 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   pulling, the opening follows the hand.
 - **The orbit ignores the room.** 0.5–0.75 m in front of the eyes it can sink into a table the player sits at.
 - **The flight ignores the canopy.** The elixir's arc rises above the straight line but may still cross the tree.
-- **Transparent glass in mixed reality.** Glass, liquid and the ingredients' halos are all transparent: the fixed
+- **Transparent glass in mixed reality.** Glass, liquid, the gems and their glows are all transparent: the fixed
   order keeps liquid and glass right, but an ingredient diving through the neck may sort oddly for a frame.
 - **Eyeballed values.** The flask's glow light (1800 at full), the glass and liquid opacity, bubble rates and the
   stream need checking on device.

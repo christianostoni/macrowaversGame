@@ -327,7 +327,7 @@ enum OrchardSceneBuilder {
         stage.name = stageName
         root.addChild(stage)
 
-        let orbTemplate = makeOrbTemplate()
+        let orbTemplate = await makeOrbTemplate()
         var fruits: [OrchardFruit] = []
         var orbs: [Int: Entity] = [:]
         for (index, fruit) in viewModel.fruits.enumerated() {
