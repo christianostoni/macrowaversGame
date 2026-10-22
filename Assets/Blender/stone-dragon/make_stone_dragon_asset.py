@@ -5,26 +5,26 @@ Usage:
         -P Assets/Blender/stone-dragon/make_stone_dragon_asset.py -- \
         Assets/Blender/stone-dragon/cartoon_dragon_rcp.usdz <output folder>
 
-The source (`CartoonDragon_RCP.usdz`, prepared in Reality Composer Pro from a Sketchfab model) is a dragon made of
-separate stones: a head
-(`Cube_Face_0`, `Cube_Horns_0`, `Cube_Teeth_0` and an empty `Jaw_Hinge`) and a chain of 19 rounded stones ending
-in a flat tail stone, ~13 m long, with an idle animation on every stone and an animated face. What the script
-does, and why:
-- Reads the rest pose (first frame) and drops the animation (the stones' transform caches and the face's mesh
-  sequence cache): the game moves every stone along the simulated body.
+The source (`CartoonDragon12_RCP.usdz`, prepared in Reality Composer Pro from a Sketchfab model) is a dragon made
+of separate stones: a head (`Cube_Face_0`, skinned to a two-bone skeleton `JawRig` (`Root`, `Jaw`), `Cube_Horns_0`,
+`Cube_Teeth_0`) and a chain of 19 stones (`Block12` meshes) ending in a flat tail stone (`Block12_Tail`), ~13 m
+long, with an idle animation on every stone and a jaw animation. What the script does, and why:
+- Reads the rest pose (first frame) and drops the animation and the skeleton (the stones' transform caches, the
+  face's armature): the game moves every stone along the simulated body and opens the jaw itself.
 - Orders the stones from the head to the tail (each is the closest to the previous one) and names them
   `Stone_00` (behind the head) ... `Stone_19` (the tail), each with its origin at its centre, its local +Z along the
   body towards the tail and its +Y up: the game turns them along the simulated curve.
 - Scales everything so the chain, from the head's centre to the tail stone's centre, is `SIM_LENGTH` long (the
   simulated body's length); the game still scales the stones' thickness to the simulated body.
 - Builds `Head`: origin at the face's centre, snout towards +Z, +Y up, with the face, the horns and the (upper)
-  teeth. The source opens the mouth in the face's animation: the pieces of the face that move in it are the lower
-  jaw. They become `Jaw`, under `JawHinge` (at the source's `Jaw_Hinge`), so the game opens the mouth by turning
-  the hinge around its +X. `mouth` and `nostrils` mark where fire and smoke come out.
-- Keeps the design team's materials exactly as they are: `AirbrushGrain` (and the unused `AirbrushGrain_Eye`) are
-  Reality Composer Pro shader graphs (unlit: a colour ramp driven by the facing angle and an animated world-space
-  grain) that Blender cannot read. Blender exports the geometry only; USD (`pxr`) then copies the material prims
-  from the source unchanged and binds `AirbrushGrain` to every mesh, as in the source.
+  teeth. The face's vertices skinned to the `Jaw` bone are the lower jaw: they become `Jaw`, under `JawHinge` (at
+  the head of that bone), so the game opens the mouth by turning the hinge around its +X. `mouth` and `nostrils`
+  mark where fire and smoke come out.
+- Keeps the design team's materials exactly as they are: `AirbrushGrain_00` (the head) ... `AirbrushGrain_19`
+  (one per stone) are Reality Composer Pro shader graphs (unlit: a colour ramp driven by the facing angle and an
+  animated world-space grain) that Blender cannot read. Blender exports the geometry only and notes which material
+  each mesh had; USD (`pxr`) then copies the material prims from the source unchanged and binds each mesh to its
+  own, as in the source (the lower jaw keeps the face's).
 - Exports a Y-up USDZ under `/Dragon` (the materials' own paths, so their connections stay valid).
 """
 import os
@@ -43,64 +43,39 @@ os.makedirs(OUTPUT, exist_ok=True)
 
 # Length of the chain in the game (m): the simulated body (TangleConfig: 63 segments, 2.35 m).
 SIM_LENGTH = 2.35
-# The source's materials (Reality Composer Pro shader graphs) and the one every mesh uses.
+# Where the source keeps its materials (Reality Composer Pro shader graphs).
 MATERIALS = "/Dragon/Materials"
-STONE_MATERIAL = MATERIALS + "/AirbrushGrain"
+# The face's bone that opens the mouth.
+JAW_BONE = "Jaw"
 UP = Vector((0, 0, 1))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.wm.usd_import(filepath=SOURCE, import_materials=False, import_cameras=False, import_lights=False)
+# Materials imported only for their names: Blender cannot read the shader graphs, USD copies them at the end.
+bpy.ops.wm.usd_import(filepath=SOURCE, import_materials=True, import_cameras=False, import_lights=False)
 scene = bpy.context.scene
 scene.frame_set(scene.frame_start)
 bpy.context.view_layer.update()
 
-# --- The lower jaw: the face's pieces its animation moves -----------------------------------------------------
-def face_points(item, frame):
-    scene.frame_set(frame)
-    evaluated = item.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    return [vertex.co.copy() for vertex in evaluated.data.vertices]
-
-
+# --- The lower jaw: the face's vertices skinned to the jaw bone, and the point that bone turns around -------------
 source_face = next((item for item in scene.objects if item.type == "MESH" and "Face" in item.name), None)
 if source_face is None:
     raise SystemExit(f"{SOURCE}: no face mesh: is it the right file?")
-rest_face = face_points(source_face, scene.frame_start)
-travel = [0.0] * len(rest_face)
-for frame in range(scene.frame_start, scene.frame_end + 1, 5):
-    travel = [max(old, (point - rest).length)
-              for old, point, rest in zip(travel, face_points(source_face, frame), rest_face)]
-scene.frame_set(scene.frame_start)
-bpy.context.view_layer.update()
-# The face is made of loose pieces: a piece belongs to the jaw when any of its vertices travels far.
-mesh = bmesh.new()
-mesh.from_mesh(source_face.data)
-mesh.verts.ensure_lookup_table()
-jaw_vertices = set()
-seen = set()
-for start in mesh.verts:
-    if start.index in seen:
-        continue
-    piece, stack = [], [start]
-    while stack:
-        vertex = stack.pop()
-        if vertex.index in seen:
-            continue
-        seen.add(vertex.index)
-        piece.append(vertex.index)
-        stack += [edge.other_vert(vertex) for edge in vertex.link_edges]
-    if max(travel[index] for index in piece) > 0.25 * max(travel):
-        jaw_vertices.update(piece)
-mesh.free()
+jaw_group = source_face.vertex_groups.get(JAW_BONE)
+rig = next((item for item in scene.objects if item.type == "ARMATURE" and JAW_BONE in item.data.bones), None)
+if jaw_group is None or rig is None:
+    raise SystemExit(f"{SOURCE}: the face is not skinned to a '{JAW_BONE}' bone: is it the right file?")
+jaw_vertices = {vertex.index for vertex in source_face.data.vertices
+                for weight in vertex.groups if weight.group == jaw_group.index and weight.weight > 0.5}
 if not jaw_vertices:
-    raise SystemExit(f"{SOURCE}: the face's animation moves nothing: no jaw to split")
-print(f"Jaw: {len(jaw_vertices)} of {len(rest_face)} face vertices")
+    raise SystemExit(f"{SOURCE}: no face vertex follows the '{JAW_BONE}' bone: no jaw to split")
+jaw_hinge = rig.matrix_world @ rig.data.bones[JAW_BONE].head_local
+print(f"Jaw: {len(jaw_vertices)} of {len(source_face.data.vertices)} face vertices skinned to '{JAW_BONE}'")
 
 # --- Rest pose baked into the vertices (world space), no parents, no animation ---------------------------------
 meshes = [item for item in scene.objects if item.type == "MESH"]
-hinge_source = scene.objects.get("Jaw_Hinge")
-if hinge_source is None:
-    raise SystemExit(f"{SOURCE}: no Jaw_Hinge: is it the right file?")
-hinge = hinge_source.matrix_world.translation.copy()
+# Each mesh's material, by name (the source's material prims have the same names).
+materials = {item: item.data.materials[0].name for item in meshes if item.data.materials and item.data.materials[0]}
+hinge = jaw_hinge.copy()
 for item in meshes:
     matrix = item.matrix_world.copy()
     item.data = item.data.copy()
@@ -147,6 +122,8 @@ for item, drop in ((face, lambda index: index in jaw_vertices), (jaw_part, lambd
     mesh.to_mesh(item.data)
     mesh.free()
 meshes.append(jaw_part)
+if face in materials:
+    materials[jaw_part] = materials[face]
 head_centre = centre(face)
 
 # --- Stones in order, from the head to the tail ----------------------------------------------------------------
@@ -241,6 +218,8 @@ for item in chain + [face, horns, teeth, jaw_part]:
     print(f"{item.name}: {len(item.data.polygons)} faces, size {tuple(round(value, 4) for value in size)} m")
 
 # --- Export: the geometry from Blender, the materials from the source ----------------------------------------
+# Mesh name (as exported) -> its material.
+bindings = {item.data.name: materials[item] for item in meshes if item in materials}
 for item in meshes:
     item.data.materials.clear()
 for item in scene.objects:
@@ -253,23 +232,27 @@ bpy.ops.wm.usd_export(filepath=geometry, selected_objects_only=True, export_anim
                       export_global_up_selection="Y", root_prim_path="/Dragon")
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUTPUT, "stone_dragon.blend"))
 
-source_layer = Usd.Stage.Open(SOURCE).GetRootLayer()
-if not source_layer.GetPrimAtPath(STONE_MATERIAL):
-    raise SystemExit(f"{SOURCE}: no {STONE_MATERIAL}: is it the right file?")
+# The stage is kept: a layer handle from a stage already released is expired.
+source_stage = Usd.Stage.Open(SOURCE)
+source_layer = source_stage.GetRootLayer()
+if not source_layer.GetPrimAtPath(MATERIALS):
+    raise SystemExit(f"{SOURCE}: no {MATERIALS}: is it the right file?")
 stage = Usd.Stage.Open(geometry)
 stage.DefinePrim(MATERIALS, "Scope")
 for material in source_layer.GetPrimAtPath(MATERIALS).nameChildren:
     if not Sdf.CopySpec(source_layer, material.path, stage.GetRootLayer(), material.path):
         raise SystemExit(f"Could not copy {material.path}")
     print(f"Material {material.path} copied")
-stone = UsdShade.Material(stage.GetPrimAtPath(STONE_MATERIAL))
-bound = 0
 for prim in stage.Traverse():
-    if prim.IsA(UsdGeom.Mesh):
-        UsdShade.MaterialBindingAPI.Apply(prim).Bind(stone)
-        bound += 1
+    if not prim.IsA(UsdGeom.Mesh):
+        continue
+    name = bindings.get(prim.GetName())
+    material = UsdShade.Material(stage.GetPrimAtPath(f"{MATERIALS}/{name}")) if name else None
+    if not material:
+        raise SystemExit(f"No material for {prim.GetPath()} ({name})")
+    UsdShade.MaterialBindingAPI.Apply(prim).Bind(material)
+    print(f"{prim.GetName()} -> {name}")
 stage.GetRootLayer().Save()
-print(f"{STONE_MATERIAL} bound to {bound} meshes")
 
 destination = os.path.join(OUTPUT, "StoneDragon.usdz")
 if not UsdUtils.CreateNewUsdzPackage(Sdf.AssetPath(geometry), destination):

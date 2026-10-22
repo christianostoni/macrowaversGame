@@ -300,7 +300,7 @@ In the scene:
 
 ## The stone dragon
 
-`StoneDragon.usdz` comes from the design team's `CartoonDragon_RCP.usdz` (`Assets/Blender/stone-dragon/`),
+`StoneDragon.usdz` comes from the design team's `CartoonDragon12_RCP.usdz` (`Assets/Blender/stone-dragon/`),
 prepared headless:
 
 ```sh
@@ -309,28 +309,33 @@ prepared headless:
     Assets/Blender/stone-dragon/cartoon_dragon_rcp.usdz <output folder>
 ```
 
-The source (Y-up, ~13 m long, a Sketchfab model prepared in Reality Composer Pro) is a head (face, horns, upper teeth, an empty `Jaw_Hinge`) and
-19 separate rounded stones with dorsal spikes, the last a flat tail, each with an idle animation, and the face with
-an animated expression. The script:
+The source (Y-up, ~13 m long, a Sketchfab model prepared in Reality Composer Pro) is a head (face, horns, upper
+teeth; the face skinned to a two-bone skeleton `JawRig`, `Root` and `Jaw`) and 19 separate stones with dorsal
+spikes (`Block12` meshes), the last a flat tail (`Block12_Tail`), each with an idle animation, and a jaw
+animation. The script:
 
-- reads the rest pose and drops the animation (the stones' transform caches and the face's mesh sequence cache,
-  which would otherwise overwrite the baked face at export);
+- reads the rest pose and drops the animation and the skeleton (the stones' transform caches, the face's
+  armature);
 - orders the stones from the head to the tail (each the closest to the previous one) as `Stone_00` … `Stone_18`,
   origin at the centre, +Z along the body towards the tail, +Y up;
 - scales the chain, from the head's centre to the tail stone's, to 2.35 m (the simulated body);
-- builds `Head` (origin at the face's centre, snout +Z): the source opens the mouth in the face's animation, so
-  the face's pieces that move in it become the lower jaw, `Jaw`, under `JawHinge` (at the source's hinge); the
-  upper teeth stay on the head; `mouth` and `nostrils` mark where fire and smoke come out;
-- keeps the design team's materials unchanged. `AirbrushGrain` is a Reality Composer Pro shader graph: unlit, a
-  four-stop colour ramp (navy, blue, red, dark gold) driven by the facing angle (`EdgePower` 0.8) plus a
-  world-space grain re-rolled 24 times a second (`GrainScale` 900, `GrainAmount` 0.35). Blender cannot read it, so
-  Blender exports the geometry only and USD (`pxr`, bundled with Blender) copies `/Dragon/Materials` from the
-  source as it is and binds `AirbrushGrain` to all 23 meshes, as in the source. `AirbrushGrain_Eye` is copied too
-  but, as in the source, no mesh uses it. RealityKit loads both as `ShaderGraphMaterial` (checked on macOS).
+- builds `Head` (origin at the face's centre, snout +Z): the face's vertices skinned to the `Jaw` bone (68 of
+  398, weight 1) become the lower jaw, `Jaw`, under `JawHinge` at the head of that bone; the upper teeth stay on the
+  head; `mouth` and `nostrils` mark where fire and smoke come out. Fitted against the source's jaw animation, the
+  jaw turns around exactly that point and the head's sideways axis (within 4 mm), at most 0.489 rad: the rig opens
+  it as far (`StoneDragonRig.Asset.jawAngle` 0.49);
+- keeps the design team's materials unchanged: `AirbrushGrain_00` (head, horns, teeth, jaw) and `AirbrushGrain_01`
+  … `AirbrushGrain_19` (one per stone, from behind the head to the tail), Reality Composer Pro shader graphs: unlit,
+  a colour ramp driven by the facing angle plus a world-space grain re-rolled 24 times a second. Blender cannot read
+  them, so Blender exports the geometry only and notes each mesh's material by name; USD (`pxr`, bundled with
+  Blender) copies `/Dragon/Materials` from the source as it is and binds each mesh to its own, as in the source.
+  RealityKit loads them as `ShaderGraphMaterial` (checked on macOS).
 
-The asset is 153 KB (the Sketchfab dragon it replaces, `DragonBody` + `DragonHead`, was 11.6 MB). An earlier export of the same dragon
-(`CartoonDragon_airbrush.usdc`) had no usable material: its MaterialX graph is Blender's, which RealityKit does not
-render, with the grain frozen at one position, so it showed flat grey boxes.
+The asset is 192 KB (the Sketchfab dragon it replaces, `DragonBody` + `DragonHead`, was 11.6 MB). Earlier exports:
+`CartoonDragon_airbrush.usdc` had no usable material (Blender's MaterialX graph, which RealityKit does not render,
+with the grain frozen at one position: flat grey boxes); `CartoonDragon_RCP.usdz` had one material for the whole
+dragon and opened the mouth in a mesh animation of the face (the script then took the face's pieces that move in
+it as the jaw).
 
 **`StoneDragonRig`** (picked first by `DragonRigLoader`):
 
@@ -338,7 +343,7 @@ render, with the grain frozen at one position, so it showed flat grey boxes.
   simulated length, and gives it the closest node: increasing, one per stone, never the head's node 0.
 - Every frame each stone sits on the smoothed body (`DragonCurve`) at its distance, turned along it (+Y as close
   to world up as the body allows), breathing with its node and floating 3 mm on its own; the head follows node 0
-  like the other rigs (look, neck lift, jaw turning 0.6 rad when wide open, smoke and fire).
+  like the other rigs (look, neck lift, jaw turning 0.49 rad when wide open, smoke and fire).
 - One scale for stones and head: the design's proportions along the simulated body, at 0.9
   (`Asset.stoneScale`): a thin gap between the stones (1–2 cm; at 1 they nearly touch, as modelled), the widest
   stone ~13 cm, the head ~25 cm long. The simulated body is 8 cm thick, so where the dragon crosses itself the

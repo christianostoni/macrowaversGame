@@ -26,8 +26,9 @@ final class StoneDragonRig: DragonRig {
         /// touching). A little smaller leaves a thin gap between them (1–2 cm) and keeps them closer to the
         /// simulated body's thickness (8 cm; the widest stone is ~13 cm), so crossings overlap less.
         static let stoneScale: Float = 0.9
-        /// How far the jaw turns when the mouth is wide open (radians).
-        static let jawAngle: Float = 0.6
+        /// How far the jaw turns when the mouth is wide open (radians): the design team's own jaw animation opens it
+        /// 0.489 rad around the same hinge.
+        static let jawAngle: Float = 0.49
         /// Stretch of neck (m) that leaves the back of the head in its direction before reaching the body.
         static let neckBlendLength: Float = 0.18
         /// How far each stone floats on its own (m), and how fast.
