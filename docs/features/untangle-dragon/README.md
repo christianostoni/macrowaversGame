@@ -37,7 +37,7 @@ uses a seated eye height of 1.15 m.
 | Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or the island panel's buttons): its side facing you follows your hand, and the dragon turns with it |
 | Tap the dragon | For ~3 s it gets angry (`DragonPhase.alerted`): circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling |
 | The flask pours the elixir over it | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
-| Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
+| Puzzle | Dragon tied in a trefoil knot (3 crossings), blue pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
 | Grab | The part you look at glows; pinch to grab, one part per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly (no shaking with a shaky hand, no flicker when pulled taut); the dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils (the placeholder's eyes turn red). Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
 | Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, spreads its wings (the placeholder also turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Game** in the island panel starts over |
@@ -97,7 +97,7 @@ SwiftUI views and the RealityKit layer only read state and forward user actions.
    runs the flight or the dragon's behaviour, the physics step, crossings, mood and win;
 3. `DetanglingStateComponent` applies the chapter to the entities (only when it changes) and fades the dragon;
 4. moves the other colliders to the simulated (or flying) positions;
-5. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the red spheres.
+5. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the blue spheres.
 
 Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/WillEnd`, subscribed in
 `DragonImmersiveView`.
@@ -162,9 +162,36 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   old 48 (~3.5 ms per tick in a debug build, 0.1 ms optimised).
 - **Friction, anchored head and a tension limit.** Without friction the knot slipped loose by itself; with
   both ends free a single pull solved the puzzle; without a tension limit a taut body tunnels through itself.
+  The head is anchored only while nobody holds it: the player can grab it like the stones (`grab(0)`), it follows
+  the hand, and let go it stays where it was put, anchored again there (settling back onto the plane in ~0.2 s if
+  it was let go in the air; the dragon never looks at its own head when the player holds it).
+- **The untangling physics, retuned (October 2026).** Measured headless (the Model at 90 Hz on the trefoil knot,
+  before → after): hand-to-stone gap pulling the tail at 0.5 m/s 0.73 → 0.17 m, direction reversals 14 → 0, a
+  stone let go 20 cm up falls at 7.0 → 0.88 m/s, two held parts pushed together 4.1 → 8.0 cm apart, phantom
+  crossings between near segments 77 → 0, the untouched knot keeps its 3 crossings for 18 → 60+ s, a taut body
+  under a shaky hand moves 0.04 → 0.23 mm per frame.
+  - *Friction once per sub-step, Coulomb-like* (`applyFriction`): it ran in all 10 solver iterations, taking
+    ~97 % of the sliding away per sub-step, so the knot stuck to the hand that pulled it, which juddered. Now a
+    contact holds a slip back by at most `selfFriction` × its depth, and a contact barely touching holds nothing
+    (a fixed minimum made a taut body stick and slip).
+  - *Tension per grab, directional* (`grabTensions`): the single most stretched segment of the whole body (4 %,
+    1.5 mm) used to hold back every grab at once. Now each grab looks at the mean stretch of the `tensionReach`
+    (8) segments on each side, and only the part of its move that stretches a taut side stops: sideways it still
+    follows its hand slowly (15 % per sub-step), back towards that side freely. So one hand pulling the body
+    taut does not lock the other (it can still lift its part; test), and the pulling one gives way.
+  - *A leash on the hand* (`grabLeash`, 8 cm): the collider follows the hand however far the body is held back;
+    the node then rushed after it like a rubber band. The target stays within 8 cm of the node.
+  - *Held parts collide*: two held nodes (or a held node and the anchored head) have infinite mass, so the
+    constraint moved neither and they passed through each other; now each gives way by half.
+  - *The pull towards the plane builds up no speed* (`previous` moves with it) and is half as strong
+    (`flattenStrength` 0.02): stones let go in the air no longer slam down. At 0.04 with that change the resting
+    knot loosened by itself.
+  - *Crossings of near segments are ignored* (`crossingSkip`, 8 segments): small kinks showed phantom markers
+    and blocked the win. The markers sit on the body as it is drawn (`drawnCrossings`, interpolated), not on the
+    60 Hz simulation.
 - **Grabs are filtered, the tension limit is soft.** The hand drives the node through a 60 ms low-pass filter
-  (`grabSmoothing`), so tracking noise does not shake the body; near `maxTension` the node slows down
-  gradually (`tensionSoftness`) and gives way in proportion to the overstretch. The old hard stop made a taut
+  (`grabSmoothing`), so tracking noise does not shake the body; near `maxTension` the stretching part of the move
+  slows down gradually (`tensionSoftness`) and the node gives way in proportion to the overstretch. The old hard stop made a taut
   node flicker between following the hand and giving way every sub-step (headless: 42 direction reversals in
   3 s of a taut pull, 162 with a shaky hand; now 0). The dragon's reaction is visual and slow: strain is
   filtered (`strainResponsiveness`), no per-vertebra tremble while held (it was a 40 Hz buzz that read as a
@@ -181,11 +208,12 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   are not a clean begin/end pair per hand: a hand holds one node at a time (a missed release used to leave a
   node frozen in the simulation), a node passes between hands without being dropped, and the end of a released
   grab arriving after a quick re-grab of the same node no longer drops the new grab (the old code released on
-  every `WillEnd`). The anchored head has no collider at all during the puzzle (its 9 cm tap sphere used to sit
-  over the neck and swallow pinches), the grab spheres are 1.2× the body radius instead of 1.5× (neighbouring
+  every `WillEnd`). The head is grabbable with its own sphere (half the gap to the first stone: it used to have
+  no collider at all, so its 9 cm tap sphere would not sit over the neck and swallow pinches), the grab spheres are 1.2× the body radius instead of 1.5× (neighbouring
   spheres overlap less, so two hands close together pick two nodes instead of sharing one), and colliders have
-  no shape while the dragon flies. One hand pulling the body taut does not lock the other: the pulling node
-  gives way between sub-steps, so the other node keeps following its hand (test).
+  no shape while the dragon flies. One hand pulling the body taut does not lock the other: tension is measured
+  per grab and only holds back the move that stretches the taut side, so the other node keeps following its hand
+  and the pulling one gives way (test).
 - **Colliders are separate from the visuals.** One invisible collider per node handles input; the visuals are
   a swappable `DragonRig`. When the asset arrives only the rig changes, not the game.
 - **Hover highlights the part you look at.** visionOS highlights the children of the looked-at entity, so the
@@ -304,7 +332,7 @@ render, with the grain frozen at one position, so it showed flat grey boxes.
 **`StoneDragonRig`** (picked first by `DragonRigLoader`):
 
 - `StoneDragonLayout` (Model, tested) keeps each stone's distance from the head along the body, scaled to the
-  simulated length, and gives it the closest node: increasing, one per stone, never the anchored head.
+  simulated length, and gives it the closest node: increasing, one per stone, never the head's node 0.
 - Every frame each stone sits on the smoothed body (`DragonCurve`) at its distance, turned along it (+Y as close
   to world up as the body allows), breathing with its node and floating 3 mm on its own; the head follows node 0
   like the other rigs (look, neck lift, jaw turning 0.6 rad when wide open, smoke and fire).
@@ -313,9 +341,10 @@ render, with the grain frozen at one position, so it showed flat grey boxes.
   stone ~13 cm, the head ~25 cm long. The simulated body is 8 cm thick, so where the dragon crosses itself the
   stones may touch a little.
 - **Every stone is grabbable.** Each stone hangs from the collider of the node that holds it, so looking at it
-  lights it up and pinching it grabs that node. In the mini-game only those 19 nodes are grabbable
-  (`DragonRig.grabTargets`), with a sphere 0.95 × half the distance to the closest stone (~6 cm; the stones are
-  ~12 cm apart), so neighbouring spheres barely touch and two hands take two different stones. The nodes in between carry no grab;
+  lights it up and pinching it grabs that node. In the mini-game only those 19 nodes and the head (node 0, whose
+  collider carries the head) are grabbable (`DragonRig.grabTargets`), with a sphere 0.95 × half the distance to
+  the closest neighbour (~6 cm for a stone, ~9 cm for the head; the stones are ~12 cm apart), so neighbouring
+  spheres barely touch and two hands take two different pieces. The nodes in between carry no grab;
   the simulation moves them with their neighbours. While the dragon circles the tree every node is still a tap
   target, as before.
 - No wings and no separate eyes: the pose's wing and blink values are not drawn.
@@ -349,8 +378,11 @@ The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit
 | Where | Parameter | Effect |
 |---|---|---|
 | `TangleConfig` | `selfFriction` | higher = harder knot |
-| `TangleConfig` | `anchorHead` | `false` = much easier |
-| `TangleConfig` | `maxTension`, `tensionSoftness` | lower = fewer glitches when pulling hard, softer grab |
+| `TangleConfig` | `anchorHead` | `false` = much easier (the head drifts when the tail is pulled) |
+| `TangleConfig` | `maxTension`, `tensionSoftness`, `tensionReach` | lower = fewer glitches when pulling hard, softer grab; how much body around a grab counts |
+| `TangleConfig` | `grabLeash` | how far ahead of its node a hand may pull (lower = no rubber band, more lag) |
+| `TangleConfig` | `flattenStrength` | how fast the body settles onto the plane (higher loosens the resting knot) |
+| `TangleConfig` | `crossingSkip` | segments this close never count as crossings |
 | `TangleConfig` | `nodeCount`, `segmentLength`, `radius` | spline control points, body length (keep ~2.35 m), body thickness (rigs follow it) |
 | `TangleConfig` | `grabSmoothing` | higher = calmer but laggier grab |
 | `TangleShape` | `.trefoil` / `.figureEight` / `.loop` | starting knot (3 / 4 / 0 crossings) |
@@ -368,7 +400,8 @@ The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit
 ## Tests
 
 `Tests/MacrowaversTests/UntangleTests.swift` (Swift Testing) covers the Model and the view model: initial
-crossings, the knot not untying by itself, rigid turns keeping crossings, the anchored head, two-handed grabs,
+crossings, the knot not untying by itself, rigid turns keeping crossings, the head staying put unless held and
+staying where it is left, two-handed grabs,
 one hand pulling taut not locking the other, hand tracking (one node per hand, hand-off, late end after a
 re-grab, cancelled grab), left and right hands dragging two parts independently through the view model,
 the fit starting with a turn after the delay, the dragon waiting while held, a shaky hand not shaking the body,

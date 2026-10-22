@@ -10,7 +10,7 @@ import simd
 struct StoneDragonLayout: Equatable {
     /// Distance of each stone's centre from the head along the simulated body (m), from the head to the tail.
     let arcLengths: [Float]
-    /// The node holding each stone: increasing, distinct, never the anchored head (node 0).
+    /// The node holding each stone: increasing, distinct, never the head's (node 0, held by the head itself).
     let nodes: [Int]
     /// From the asset's units to the simulated body's metres: the stones keep the design's proportions at this scale.
     let scale: Float
@@ -43,6 +43,9 @@ struct StoneDragonLayout: Equatable {
         }
         self.nodes = nodes
     }
+
+    /// Half the distance from the head to the first stone (m): the head's grab sphere never reaches the stone's.
+    var headHalfGap: Float { 0.5 * (arcLengths.first ?? 0) }
 
     /// Half the distance from stone `index` to its closest neighbour along the body (m): a grab sphere of that
     /// radius never reaches the next stone's.

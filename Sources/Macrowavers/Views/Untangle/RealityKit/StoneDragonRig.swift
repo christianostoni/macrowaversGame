@@ -12,9 +12,9 @@ import simd
 ///   (`StoneDragonLayout`).
 ///
 /// Every frame each stone sits on the smoothed body at its distance from the head, turned along it, breathing and
-/// floating a few millimetres on its own. Each stone hangs from the collider of the node that holds it, so it lights
-/// up when looked at and the player grabs it: only those nodes are grabbable (`grabTargets`), with a sphere the size
-/// of their stone.
+/// floating a few millimetres on its own. Each stone hangs from the collider of the node that holds it, and the head
+/// from node 0's, so each lights up when looked at and the player grabs it: only those nodes are grabbable
+/// (`grabTargets`), with a sphere as large as the gap to the next stone allows.
 @MainActor
 final class StoneDragonRig: DragonRig {
     enum Asset {
@@ -91,6 +91,8 @@ final class StoneDragonRig: DragonRig {
             holders.append(holder)
             targets[layout.nodes[index]] = Asset.grabReach * layout.halfGap(around: index)
         }
+        // The head is grabbed too, by its own node.
+        targets[0] = Asset.grabReach * layout.headHalfGap
 
         head.removeFromParent()
         head.transform = Transform(scale: SIMD3(repeating: scale))
@@ -115,13 +117,14 @@ final class StoneDragonRig: DragonRig {
         effects.attach(nostrils: nostrils, mouth: mouth, voice: headAnchor)
     }
 
-    /// Each stone hangs from the collider of its node: looking at it lights up exactly that stone.
+    /// Each stone hangs from the collider of its node, the head from node 0's: looking at one lights up exactly it.
     func attach(to colliders: [Entity]) {
         guard let last = layout.nodes.last, last < colliders.count else { return }
         self.colliders = colliders
         for (index, holder) in holders.enumerated() {
             colliders[layout.nodes[index]].addChild(holder)
         }
+        colliders[0].addChild(headAnchor)
     }
 
     func update(_ frame: DragonFrame, deltaTime: Float) {
@@ -129,7 +132,8 @@ final class StoneDragonRig: DragonRig {
         let pose = animator.pose
         let visual = DragonCurve.neckFollowingHead(animator.visualPositions(frame), headOrientation: pose.headOrientation,
                                                    blendLength: Asset.neckBlendLength)
-        headAnchor.position = visual[0]
+        // When attached to the collider, the position is relative to it (which may already be in the hand).
+        headAnchor.position = colliders.isEmpty ? visual[0] : visual[0] - colliders[0].position
         headAnchor.orientation = pose.headOrientation
         jawHinge?.orientation = jawRest * simd_quatf(angle: pose.jawOpen * Asset.jawAngle, axis: SIMD3(1, 0, 0))
         effects.update(pose: pose, frame: frame)

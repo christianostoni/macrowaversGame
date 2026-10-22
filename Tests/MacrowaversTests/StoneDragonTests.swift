@@ -24,7 +24,7 @@ struct StoneDragonLayoutTests {
     @Test func everyStoneIsHeldByItsOwnNodeNextToIt() {
         let stones = layout(count: 19, spacing: 1.2)
         #expect(stones.nodes.count == 19)
-        // Distinct, in order, never the anchored head, within the body.
+        // Distinct, in order, never the head's node (the head has its own grab), within the body.
         #expect(zip(stones.nodes, stones.nodes.dropFirst()).allSatisfy { $0 < $1 })
         #expect(stones.nodes.first! >= 1 && stones.nodes.last! <= config.nodeCount - 1)
         // Each node lies under its stone: within half a segment.

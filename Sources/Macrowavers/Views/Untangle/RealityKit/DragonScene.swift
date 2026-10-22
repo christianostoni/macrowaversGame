@@ -179,7 +179,7 @@ enum DragonSceneBuilder {
     }
 }
 
-/// Red pulsing spheres on the crossings: they show where the dragon is still tangled.
+/// Blue pulsing spheres on the crossings: they show where the dragon is still tangled.
 /// Independent from the rig, so they work with any dragon.
 @MainActor
 final class CrossingMarkers {
@@ -190,7 +190,7 @@ final class CrossingMarkers {
 
     init(radius: Float) {
         mesh = .generateSphere(radius: radius)
-        var material = UnlitMaterial(color: PlatformColor(red: 1, green: 0.25, blue: 0.2, alpha: 1))
+        var material = UnlitMaterial(color: PlatformColor(red: 0.2, green: 0.5, blue: 1, alpha: 1))
         material.blending = .transparent(opacity: .init(floatLiteral: 0.55))
         self.material = material
         entity.name = "CrossingMarkers"

@@ -32,13 +32,34 @@ struct TangleSimulationTests {
         #expect(abs(simd_distance(simulation.positions[0], simulation.positions[1]) - firstSegment) < 1e-5)
     }
 
-    @Test func anchoredHeadCannotBeGrabbed() {
+    @Test func theHeadCanBeMovedAndStaysWhereItIsLeft() {
         let config = TangleConfig()
         let simulation = TangleSimulation(config: config, positions: TangleShape.trefoil.positions(config: config))
+        let start = simulation.positions[0]
 
-        #expect(!simulation.grab(0))
+        // Not held, it stays put while the tail is pulled.
         #expect(simulation.grab(config.nodeCount - 1))
-        #expect(simulation.isGrabbed(config.nodeCount - 1))
+        simulation.drag(config.nodeCount - 1, to: simulation.positions[config.nodeCount - 1] + SIMD3(0.3, 0, 0))
+        for _ in 0..<60 { simulation.step(deltaTime: 1.0 / 60) }
+        #expect(simd_distance(simulation.positions[0], start) < 1e-4)
+        simulation.release(config.nodeCount - 1)
+
+        // Held, it follows the hand, even up in the air; let go, it stays where it was put and settles onto the
+        // plane.
+        #expect(simulation.grab(0))
+        let moved = start + SIMD3(0.15, 0.2, 0.1)
+        for _ in 0..<120 {
+            simulation.drag(0, to: moved)
+            simulation.step(deltaTime: 1.0 / 60)
+        }
+        #expect(simulation.positions[0].y > 0.1)
+        simulation.release(0)
+        let left = simulation.positions[0]
+        #expect(simd_distance(SIMD2(left.x, left.z), SIMD2(moved.x, moved.z)) < 0.02)
+        for _ in 0..<60 { simulation.step(deltaTime: 1.0 / 60) }
+        let settled = simulation.positions[0]
+        #expect(simd_distance(SIMD2(settled.x, settled.z), SIMD2(left.x, left.z)) < 1e-4)
+        #expect(abs(settled.y - config.radius) < 0.005)
     }
 
     @Test func twoHandsCanHoldTwoNodes() {
@@ -85,10 +106,11 @@ struct TangleSimulationTests {
         let middle = config.nodeCount / 3
         simulation.grab(tail)
         simulation.grab(middle)
-        // The right hand pulls the tail until the body is taut, the left hand just holds its node.
-        let pulled = simulation.positions[tail] + SIMD3(0.8, 0.05, 0)
+        // The right hand pulls the tail until the body is taut, the left hand just holds its node. Far: the knot
+        // slides between them before the body gets taut (the friction holds it back, it no longer glues it).
+        let pulled = simulation.positions[tail] + SIMD3(1.6, 0.05, 0)
         let held = simulation.positions[middle]
-        for _ in 0..<90 {
+        for _ in 0..<240 {
             simulation.drag(tail, to: pulled)
             simulation.drag(middle, to: held)
             simulation.step(deltaTime: 1.0 / 60.0)
@@ -114,14 +136,15 @@ struct TangleSimulationTests {
         let second = config.nodeCount - 1
         simulation.grab(first)
         simulation.grab(second)
-        // The two hands pull far apart, one of them shaky: the body cannot follow both.
-        let left = simulation.positions[first] + SIMD3(-0.6, 0.05, 0)
-        let right = simulation.positions[second] + SIMD3(0.6, 0.05, 0)
+        // The two hands pull far apart, one of them shaky: the body cannot follow both. Far enough that it ends up
+        // taut even though the knot slides between them (the friction holds it back, it no longer glues it).
+        let left = simulation.positions[first] + SIMD3(-1.5, 0.05, 0)
+        let right = simulation.positions[second] + SIMD3(1.5, 0.05, 0)
         var jerk: Float = 0
         var frames: Float = 0
         var previousStep = SIMD3<Float>.zero
         var previous = simulation.positions[second]
-        for frame in 0..<240 {
+        for frame in 0..<480 {
             let noise: Float = frame.isMultiple(of: 2) ? 0.008 : -0.008
             simulation.drag(first, to: left)
             simulation.drag(second, to: right + SIMD3(repeating: noise))
