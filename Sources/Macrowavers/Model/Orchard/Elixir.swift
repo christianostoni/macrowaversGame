@@ -70,6 +70,8 @@ struct Elixir: Equatable {
     private(set) var flaskTime: Float = 0
 
     var isComplete: Bool { orbitingCount >= Self.ingredientCount }
+    /// The player may hold the ingredients in orbit (drag and turn them) only before the brew starts.
+    var letsIngredientsBeHeld: Bool { state == .gathering || state == .ready }
 
     /// Colour of the ingredient in `slot`.
     static func ingredientColor(slot: Int) -> SIMD3<Float> {

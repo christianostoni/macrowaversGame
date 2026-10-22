@@ -49,6 +49,9 @@ struct OrbComponent: Component {
     /// Where the flight from the fruit to the orbit started (orchard space) and how long it has lasted.
     var joinStart: SIMD3<Float>?
     var joinElapsed: Float = 0
+    /// The player holds it in orbit: the hand moves and turns it, the orbit waits. Let go, it flies back to its
+    /// slot like it came from its fruit (`joinStart` starts over).
+    var isHeld = false
 
     /// Seconds from the fruit to the orbit.
     static let joinDuration = Elixir.joinDuration
