@@ -130,8 +130,9 @@ final class UntangleViewModel {
         let direction = worldFromLocal.inverse * worldFromFlight * SIMD4(flight.velocity, 0)
         return SIMD3(direction.x, direction.y, direction.z)
     }
-    /// Node dragged by the player (not by the dragon) that the head looks at.
-    var lookedAtNodeIndex: Int? { grabOrder.first }
+    /// Node dragged by the player (not by the dragon) that the head looks at: never the head itself, when the player
+    /// holds it.
+    var lookedAtNodeIndex: Int? { grabOrder.first { $0 != 0 } }
 
     // MARK: - Dragon actions
 
@@ -397,7 +398,8 @@ final class UntangleViewModel {
 
     private func refreshCrossings() {
         let crossings = simulation.crossings()
-        crossingPoints = crossings.map(\.position)
+        // The markers on the body as it is drawn (between two ticks), the count on the simulated one.
+        crossingPoints = simulation.drawnCrossings().map(\.position)
         // Assign only when it changes, so the views are not invalidated every frame.
         if crossings.count != crossingCount { crossingCount = crossings.count }
     }

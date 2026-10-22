@@ -39,11 +39,12 @@ struct DetanglingStateComponent: Component {
     /// Radius of the tappable colliders: larger than the body, the dragon moves and is far away.
     static let tapRadius: Float = 0.09
 
+    /// `grabTargets`: the rig's grabbable nodes and their sphere's radius (nil: every node).
     @MainActor
-    mutating func apply(phase: DragonPhase, colliders: [Entity], config: TangleConfig) {
+    mutating func apply(phase: DragonPhase, colliders: [Entity], config: TangleConfig, grabTargets: [Int: Float]?) {
         guard phase != appliedPhase else { return }
         if appliedPhase?.interaction != phase.interaction {
-            Self.configure(colliders, for: phase.interaction, config: config)
+            Self.configure(colliders, for: phase.interaction, config: config, grabTargets: grabTargets)
         }
         appliedPhase = phase
     }
@@ -60,9 +61,11 @@ struct DetanglingStateComponent: Component {
     }
 
     /// Captive: the whole body can be tapped (large spheres, highlighted when looked at).
-    /// Mini-game: every node can be grabbed except the anchored head. Flying: nothing.
+    /// Mini-game: every node can be grabbed, head included, or only the rig's grab targets (the stone dragon: the
+    /// head and one node per stone). Flying: nothing.
     @MainActor
-    private static func configure(_ colliders: [Entity], for interaction: DragonPhase.Interaction, config: TangleConfig) {
+    private static func configure(_ colliders: [Entity], for interaction: DragonPhase.Interaction, config: TangleConfig,
+                                  grabTargets: [Int: Float]?) {
         for (index, collider) in colliders.enumerated() {
             switch interaction {
             case .tap:
@@ -76,13 +79,18 @@ struct DetanglingStateComponent: Component {
                                                                                strength: 0.8))))
             case .grab:
                 collider.components.remove(DragonTapTargetComponent.self)
-                if config.anchorHead && index == 0 {
-                    // The anchored head cannot be grabbed: no shape at all, or its large tap sphere would sit
-                    // over the neck and catch the pinches meant for it.
+                let isTarget = grabTargets.map { $0[index] != nil } ?? true
+                if !isTarget {
+                    // A node with no stone cannot be grabbed: no shape at all, or its large tap sphere would sit over
+                    // the body and catch the pinches meant for the grabbable nodes.
+                    #if os(visionOS)
+                    collider.components.remove(ManipulationComponent.self)
+                    #endif
+                    collider.components.remove(HoverEffectComponent.self)
                     collider.components[InputTargetComponent.self]?.isEnabled = false
                     collider.components.remove(CollisionComponent.self)
                 } else {
-                    DragonSceneBuilder.makeGrabbable(collider, config: config)
+                    DragonSceneBuilder.makeGrabbable(collider, config: config, radius: grabTargets?[index])
                 }
             case .none:
                 collider.components.remove(DragonTapTargetComponent.self)

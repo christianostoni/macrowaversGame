@@ -76,6 +76,23 @@ extension OrchardSystem {
         setTrail(orb, isEmitting: true)
 
         let elixir = viewModel.elixir
+        // Held while the elixir is brewed (a snap with the other hand): it lets go and dives with the others.
+        if journey.isHeld, !elixir.letsIngredientsBeHeld {
+            journey.isHeld = false
+            journey.joinStart = nil
+            journey.joinElapsed = 0
+        }
+        // Pinch an ingredient to drag and turn it, or tap it to brew the elixir (without hand tracking); never while
+        // a fruit is close or the dragon is away.
+        orb.components[InputTargetComponent.self]?.isEnabled = elixir.letsIngredientsBeHeld
+            && viewModel.focusedFruitID == nil && viewModel.isDragonOnIsland
+        guard !journey.isHeld else {
+            orb.components.set(journey)
+            return
+        }
+        // Back from the hand: it turns upright again.
+        orb.orientation = simd_slerp(orb.orientation, simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)),
+                                     1 - exp(-deltaTime * 4))
         let target: SIMD3<Float>
         if elixir.state == .fusing || elixir.state == .brewed {
             let neck = orchard.elixir.neck(relativeTo: root)
@@ -92,9 +109,6 @@ extension OrchardSystem {
         // Out of the fruit it lifts a little before settling into the orbit: an arc, not a slide.
         orb.position = simd_mix(start, target, SIMD3(repeating: eased)) + SIMD3(0, 0.2 * sin(.pi * join), 0)
         orb.components.set(journey)
-        // Tap one to brew the elixir (without hand tracking); never while a fruit is close or the dragon is away.
-        orb.components[InputTargetComponent.self]?.isEnabled = elixir.state == .ready
-            && viewModel.focusedFruitID == nil && viewModel.isDragonOnIsland
     }
 
     /// Back in its fruit (the game restarted): the neutral colour again, ready for a new journey.
