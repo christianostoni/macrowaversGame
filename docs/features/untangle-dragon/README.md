@@ -25,7 +25,8 @@ placeholder is used when it is not in the bundle.
    dive one by one into the flask in the orbit's middle and brew the **elixir**; the flask flies to the dragon and
    pours the elixir over its head (`callDragon()`): it flies to you, stops to look at you and settles tangled in
    front of you.
-6. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
+6. Pinch and drag the dragon's stones or its head (one per hand), lift them to pass them over or under the
+   others. Each stone lights up when you look at it; the head stays where you leave it.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
 uses a seated eye height of 1.15 m.
@@ -38,10 +39,10 @@ uses a seated eye height of 1.15 m.
 | Tap the dragon | For ~3 s it gets angry (`DragonPhase.alerted`): circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling |
 | The flask pours the elixir over it | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), blue pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
-| Grab | The part you look at glows; pinch to grab, one part per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly (no shaking with a shaky hand, no flicker when pulled taut); the dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard |
+| Grab | The stone (or the head) you look at glows; pinch to grab, one per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly, without snapping after it, and slides through the knot instead of sticking to the hand; pulled taut, it stops stretching but the other hand can still move its part. Two held parts push each other away instead of passing through. The dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard. The head can be held too: it follows the hand and stays where it is let go, settling onto the plane |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils (the placeholder's eyes turn red). Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, spreads its wings (the placeholder also turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Game** in the island panel starts over |
-| Play area | Invisible: the knot floats at knee/table height in front of the player. Rotate it with the panel buttons, tilt it with the slider, reset it. Default is tuned for a seated player |
+| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, lifts its head (the placeholder also spreads its wings and turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Game** in the island panel starts over |
+| Play area | Invisible: the knot floats at knee/table height in front of the player, placed for a seated player (`PlayAreaPlacement.seated`). There are no controls to move it: the dragon panel that rotated and tilted it was removed |
 
 Everything is in English: user-facing text, code comments and tooling.
 
@@ -55,7 +56,8 @@ Sources/Macrowavers/
 ├── Model/Story/, Views/Story/        Storytelling screens (see ../storytelling/README.md)
 ├── Model/SceneFocus.swift            Focus mode: what fades back (none / fruit / dragon)
 ├── Model/Untangle/                   Pure game logic: Foundation + simd only, unit-tested
-│   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet) and crossing count
+│   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet): grabs with a leash and per-grab
+│   │                                     tension, friction, flatten, crossing count (drawn and simulated)
 │   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight, loop)
 │   ├── DragonBehavior.swift            Difficulty: idle timer → fit (choreography of DragonAction), DragonMood
 │   ├── DragonFlight.swift              Flights (orbit, approach, landing, farewell) with a "follow the leader" body
@@ -64,7 +66,7 @@ Sources/Macrowavers/
 │   ├── HandGrabs.swift                 Which hand holds which node, from the manipulation events
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
-│   └── UntangleViewModel.swift         @Observable @MainActor view model shared by panel and immersive space
+│   └── UntangleViewModel.swift         @Observable @MainActor view model shared by the island panel and the space
 └── Views/Untangle/
     ├── DragonImmersiveView.swift       RealityView, island, island panel, island spin, grab events, tap on the dragon
     └── RealityKit/                     Draws, never decides
@@ -141,8 +143,9 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   which is what the `SpatialTapGesture` targets, so it never steals the pinch from grabbing), *grab*
   (`ManipulationComponent`, head excluded), *none* while flying.
 - **No visible platform.** The knot lies on an invisible plane (`y = 0` of the play area): a floor appearing
-  in the room when the dragon arrives looked out of place. The play area can still be rotated, tilted and reset
-  from the panel; it cannot be dragged by hand any more.
+  in the room when the dragon arrives looked out of place. The play area cannot be dragged by hand, and since the
+  dragon panel was removed it is not rotated or tilted from a panel either: it stays at `PlayAreaPlacement.seated`
+  (`UntangleViewModel.setTilt` remains for code and tests).
 - **Orbit = a two-turn torus curve around the trunk (`OrbitPath`).** After one turn radius and height swap, so
   the 2.35 m body (more than one turn) wraps the tree without crossing itself (headless: closest gap 14 cm,
   6 cm needed). The head advances at a fixed speed per second (frame-rate independent) and the body follows its
@@ -400,12 +403,13 @@ The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit
 ## Tests
 
 `Tests/MacrowaversTests/UntangleTests.swift` (Swift Testing) covers the Model and the view model: initial
-crossings, the knot not untying by itself, rigid turns keeping crossings, the head staying put unless held and
-staying where it is left, two-handed grabs,
-one hand pulling taut not locking the other, hand tracking (one node per hand, hand-off, late end after a
+crossings, the knot not untying by itself, rigid turns keeping crossings, the head staying put unless held,
+following the hand when held (even in the air) and staying where it is left, settling onto the plane, two-handed
+grabs,
+one hand pulling taut not locking the other (the knot slides first, so the test pulls 1.6 m), hand tracking (one node per hand, hand-off, late end after a
 re-grab, cancelled grab), left and right hands dragging two parts independently through the view model,
 the fit starting with a turn after the delay, the dragon waiting while held, a shaky hand not shaking the body,
-a taut pull not flickering, flight keeping its distance from the player, the orbit never crossing itself, the
+a taut pull not flickering (pulled 1.5 m apart, so it ends up taut), flight keeping its distance from the player, the orbit never crossing itself, the
 captive dragon turning rigidly with the island, the landing matching the knot, the farewell ending, the free
 dragon staying in front of the player and hovering where they look (two gaze directions), the story flow
 (captive, a tap only makes it angry for `alertDuration`, `callDragon()` → puzzle), tilt clamping, restart and
@@ -423,8 +427,15 @@ story).
 ## Known limits
 
 - Pulling very hard can make one part clip through another for a moment (see `maxTension`).
-- The stone dragon's look (thickness, gaps between the stones, the grey) and its grab spheres are first guesses:
-  check them on device (`StoneDragonRig.Asset`).
+- The stone dragon's look (thickness, gaps between the stones) and its grab spheres are first guesses: check them
+  on device (`StoneDragonRig.Asset`). The stones are ~13 cm wide but the simulated body is 8 cm thick
+  (`TangleConfig.radius`), so where the dragon crosses itself the stones may touch or slightly overlap. A thicker
+  body (radius 5–5.5 cm, with a retuned starting knot) or smaller stones (`stoneScale` ~0.7) would fix it, at the
+  cost of changing the puzzle's difficulty.
+- The physics was retuned headless; how it feels in the hand (the leash, the sideways give of a taut grab, the
+  friction) needs checking on device. A taut grab may stretch one segment by up to ~9 % for a moment.
+- Damping, ground friction, the pull towards the plane and the friction are per sub-step: changing `substeps`
+  silently changes them too (they should become per-second values).
 - While rearing up the neck is raised only visually; colliders stay on the play area plane for ~1 s.
 - Smoke and fire sizes are eyeballed and need tuning on device.
 - The island (2.8 m away, ~2.5 m wide, floating rocks ~3.6 m) does not know the room: reduce
