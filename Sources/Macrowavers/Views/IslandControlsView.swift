@@ -7,6 +7,7 @@ struct IslandControlsView: View {
 
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
+    @Environment(StoryViewModel.self) private var story
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
     var body: some View {
@@ -47,6 +48,10 @@ struct IslandControlsView: View {
         .frame(width: 420)
         .padding(28)
         .glassBackgroundEffect()
+        // Gone with the room during the ride (hidden in SwiftUI: attachments are never disabled, see
+        // DragonImmersiveView).
+        .opacity(story.step.isFullyImmersed ? 0 : 1)
+        .allowsHitTesting(!story.step.isFullyImmersed)
     }
 
     private var storyStatus: String {
@@ -75,4 +80,5 @@ struct IslandControlsView: View {
     IslandControlsView()
         .environment(UntangleViewModel())
         .environment(OrchardViewModel())
+        .environment(StoryViewModel())
 }

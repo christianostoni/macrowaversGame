@@ -19,6 +19,15 @@ final class ViewerTracker {
     private var isRunning = false
     #endif
 
+    /// The head is being tracked: `viewerPose()` is the real one, not the fallback.
+    var isTracking: Bool {
+        #if os(visionOS)
+        isRunning && worldTracking.state == .running
+        #else
+        false
+        #endif
+    }
+
     func start() async {
         #if os(visionOS)
         guard WorldTrackingProvider.isSupported, !isRunning else { return }

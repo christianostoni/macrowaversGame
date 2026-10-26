@@ -26,6 +26,11 @@ struct ContentView: View {
             }
         }
         .padding(24)
+        #if DEBUG
+        .task {
+            if StoryViewModel.startsAtRide && story.step == .start { await start() }
+        }
+        #endif
     }
 
     /// Window and space actions exist only in the Environment: they live in the view.
@@ -35,6 +40,10 @@ struct ContentView: View {
         story.begin()
         switch await openImmersiveSpace(id: DragonImmersiveView.spaceID) {
         case .opened:
+            #if DEBUG
+            // Like in the story: the ride starts in the open space, which then turns fully immersive.
+            if StoryViewModel.startsAtRide { story.skipToRide() }
+            #endif
             // The state becomes `.open` in DragonImmersiveView's onAppear. The window steps aside.
             dismissWindow(id: Self.windowID)
         case .userCancelled, .error:

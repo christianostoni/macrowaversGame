@@ -6,7 +6,7 @@ enum MusicTrack: String, CaseIterable {
     case intro = "MusicIntro"
     /// From the moment the soothed dragon flies to the player until it is untangled.
     case puzzle = "MusicPuzzle"
-    /// The freed dragon thanks the player and flies away. Long enough to play once.
+    /// The freed dragon thanks the player and takes them on its back. Long enough to play once.
     case farewell = "MusicFarewell"
 
     var loops: Bool { self != .farewell }
@@ -15,7 +15,8 @@ enum MusicTrack: String, CaseIterable {
     static func playing(story: StoryStep, dragon: DragonPhase) -> MusicTrack? {
         switch (story, dragon) {
         case (.start, _): nil
-        case (.gratitude, _), (.safety, _), (.farewell, _), (_, .free), (_, .gone): .farewell
+        case (.gratitude, _), (.safety, _), (.ride, _), (.secondChapter, _), (.feast, _), (_, .free), (_, .gone):
+            .farewell
         case (_, .approaching), (_, .landing), (_, .untangling): .puzzle
         default: .intro
         }

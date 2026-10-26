@@ -21,10 +21,10 @@ struct MusicTrackTests {
 
     @Test func farewellOnceTheDragonIsFree() {
         #expect(MusicTrack.playing(story: .adventure, dragon: .free) == .farewell)
-        for step in [StoryStep.gratitude, .safety, .farewell] {
+        for step in [StoryStep.gratitude, .safety, .ride] {
             #expect(MusicTrack.playing(story: step, dragon: .free) == .farewell)
         }
-        #expect(MusicTrack.playing(story: .farewell, dragon: .gone) == .farewell)
+        #expect(MusicTrack.playing(story: .ride, dragon: .gone) == .farewell)
         #expect(!MusicTrack.farewell.loops)
     }
 }
