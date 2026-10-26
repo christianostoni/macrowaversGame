@@ -48,6 +48,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 |---|---|
 | On the tree | 3 apples, 1 pomegranate, 1 banana, 1 orange and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
 | Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close |
+| Turn it | With hand tracking, cup a hand next to the close fruit (all four fingers curled like a bowl, the thumb off the index, the palm within ~16 cm) and turn the hand: the fruit turns with it, in every direction, about its centre. Open the hand and it stays as it is; back on the tree it eases to its home pose, and it comes close upright again. The panel says so under the hint. Not in the simulator |
 | Open it | Apple: the design team's apple gives way to its spiral-cut copy, whose slices lift (Metal compute shader) while the stem and the leaf rise with the top one, and 3 worms guard the orb. Pomegranate: the halves open like a book and its 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Orange: the halves move apart and turn their cut faces to the player, then the 8 wedges fall open into a ring around the orb, showing their flesh and white rind. Pineapple: the halves fall open towards the player and the crown tips away |
 | Ingredient found | The orb rises out of the fruit (1.2 s), glowing and pulsing, and floats there for 0.6 s (or until tapped) |
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
@@ -148,8 +149,9 @@ flight time over `duration = max(|P₂ − P₀| / 1.1 m/s, 0.9 s)`, eased in an
 
 ## The snap
 
-ARKit hand tracking (`HandTracker`) gives each hand's wrist, middle knuckle, the thumb and index tips, and the
-middle finger's last joint (DIP) and tip. Joints flagged "not tracked" are kept with ARKit's estimate: in a fast
+ARKit hand tracking (`HandTracker`) gives each hand's wrist, the four knuckles, the thumb, index, ring and little
+tips, and the middle finger's last joint (DIP) and tip (the snap reads the thumb, index and middle finger; the
+cupped hand that turns the fruit reads the others too). Joints flagged "not tracked" are kept with ARKit's estimate: in a fast
 movement the fingertips lose tracking for a frame, exactly when the snap happens.
 
 A snap lasts a few hundredths of a second (one to three readings), so `SnapDetector` does not follow the finger:
@@ -181,6 +183,7 @@ Sources/Macrowavers/
 │   ├── Elixir.swift                       Ingredients in orbit, brew timeline, fusing → brewed → flying → delivered,
 │   │                                      the flask's curves (cork, dives, liquid, colours, slosh, pour)
 │   ├── ElixirOrbit.swift                  The ellipse to the player's right, lazy follow, the dive into the neck, ElixirFlight
+│   ├── CupTurn.swift                      A cupped hand next to the close fruit turns it
 │   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
 │   └── OrchardViewModel.swift             @Observable: fruit focus, openings, worms, one ingredient per fruit, elixir
 └── Views/Orchard/
@@ -227,6 +230,8 @@ elixir's flight (`OrchardComponent.flight`).
 3. **Openings.** It eases each fruit's drawing towards its opening (`ease(towards:)`; a fruit sent back closes
    gently). `AppleRig.apply(opening:)` re-runs the Metal kernel only when the value changes.
 4. **Chop.** With hand tracking, it feeds `ChopDetector` with the hands near the focused pineapple.
+   **Cup.** Once the close fruit has arrived, it feeds `CupTurn` with both hands and turns the fruit's holder by
+   the cupped palm's turn since the last reading (scene space).
 5. **Orbit.** `ElixirOrbit.follow` with the head's pose (faster spin while brewing); the label's anchor follows it.
 6. **Snap.** With the orbit complete, it feeds `SnapDetector` with both hands; a snap calls `orchard.brewElixir()`.
 7. **Orbs.** It moves each orb: sealed, rising above its fruit, flying into its slot, orbiting, diving into the flask.
@@ -249,9 +254,14 @@ elixir's flight (`OrchardComponent.flight`).
   view tells it whether the dragon is still on the island (`isDragonOnIsland`). The elixir only flies then, and the
   orbiting ingredients only take the pinch then (and never while a fruit is close): during the untangling they
   would steal the grabs on the knot. The view calls `callDragon()` when the elixir arrives.
-- **The chop and the snap use ARKit hand tracking, the rest are SwiftUI gestures.** SwiftUI has no "fast hand
-  coming down" or "snap". The detectors are pure structs fed with `HandSample`s, so they are unit-tested.
+- **The chop, the snap and the cupped hand use ARKit hand tracking, the rest are SwiftUI gestures.** SwiftUI has no
+  "fast hand coming down", "snap" or "cupped hand". The detectors are pure structs fed with `HandSample`s, so they are unit-tested.
   - **Two poses, not a trajectory.** See [The snap](#the-snap): robust at the tracking's rate.
+  - **A cup is never a pinch.** `CupTurn` ignores a hand whose thumb touches its index, so pulling the stem,
+    peeling the banana or pulling a fruit apart never turns it. The turn is the palm's frame built from the
+    joints (wrist → middle knuckle, little → index knuckle), followed with a little smoothing; it lives on the
+    fruit's holder, so `FocusComponent` takes it back to the home pose for free. The stem is pulled along the
+    apple's own up axis, so a turned apple still opens.
   - **Taps always work too:** a tap opens the pineapple, a tap on an orbiting ingredient brews the elixir. Without
     hand tracking (simulator, permission denied) they are the only way, and the label shows **Brew the Elixir**.
 - **The orbit is body-locked with lazy follow, not head-locked.** See [The orbit](#the-orbit).
@@ -316,6 +326,7 @@ elixir's flight (`OrchardComponent.flight`).
 | `Elixir` | `joinDuration` | how long an ingredient takes from its fruit to the orbit (`OrbComponent` uses it) |
 | `OrbComponent` | `heldScaleRange` | how small and how big two hands can make an ingredient |
 | `ChopDetector.Settings` | `speed`, `cooldown` | how fast the hand must come down |
+| `CupTurn.Settings` | `bend`, `keepMargin`, `pinchClearance`, `reach`, `keepReach`, `grace`, `smoothing` | how curled the fingers must be, how close to the fruit, how forgiving once holding, how smooth the turn is |
 | `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
 | `WormSwarm.Settings` | `count`, `crawlSpeed`, `speedUpPerCatch`, `burrowInterval`, `burrowDuration` | worm difficulty |
 | `OrchardSceneBuilder` | `…SizeOnTree`, `…SizeFocused` | fruit sizes on the tree and in front of the player (the apple's is its width) |
@@ -422,6 +433,10 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   - an ingredient rising, joining the orbit by itself or when tapped, also from a fruit sent back early
   - empty fruit, a complete orbit taking no more
   - the elixir brewing, flying, waiting when the dragon is gone, sending the close fruit back
+- **`Tests/MacrowaversTests/CupTurnTests.swift`:** a cupped hand turning about any axis turns the fruit by as
+  much; a flat hand, a fist, a pinch or a far hand do not; a wobbly or briefly lost cup keeps holding, a longer
+  one lets go; no jump after a tracking gap or on a repeated reading; one hand at a time; the palm frame and the
+  bends follow the joints.
 - **`Tests/MacrowaversTests/HandGestureTests.swift`:** chop speed, zone and cooldown; the snap (fast, slow, late,
   fingers that do not curl, a pinch, repeated readings, cooldown, one hand at a time); the elixir's slots and
   timing; the flask appearing and wobbling when an ingredient arrives, the cork popping before the first dive and
@@ -432,9 +447,11 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
 
 ## Known limits
 
-- **The snap and the chop need a headset.** The simulator has no hand tracking: use the taps.
+- **The snap, the chop and the cupped-hand turn need a headset.** The simulator has no hand tracking: use the taps.
 - **Snap thresholds come from hand proportions, not from recordings:** tune `SnapDetector.Settings` on device
-  with `SnapDetector.closestContact` and `lastAttempt`.
+  with `SnapDetector.closestContact` and `lastAttempt`. The same goes for `CupTurn.Settings` (finger bends).
+- **A turned pineapple is chopped as if upright.** `PineappleRig.chopTarget` ignores the fruit's turn; its zone
+  is generous, so a chop still lands, but on a fruit turned on its side the zone is off.
 - **Head, not body.** The orbit turns with the head's yaw past 30° (visionOS gives no torso pose): a long look to
   the side turns it too.
 - **Hand height, not the apple.** Pulling the stem uses the hand's height: if the player moves their head a lot while

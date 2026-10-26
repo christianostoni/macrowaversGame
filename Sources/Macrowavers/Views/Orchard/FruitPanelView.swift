@@ -21,6 +21,11 @@ struct FruitPanelView: View {
             Text(hint)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if orchard.isHandTrackingAvailable {
+                Text("Cup a hand next to it and turn your hand to turn the fruit.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
             if orchard.focusedFruit?.kind == .apple && orchard.focusedOrb == .sealed {
                 Text("Worms caught: \(orchard.caughtWorms)/\(orchard.wormCount)")
                     .font(.subheadline.monospacedDigit())

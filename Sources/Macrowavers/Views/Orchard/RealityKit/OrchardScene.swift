@@ -141,6 +141,7 @@ struct OrchardComponent: Component {
     var appliedFocus: Int??
     var time: Float = 0
     var chop = ChopDetector()
+    var cup = CupTurn()
     var snap = SnapDetector()
     /// The small ellipse at the player's side the ingredients go round on.
     var orbit = ElixirOrbit()
@@ -192,6 +193,7 @@ struct OrchardSystem: System {
                 Self.applyOpening(fruit, viewModel: viewModel, time: orchard.time, deltaTime: deltaTime)
             }
             Self.detectChop(&orchard)
+            Self.detectCup(&orchard)
             Self.updateOrbit(&orchard, deltaTime: deltaTime)
             Self.detectSnap(&orchard)
             Self.updateOrbs(orchard: orchard, root: entity, deltaTime: deltaTime)
@@ -239,6 +241,23 @@ struct OrchardSystem: System {
         for sample in orchard.hands.samples.values where orchard.chop.process(sample, target: target) {
             viewModel.chopPineapple()
             return
+        }
+    }
+
+    /// A hand cupped next to the fruit in front of the player turns it, once it has arrived (during the fly-in its
+    /// `FocusComponent` turns it). The turn stays; going back to the tree eases it to its home pose.
+    @MainActor
+    private static func detectCup(_ orchard: inout OrchardComponent) {
+        let viewModel = orchard.viewModel
+        guard let fruit = orchard.fruits.first(where: { $0.fruit.id == viewModel.focusedFruitID }),
+              !fruit.holder.components.has(FocusComponent.self) else {
+            orchard.cup.reset()
+            return
+        }
+        let holder = fruit.holder
+        let samples = Array(orchard.hands.samples.values)
+        if let turn = orchard.cup.process(samples, fruitCentre: holder.position(relativeTo: nil)) {
+            holder.setOrientation(turn * holder.orientation(relativeTo: nil), relativeTo: nil)
         }
     }
 
