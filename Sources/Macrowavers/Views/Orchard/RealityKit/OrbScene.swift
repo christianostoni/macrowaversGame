@@ -31,7 +31,7 @@ extension OrchardSystem {
                 orb.setScale(SIMD3(repeating: scale), relativeTo: nil)
             case .spent:
                 orb.isEnabled = false
-                setTrail(orb, isEmitting: false)
+                setEmitting(orb, OrchardSceneBuilder.orbTrailName, false)
             }
         }
     }
@@ -74,9 +74,15 @@ extension OrchardSystem {
             OrchardSceneBuilder.tint(orb, color: OrchardSceneBuilder.ingredientColor(slot: slot))
             journey.tintedSlot = slot
         }
-        setTrail(orb, isEmitting: true)
 
         let elixir = viewModel.elixir
+        let dive = elixir.state == .fusing || elixir.state == .brewed ? elixir.diveProgress(slot: slot) : 0
+        // Into the flask: the glow (a 12 cm quad, wider than the neck, drawn without depth) and the sparks would show
+        // through the glass, so they are gone before the gem drops into the neck. The gem itself is opaque.
+        setEmitting(orb, OrchardSceneBuilder.orbTrailName, dive < Self.diveSparksStop)
+        setEmitting(orb, OrchardSceneBuilder.orbGlintsName, dive < Self.diveSparksStop)
+        let glow = 1 - Elixir.smoothstep(from: Self.diveGlowFade.lowerBound, to: Self.diveGlowFade.upperBound, dive)
+        orb.findEntity(named: OrchardSceneBuilder.orbHaloName)?.scale = SIMD3(repeating: max(glow, 0.001))
         // Held while the elixir is brewed (a snap with the other hand): it lets go and dives with the others.
         if journey.isHeld, !elixir.letsIngredientsBeHeld {
             journey.isHeld = false
@@ -120,17 +126,25 @@ extension OrchardSystem {
         OrchardSceneBuilder.tint(orb, color: OrchardSceneBuilder.sealedColor)
         journey = OrbComponent(fruitID: journey.fruitID)
         orb.components.set(journey)
-        setTrail(orb, isEmitting: false)
+        setEmitting(orb, OrchardSceneBuilder.orbTrailName, false)
+        setEmitting(orb, OrchardSceneBuilder.orbGlintsName, true)
+        orb.findEntity(named: OrchardSceneBuilder.orbHaloName)?.scale = SIMD3(repeating: 1)
     }
 
+    /// Share of its dive (`Elixir.diveProgress`) over which an ingredient's glow fades: gone well before the neck.
+    static let diveGlowFade: ClosedRange<Float> = 0.45...0.75
+    /// Its trail and glints stop here, while it is still above the flask.
+    static let diveSparksStop: Float = 0.5
+
+    /// Starts or stops one of the orb's particle emitters (`orbTrailName`, `orbGlintsName`).
     @MainActor
-    private static func setTrail(_ orb: Entity, isEmitting: Bool) {
-        guard let trail = orb.findEntity(named: OrchardSceneBuilder.orbTrailName),
-              var emitter = trail.components[ParticleEmitterComponent.self], emitter.isEmitting != isEmitting else {
+    private static func setEmitting(_ orb: Entity, _ name: String, _ isEmitting: Bool) {
+        guard let entity = orb.findEntity(named: name),
+              var emitter = entity.components[ParticleEmitterComponent.self], emitter.isEmitting != isEmitting else {
             return
         }
         emitter.isEmitting = isEmitting
-        trail.components.set(emitter)
+        entity.components.set(emitter)
     }
 
     @MainActor

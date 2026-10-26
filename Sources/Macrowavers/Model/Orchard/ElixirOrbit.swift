@@ -123,10 +123,12 @@ struct ElixirOrbit: Equatable {
     /// flask. With `n` the neck's axis (from its base to its top, the cork's ends) and `e` an eased progress:
     ///
     ///     A = top + n · 0.08                      above the open neck
-    ///     first 60 %:  B(t) = (1 − t)² P + 2 (1 − t) t C + t² A,   C = (P + A) / 2 + up · 0.06
+    ///     first 60 %:  B(t) = (1 − t)² P + 2 (1 − t) t C + t² A,   C = P raised to max(P.y, A.y) + 0.06
     ///     last 40 %:   from A down to base − n · 0.03, inside the flask
     ///
-    /// so it starts on the orbit with no jump and always ends inside the flask, whatever its slot.
+    /// so it starts on the orbit with no jump and always ends inside the flask, whatever its slot. With `C` straight
+    /// above the start, the ingredient rises first and comes over the flask onto the neck: with `C` between `P` and
+    /// `A`, an ingredient starting below the neck climbed alongside it and brushed through the glass.
     func divePosition(slot: Int, count: Int = Elixir.ingredientCount, progress: Float,
                       neckTop: SIMD3<Float>, neckBase: SIMD3<Float>) -> SIMD3<Float> {
         let start = point(slot: slot, count: count)
@@ -135,7 +137,7 @@ struct ElixirOrbit: Equatable {
         let progress = min(max(progress, 0), 1)
         if progress < Self.diveArc {
             let time = Elixir.smootherstep(progress / Self.diveArc)
-            let control = (start + above) / 2 + SIMD3(0, Self.diveLift, 0)
+            let control = SIMD3(start.x, max(start.y, above.y) + Self.diveLift, start.z)
             let early = 1 - time
             return early * early * start + 2 * early * time * control + time * time * above
         }
@@ -148,7 +150,7 @@ struct ElixirOrbit: Equatable {
     static let diveArc: Float = 0.6
     /// Height above the open neck where the arc ends (m).
     static let diveClearance: Float = 0.08
-    /// How much the arc rises above the straight line (m).
+    /// How far the arc's control point stands above the higher of its start and its end (m).
     static let diveLift: Float = 0.06
     /// How deep below the neck the ingredient ends (m).
     static let diveDepth: Float = 0.03
