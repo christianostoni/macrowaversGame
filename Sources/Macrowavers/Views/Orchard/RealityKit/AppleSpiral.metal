@@ -29,16 +29,19 @@ struct Uniforms {
     float turns;
     float gapPerTurn;
     uint  vertexCount;
+    uint  profileCount; // radii in the profile buffer, at least 2
 };
 
-// Apple profile: radius as a function of height.
-static float appleRadius(float h, constant Uniforms& u) {
-    float t = clamp(h / u.height, 0.0, 1.0);
-    return u.maxRadius * (0.12 + 0.88 * sqrt(max(sin(M_PI_F * t), 0.0)));
+// Apple profile: radius as a function of height, the radii at evenly spaced heights interpolated linearly.
+static float appleRadius(float h, constant Uniforms& u, constant float* profile) {
+    float along = clamp(h / u.height, 0.0, 1.0) * float(u.profileCount - 1);
+    uint index = min(uint(along), u.profileCount - 2);
+    return mix(profile[index], profile[index + 1], along - float(index));
 }
 
 // Position of a surface point for the current opening.
-static float3 applePoint(float theta, float radial, float vertical, uint surface, constant Uniforms& u) {
+static float3 applePoint(float theta, float radial, float vertical, uint surface, constant Uniforms& u,
+                         constant float* profile) {
     float pitch = u.height / (u.turns + 1.0);
     float turn  = theta / (2.0 * M_PI_F);
 
@@ -50,9 +53,9 @@ static float3 applePoint(float theta, float radial, float vertical, uint surface
     float lift = u.opening * u.gapPerTurn * clamp(turn, 0.0, u.turns);
 
     float h, r;
-    if (surface == 0)      { h = yt;                   r = appleRadius(h, u) * radial; }
-    else if (surface == 1) { h = yb;                   r = appleRadius(h, u) * radial; }
-    else                   { h = mix(yb, yt, vertical); r = appleRadius(h, u); }
+    if (surface == 0)      { h = yt;                   r = appleRadius(h, u, profile) * radial; }
+    else if (surface == 1) { h = yb;                   r = appleRadius(h, u, profile) * radial; }
+    else                   { h = mix(yb, yt, vertical); r = appleRadius(h, u, profile); }
 
     return float3(r * cos(theta), h + lift, r * sin(theta));
 }
@@ -60,23 +63,24 @@ static float3 applePoint(float theta, float radial, float vertical, uint surface
 kernel void deformApple(device const VertexParams* params [[buffer(0)]],
                         device OutVertex*          out    [[buffer(1)]],
                         constant Uniforms&         u      [[buffer(2)]],
+                        constant float*            profile [[buffer(3)]],
                         uint id [[thread_position_in_grid]])
 {
     if (id >= u.vertexCount) return;
     VertexParams p = params[id];
 
-    float3 pos = applePoint(p.theta, p.radial, p.vertical, p.surface, u);
+    float3 pos = applePoint(p.theta, p.radial, p.vertical, p.surface, u, profile);
 
     // Normal by finite differences of the same function around the point.
     // On the axis (radial = 0) the derivative degenerates, so evaluate a little further out.
     const float e = 0.002;
     float radialEval = (p.surface == 2) ? p.radial : max(p.radial, 0.05);
 
-    float3 dTheta = applePoint(p.theta + e, radialEval, p.vertical, p.surface, u)
-                  - applePoint(p.theta - e, radialEval, p.vertical, p.surface, u);
+    float3 dTheta = applePoint(p.theta + e, radialEval, p.vertical, p.surface, u, profile)
+                  - applePoint(p.theta - e, radialEval, p.vertical, p.surface, u, profile);
     float3 dOther = (p.surface == 2)
-        ? applePoint(p.theta, radialEval, p.vertical + e, p.surface, u) - applePoint(p.theta, radialEval, p.vertical - e, p.surface, u)
-        : applePoint(p.theta, radialEval + e, p.vertical, p.surface, u) - applePoint(p.theta, radialEval - e, p.vertical, p.surface, u);
+        ? applePoint(p.theta, radialEval, p.vertical + e, p.surface, u, profile) - applePoint(p.theta, radialEval, p.vertical - e, p.surface, u, profile)
+        : applePoint(p.theta, radialEval + e, p.vertical, p.surface, u, profile) - applePoint(p.theta, radialEval - e, p.vertical, p.surface, u, profile);
 
     float3 n = cross(dTheta, dOther);
     float3 outward = float3(pos.x, 0.0, pos.z);

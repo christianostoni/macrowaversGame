@@ -26,7 +26,8 @@ extension OrchardSystem {
                 orb.setScale(SIMD3(repeating: pulse), relativeTo: nil)
             case .orbiting(let slot):
                 showOrbiting(orb, slot: slot, orchard: orchard, root: root, deltaTime: deltaTime)
-                let scale = max(pulse * viewModel.elixir.ingredientScale(slot: slot), 0.001)
+                let held = orb.components[OrbComponent.self]?.heldScale ?? 1
+                let scale = max(pulse * viewModel.elixir.ingredientScale(slot: slot) * held, 0.001)
                 orb.setScale(SIMD3(repeating: scale), relativeTo: nil)
             case .spent:
                 orb.isEnabled = false
@@ -90,9 +91,10 @@ extension OrchardSystem {
             orb.components.set(journey)
             return
         }
-        // Back from the hand: it turns upright again.
-        orb.orientation = simd_slerp(orb.orientation, simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)),
-                                     1 - exp(-deltaTime * 4))
+        // Back from the hand: it turns upright again and takes back its own size.
+        let settle = 1 - exp(-deltaTime * 4)
+        orb.orientation = simd_slerp(orb.orientation, simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), settle)
+        journey.heldScale += (1 - journey.heldScale) * settle
         let target: SIMD3<Float>
         if elixir.state == .fusing || elixir.state == .brewed {
             let neck = orchard.elixir.neck(relativeTo: root)
@@ -221,10 +223,10 @@ extension OrchardSceneBuilder {
         glowTexture = await makeGlowTexture()
         tint(orb, color: sealedColor)
 
-        // Generous: it may be tapped while it moves.
+        // Generous: it may be tapped while it moves. No hover effect: visionOS would light up every mesh under the
+        // orb, the glow's square quad too, a box around the gem when it is looked at or taken.
         orb.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.05)]))
         orb.components.set(InputTargetComponent.disabled)
-        orb.components.set(HoverEffectComponent())
         return orb
     }
 

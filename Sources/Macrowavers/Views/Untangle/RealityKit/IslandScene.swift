@@ -122,6 +122,10 @@ enum IslandSceneBuilder {
     static let treeAnchorName = "TreeAnchor"
     static let rockName = "IslandRock"
     static let floorOccluderName = "IslandFloorOccluder"
+    /// How much the airbrush materials darken the faces turned to the player: each face shines with
+    /// `EmissionBase + (1 − edge) · EmissionBoost`, from 1 on the silhouette down to the boost on the faces seen
+    /// head-on. The asset's −1.2 left those faces black and the island dark; −0.7 keeps them at 30 %.
+    static let islandEmissionBoost: Float = -0.7
 
     struct Island {
         let root: Entity
@@ -158,6 +162,7 @@ enum IslandSceneBuilder {
         do {
             let model = try await Entity(named: islandName, in: .main)
             rock.addChild(model)
+            brighten(model)
             modelBounds = model.visualBounds(relativeTo: root)
             if let island = model.findEntity(named: "Island") {
                 rockBounds = island.visualBounds(relativeTo: root)
@@ -176,8 +181,8 @@ enum IslandSceneBuilder {
             print("⚠️ \(islandName).usdz not found: the dragon circles an empty spot (\(error))")
         }
         if hangPoints.isEmpty {
-            hangPoints = (0..<6).map { index in
-                let angle = Float(index) / 6 * 2 * .pi
+            hangPoints = (0..<7).map { index in
+                let angle = Float(index) / 7 * 2 * .pi
                 return SIMD3(0.75 * cos(angle), 0.8 + 0.08 * Float(index % 2), 0.75 * sin(angle))
             }
         }
@@ -197,6 +202,22 @@ enum IslandSceneBuilder {
         root.addChild(treeAnchor)
         return Island(root: root, treeAnchor: treeAnchor, fruitHangPoints: hangPoints,
                       floorOccluder: makeFloorOccluder(under: placement, modelBounds: modelBounds))
+    }
+
+    /// Sets `islandEmissionBoost` on every airbrush material of the island (rock, tree, floating rocks).
+    @MainActor
+    private static func brighten(_ entity: Entity) {
+        if var model = entity.components[ModelComponent.self] {
+            model.materials = model.materials.map { material in
+                guard var airbrush = material as? ShaderGraphMaterial else { return material }
+                try? airbrush.setParameter(name: "EmissionBoost", value: .float(islandEmissionBoost))
+                return airbrush
+            }
+            entity.components.set(model)
+        }
+        for child in entity.children {
+            brighten(child)
+        }
     }
 
     /// A patch of floor (the immersive space's floor, y = 0) drawn with `OcclusionMaterial`: whatever is below

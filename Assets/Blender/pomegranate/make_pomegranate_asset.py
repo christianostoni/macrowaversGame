@@ -5,10 +5,10 @@ Usage:
         -P Assets/Blender/pomegranate/make_pomegranate_asset.py -- \
         Assets/Blender/pomegranate/pomegranate_rcp.usdz <output folder>
 
-The source (`pomegranate_RCP.usdz`, prepared in Reality Composer Pro) is a pomegranate at real size (16 cm wide),
+The source (`roma_RCP.usdz`, prepared in Reality Composer Pro) is a pomegranate at real size (16 cm wide),
 centred on the origin and already cut in two along x = 0: `RightSkin` and `RightFlesh` (x ≥ 0), `LeftSkin` and
-`LeftFlesh` (x ≤ 0; the flesh is the cut face), a `Crown` on top and `Seeds`, one mesh with 80 seeds packed
-inside. Its materials (`Airbrush_Skin`, `Airbrush_Flesh`, `Airbrush_Seeds`) are Reality Composer Pro shader graphs
+`LeftFlesh` (x ≤ 0; the flesh is the cut face), a `Crown` on top and `Seeds`, one mesh with 40 seeds packed
+inside (and 40 stray vertices without faces, dropped). Its materials (`Airbrush_Skin`, `Airbrush_Flesh`, `Airbrush_Seeds`) are Reality Composer Pro shader graphs
 that Blender cannot read. What the script does, and why:
 - Groups the halves for the code, which opens them like a book: `RightHalf` (right skin and flesh, and the crown)
   and `LeftHalf` (left skin and flesh), both with their origin at the centre of the fruit.
@@ -72,6 +72,10 @@ bpy.ops.mesh.select_all(action="SELECT")
 bpy.ops.mesh.separate(type="LOOSE")
 bpy.ops.object.mode_set(mode="OBJECT")
 seeds = [item for item in scene.objects if item.type == "MESH" and item.name.startswith("Seeds")]
+# Loose vertices with no face are no seed: left in, they became empty seeds the player could grab unseen.
+for item in [item for item in seeds if not item.data.polygons]:
+    seeds.remove(item)
+    bpy.data.objects.remove(item)
 
 
 def centre(item):

@@ -11,7 +11,7 @@ final class OrchardSounds {
         /// Loops while the worms crawl out of the open apple.
         case wormCrawl = "WormCrawl"
         case wormSquish = "WormSquish"
-        /// The pomegranate bursting open, its seeds spilling out.
+        /// The pomegranate bursting open, its seeds spilling out (and, for now, the orange splitting open).
         case pomegranateBurst = "PomegranateBurst"
         case bananaPeel = "BananaPeel"
         case pineappleChop = "PineappleChop"
@@ -33,6 +33,8 @@ final class OrchardSounds {
 
     /// A strip of the banana's peel tears once pulled this far.
     static let peelTear: Float = 0.15
+    /// The orange splits into two halves once pulled this far (`OrangeRig`).
+    static let orangeSplit: Float = 0.5
 
     private var resources: [Sound: AudioFileResource] = [:]
     private var crawl: AudioPlaybackController?
@@ -42,6 +44,8 @@ final class OrchardSounds {
     private var caughtWorms = 0
     private var pomegranateBurst = false
     private var bananaPeel: [Float] = []
+    private var orangeOpening: Float = 0
+    private var orangeOpened = false
     private var pineappleChopped = false
     private var orbs: [OrbState] = []
     private var elixirState = ElixirState.gathering
@@ -71,6 +75,8 @@ final class OrchardSounds {
         caughtWorms = model.caughtWorms
         pomegranateBurst = model.pomegranateBurst
         bananaPeel = model.bananaPeel
+        orangeOpening = model.orangeOpening
+        orangeOpened = model.orangeOpened
         pineappleChopped = model.pineappleChopped
         orbs = model.orbs
         elixirState = model.elixir.state
@@ -86,6 +92,9 @@ final class OrchardSounds {
         where bananaPeel.indices.contains(strip) && bananaPeel[strip] < Self.peelTear && pulled >= Self.peelTear {
             play(.bananaPeel, at: fruit)
         }
+        // Into halves, then into wedges.
+        if orangeOpening < Self.orangeSplit && model.orangeOpening >= Self.orangeSplit { play(.pomegranateBurst, at: fruit) }
+        if !orangeOpened && model.orangeOpened { play(.pomegranateBurst, at: fruit) }
         if !pineappleChopped && model.pineappleChopped { play(.pineappleChop, at: fruit) }
     }
 
