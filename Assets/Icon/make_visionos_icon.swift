@@ -1,9 +1,10 @@
 // Renders an Icon Composer document's layers into visionOS image-stack layers (1024 x 1024 px): Xcode compiles
-// .icon documents for iOS, macOS and watchOS only. The dragon (GroupFG) is the front layer, the orange, its shine
-// and the leaf the middle one, an opaque light fill the back one. The whole drawing shrinks to fit the round mask.
-// Usage: swift Assets/Icon/make_visionos_icon.swift Assets/Icon/AppIcon.icon <output dir> [fit radius px]
+// .icon documents for iOS, macOS and watchOS only. The frontmost visible layer (the first one listed, in the first
+// group that has layers) is the front layer, every other visible layer the middle one, and the document's fill an
+// opaque back one (`automatic`: light, `system-dark`: dark). The whole drawing shrinks to fit the round mask.
+// Usage: swift Assets/Icon/make_visionos_icon.swift Assets/Icon/<Name>.icon <output dir> [fit radius px]
 // then copy Front.png, Middle.png and Back.png into Sources/Macrowavers/Resources/Assets.xcassets/
-// AppIcon.solidimagestack/<Layer>.solidimagestacklayer/Content.imageset/ (preview-visionOS.png is a flat preview).
+// <Name>.solidimagestack/<Layer>.solidimagestacklayer/Content.imageset/ (preview-visionOS.png is a flat preview).
 import AppKit
 
 let args = CommandLine.arguments
@@ -16,9 +17,10 @@ let center = CGPoint(x: 512, y: 512)
 struct Layer { let image: NSImage; let scale: CGFloat; let dx: CGFloat; let dy: CGFloat; let name: String }
 
 let json = try JSONSerialization.jsonObject(with: Data(contentsOf: doc.appendingPathComponent("icon.json"))) as! [String: Any]
-let group = (json["groups"] as! [[String: Any]])[0]
-// First listed = frontmost.
-let layers: [Layer] = (group["layers"] as! [[String: Any]]).map { entry in
+// First listed = frontmost, groups and layers alike; hidden layers are left out.
+let entries = (json["groups"] as! [[String: Any]]).flatMap { $0["layers"] as? [[String: Any]] ?? [] }
+    .filter { ($0["hidden"] as? Bool) != true }
+let layers: [Layer] = entries.map { entry in
     let name = entry["image-name"] as! String
     let position = entry["position"] as! [String: Any]
     let translation = position["translation-in-points"] as! [Double]
@@ -68,8 +70,8 @@ func save(_ ctx: CGContext, _ file: String) {
     try! rep.representation(using: .png, properties: [:])!.write(to: out.appendingPathComponent(file))
 }
 
-let front = layers.filter { $0.name.hasPrefix("GroupFG") }
-let middle = layers.filter { !$0.name.hasPrefix("GroupFG") }
+let front = Array(layers.prefix(1))
+let middle = Array(layers.dropFirst())
 let radius = maxRadius(render(layers, fit: 1))
 let fit = min(1, fitRadius / radius)
 print("farthest pixel \(Int(radius)) px from the centre, fit \(String(format: "%.3f", fit))")
@@ -77,12 +79,14 @@ print("farthest pixel \(Int(radius)) px from the centre, fit \(String(format: "%
 save(render(front, fit: fit), "Front.png")
 save(render(middle, fit: fit), "Middle.png")
 
-// Back: opaque, Icon Composer's automatic light fill (white to light grey).
+// Back: opaque, Icon Composer's fill: `automatic` is light (white to light grey), `system-dark` dark grey to black.
+let isDark = (json["fill"] as? String) == "system-dark"
 let back = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
-let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-                          colors: [CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1),
-                                   CGColor(srgbRed: 0.91, green: 0.91, blue: 0.92, alpha: 1)] as CFArray,
+let fill = isDark
+    ? [CGColor(srgbRed: 0.24, green: 0.24, blue: 0.26, alpha: 1), CGColor(srgbRed: 0.07, green: 0.07, blue: 0.08, alpha: 1)]
+    : [CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1), CGColor(srgbRed: 0.91, green: 0.91, blue: 0.92, alpha: 1)]
+let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!, colors: fill as CFArray,
                           locations: [0, 1])!
 back.drawLinearGradient(gradient, start: CGPoint(x: 512, y: 1024), end: CGPoint(x: 512, y: 0), options: [])
 save(back, "Back.png")

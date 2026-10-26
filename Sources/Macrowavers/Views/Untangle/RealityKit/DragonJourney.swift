@@ -56,7 +56,12 @@ struct DetanglingStateComponent: Component {
             ? min(newDragonOpacity, dragonOpacity + deltaTime / Self.fadeDuration) : newDragonOpacity
         if opacity != dragonOpacity {
             dragonOpacity = opacity
-            dragon.components.set(OpacityComponent(opacity: dragonOpacity))
+            // Fully visible: no opacity at all, so the dragon is drawn in the opaque pass (as `FocusDimmingSystem`).
+            if opacity >= 1 {
+                dragon.components.remove(OpacityComponent.self)
+            } else {
+                dragon.components.set(OpacityComponent(opacity: dragonOpacity))
+            }
         }
     }
 

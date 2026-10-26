@@ -8,7 +8,7 @@ before its farewell.
 
 | # | Step (`StoryStep`) | Where | Text | Moves on |
 |---|---|---|---|---|
-| 1 | `start` | Launch window (plain, no glass) | **Start** | Start opens the immersive space |
+| 1 | `start` | Launch window (plain, no glass) | **Start**, and under it a small **App Icon** menu (see below) | Start opens the immersive space |
 | 2 | `searching` | In front of the player's eyes | **What are you searching for?** / I can see you are eager to find… | Tap the text |
 | 3 | `chapter` | Same spot | **Chapter I** / Patience is bitter, but its fruit is sweet. | Tap the text: the island fades in |
 | – | `adventure` | – | No story text: the island, its fruit, the dragon and its puzzle | The dragon is freed |
@@ -52,6 +52,8 @@ Sources/Macrowavers/
 ├── Model/Story/StoryStep.swift          Steps, pages and their text, dimming / reveal / focus rules
 ├── Model/Story/StoryViewModel.swift     @Observable @MainActor state machine
 ├── Views/ContentView.swift              Screen 1: the Start button (launch window, plain style)
+├── Views/AppIconMenu.swift              Screen 1: the app icon picker under Start
+├── Model/AppIconChoice.swift            The app icons (asset catalog names, titles)
 ├── Views/Story/StoryPanelView.swift     The page (attachment): title, lines, tap / answer
 └── Views/Story/StoryPanelPlacement.swift StoryPanelComponent/System: in front of the player or above the dragon
 Tests/MacrowaversTests/StoryTests.swift
@@ -73,6 +75,25 @@ Tests/MacrowaversTests/StoryTests.swift
   `restartScene()` and closing the space going back, which pages dim the room and where they sit, the island
   hidden until after the chapter's title, no placeholder text left;
 - `FarewellCueTests`: the free dragon waiting for the answer (and taking off on its own without the story).
+
+`AppIconTests.swift`: the stone dragon is the primary icon, every choice is found again from the system's icon
+name, and every alternate icon is declared in the app's Info.plist.
+
+## The app icon
+
+Three icons, picked in the **App Icon** menu under Start (`AppIconMenu`, `AppIconChoice`): **Stone Dragon** (the
+design team's 3D stone dragon on a dark fill, the default: `AppIcon`), **Red Dragon** (`AppIconRedDragon`) and
+**Black Dragon** (the first icon, `AppIconBlackDragon`), both coiled around an orange. The system changes the icon
+with `UIApplication.setAlternateIconName` and tells the player; the menu shows only where
+`supportsAlternateIcons` is true. The alternates are listed in the build setting
+`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` (project, Debug and Release), so the asset catalog compiles them
+into the app and its Info.plist (`CFBundleAlternateIcons`).
+
+Each icon is an Icon Composer document in `Assets/Icon/` (`<name>.icon`), rendered into the three layers of
+`<name>.solidimagestack` by `Assets/Icon/make_visionos_icon.swift` (Xcode compiles `.icon` documents for iOS,
+macOS and watchOS only): the frontmost layer (the stone dragon's head, the coiled dragon) in front, the other
+layers in the middle, and the document's fill behind (`automatic` light, `system-dark` dark). To add one: a new
+`.icon`, its render into a new `.solidimagestack`, its name in the build setting and a case in `AppIconChoice`.
 
 ## Known limits
 

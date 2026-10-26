@@ -47,7 +47,7 @@ struct FruitPanelView: View {
                     }
                 }
             }
-            .disabled(orchard.elixir.state == .flying)
+            .disabled(orchard.elixirState == .flying)
         }
         .multilineTextAlignment(.center)
         .frame(width: 360)
@@ -69,7 +69,7 @@ struct FruitPanelView: View {
     private var hint: String {
         switch orchard.focusedOrb {
         case .revealed:
-            return orchard.elixir.state == .gathering
+            return orchard.elixirState == .gathering
                 ? "An ingredient for the elixir! It's joining the others around you."
                 : "Three ingredients already orbit you: brew the elixir first."
         case .orbiting, .spent:

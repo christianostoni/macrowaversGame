@@ -47,6 +47,8 @@ struct SeedComponent: Component {}
 /// to the orbit at the player's side. Also remembers that journey, which only the RealityKit layer draws.
 struct OrbComponent: Component {
     let fruitID: Int
+    /// Its parts the system moves every frame, found once by name.
+    let parts: OrbParts
     /// Orbit slot whose colour the orb wears (nil = not found yet, neutral colour).
     var tintedSlot: Int?
     /// Where the flight from the fruit to the orbit started (orchard space) and how long it has lasted.
@@ -62,6 +64,33 @@ struct OrbComponent: Component {
     static let joinDuration = Elixir.joinDuration
     /// How small and how big two hands can make it.
     static let heldScaleRange: ClosedRange<Float> = 0.5...3
+}
+
+/// The orb's parts the system moves every frame (the spinning gem, its glow, its glints and trail): found once, not
+/// looked up by name several times per orb every frame.
+struct OrbParts {
+    let spin: Entity?
+    let halo: Entity?
+    let glints: Entity?
+    let trail: Entity?
+
+    @MainActor
+    init(of orb: Entity) {
+        spin = orb.findEntity(named: OrchardSceneBuilder.orbSpinName)
+        halo = orb.findEntity(named: OrchardSceneBuilder.orbHaloName)
+        glints = orb.findEntity(named: OrchardSceneBuilder.orbGlintsName)
+        trail = orb.findEntity(named: OrchardSceneBuilder.orbTrailName)
+    }
+}
+
+extension Entity {
+    /// Turns the entity's input target on or off, only when that changes: the component's setter runs even when the
+    /// value is the same, and the systems call this every frame.
+    func setInputTargetEnabled(_ isEnabled: Bool) {
+        guard var target = components[InputTargetComponent.self], target.isEnabled != isEnabled else { return }
+        target.isEnabled = isEnabled
+        components.set(target)
+    }
 }
 
 /// Smoothly moves an entity to `target` (in its parent's space), then removes itself.
@@ -151,6 +180,10 @@ struct OrchardComponent: Component {
     var drawnElixirState = ElixirState.gathering
     /// Ingredients already drawn landing in the flask: each new one splashes.
     var drawnLandings = 0
+    /// The flask's turn while it pours (side-on to the player), set as it arrives.
+    var pourYaw: Float = 0
+    /// The soothed dragon's shimmer already drawn.
+    var drawnSoothed = false
 }
 
 struct OrchardSystem: System {
@@ -376,9 +409,11 @@ enum OrchardSceneBuilder {
             fruits.append(orchardFruit)
             let orb = orbTemplate.clone(recursive: true)
             orb.name = "Orb\(fruit.id)"
-            orb.components.set(OrbComponent(fruitID: fruit.id))
+            orb.components.set(OrbComponent(fruitID: fruit.id, parts: OrbParts(of: orb)))
             orb.isEnabled = false
-            orchardFruit.orbAnchor.addChild(orb)
+            // Never in the fruit's hierarchy (it is placed from its anchor): the fruit's hover highlight lights up
+            // every mesh under it, the gem's square glow too.
+            root.addChild(orb)
             orbs[fruit.id] = orb
         }
 

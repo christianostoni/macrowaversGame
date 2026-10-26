@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="425px" height="425px" viewBox="0 0 425 425" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>Orange</title>
+    <defs>
+        <linearGradient x1="16.6667%" y1="10.5263%" x2="86.8421%" y2="93.8596%" id="linearGradient-1">
+            <stop stop-color="#FAB26A" offset="0%"></stop>
+            <stop stop-color="#FF8100" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="Page-2" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <path d="M212.342557,0.226140268 C329.615954,0.226140268 424.685115,95.2953007 424.685115,212.568698 C424.685115,329.842095 329.615954,424.911255 212.342557,424.911255 C95.0691604,424.911255 0,329.842095 0,212.568698 C0,95.2953007 95.0691604,0.226140268 212.342557,0.226140268 Z" id="Orange" fill="url(#linearGradient-1)"></path>
+    </g>
+</svg>

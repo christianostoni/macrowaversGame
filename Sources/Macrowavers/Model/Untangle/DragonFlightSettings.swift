@@ -16,6 +16,9 @@ extension DragonFlight {
         case loop
         /// Captive: circles the island's tree along `OrbitPath` until it is called.
         case orbit
+        /// Receives the elixir: slows down to a stop on its path around the tree (`holdBraking`), the body still on
+        /// it, until it is called.
+        case hold
         /// Called: flies to the player and stops in front of them, looking at them.
         case approach
         /// Settles: the head retraces the knot from the tail, the body follows it
@@ -31,7 +34,7 @@ extension DragonFlight {
             case .swoop: 3
             case .hover: 3.2
             case .loop: 3
-            case .orbit: .infinity
+            case .orbit, .hold: .infinity
             case .approach: 5
             // Depends on the path length: see `landingProgress`.
             case .land: .infinity
@@ -46,7 +49,7 @@ extension DragonFlight {
         var staysInRoom: Bool {
             switch self {
             case .takeoff, .cruise, .swoop, .hover, .loop: true
-            case .orbit, .approach, .land, .depart: false
+            case .orbit, .hold, .approach, .land, .depart: false
             }
         }
     }

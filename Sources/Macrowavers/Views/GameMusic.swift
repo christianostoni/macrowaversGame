@@ -25,7 +25,7 @@ final class GameMusic {
 
     func load() async {
         for track in MusicTrack.allCases {
-            resources[track] = await GameAudio.load(track.rawValue, loops: track.loops)
+            resources[track] = await GameAudio.load(track.rawValue, loops: track.loops, streams: true)
         }
         play(wanted)
     }
