@@ -46,12 +46,17 @@ final class ElixirRig {
     private var appliedLiquid: SIMD4<Float>?
     private var appliedGlass: SIMD4<Float>?
 
-    /// The liquid: scaled along its own vertical axis from its bottom (its origin) to raise its level.
+    /// The liquid: built for its level (`LiquidLevels`), filling the inside of the glass up to it, and sloshing around
+    /// the centre of the flask's round body, so it never leaves the glass.
     private struct LiquidPart {
         let entity: Entity
         let model: ModelEntity
         let rest: Transform
-        /// Its local axis pointing up in the flask, and a horizontal one to slosh around.
+        let levels: LiquidLevels?
+        /// The centre of the round body, in the liquid's space: the liquid tilts around it.
+        let pivot: SIMD3<Float>
+        /// Its local axis pointing up in the flask (without `levels`, the liquid is scaled along it), and a
+        /// horizontal one to slosh around.
         let upAxis: Int
         let slosh: SIMD3<Float>
     }
@@ -128,6 +133,23 @@ final class ElixirRig {
         Self.burst(bubbles)
     }
 
+    /// The liquid at its level, tilted by the slosh around the centre of the round body: it stays inside the glass.
+    private static func fill(_ liquid: LiquidPart, to fill: Float, slosh: Float) {
+        liquid.entity.isEnabled = fill > 0.002
+        let tilt = simd_quatf(angle: slosh, axis: liquid.slosh)
+        liquid.entity.orientation = liquid.rest.rotation * tilt
+        if let levels = liquid.levels {
+            levels.show(fill)
+            liquid.entity.position = liquid.rest.translation
+                + liquid.rest.rotation.act(liquid.rest.scale * (liquid.pivot - tilt.act(liquid.pivot)))
+        } else {
+            // No mesh to take the glass's shape from: the old squash.
+            var scale = SIMD3<Float>(repeating: 1)
+            scale[liquid.upAxis] = max(fill, 0.002)
+            liquid.entity.scale = liquid.rest.scale * scale
+        }
+    }
+
     /// Draws the flask's inside for the elixir's state: liquid level, colour, glow and slosh, the cork, the glass
     /// lighting up as an ingredient arrives, bubbles, the stream and the light. `pulse` makes the brewed elixir
     /// throb.
@@ -137,11 +159,7 @@ final class ElixirRig {
         flask.orientation = simd_quatf(angle: state.wobble, axis: SIMD3(1, 0, 0)) * pourRotation(state.pourTilt)
 
         if let liquid {
-            liquid.entity.isEnabled = fill > 0.002
-            var scale = SIMD3<Float>(repeating: 1)
-            scale[liquid.upAxis] = max(fill, 0.002)
-            liquid.entity.scale = liquid.rest.scale * scale
-            liquid.entity.orientation = liquid.rest.rotation * simd_quatf(angle: state.slosh, axis: liquid.slosh)
+            Self.fill(liquid, to: fill, slosh: state.slosh)
             let color = state.liquidColor
             let key = SIMD4(color, glowLevel)
             if appliedLiquid.map({ simd_distance($0, key) > 0.004 }) ?? true {
@@ -222,7 +240,10 @@ final class ElixirRig {
         let magnitudes = [abs(up.x), abs(up.y), abs(up.z)]
         let upAxis = magnitudes.firstIndex(of: magnitudes.max() ?? 0) ?? 1
         let across = simd_normalize(entity.convert(direction: SIMD3(1, 0, 0), from: flask))
-        return LiquidPart(entity: entity, model: model, rest: entity.transform, upAxis: upAxis, slosh: across)
+        let levels = LiquidLevels(model: model, up: model.convert(direction: SIMD3(0, 1, 0), from: flask))
+        let pivot = levels.map { entity.convert(position: $0.volume.widestPoint, from: model) } ?? .zero
+        return LiquidPart(entity: entity, model: model, rest: entity.transform, levels: levels, pivot: pivot,
+                          upAxis: upAxis, slosh: across)
     }
 
     private static func corkPart(_ entity: Entity?, neckTop: Entity?, neckBase: Entity?) -> CorkPart? {
