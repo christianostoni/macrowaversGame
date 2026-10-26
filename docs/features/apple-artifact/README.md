@@ -46,7 +46,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 |---|---|
 | On the tree | 3 apples, 1 pomegranate, 1 banana and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
 | Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close |
-| Open it | Apple: the spiral slices lift (Metal compute shader) and 3 worms guard the orb. Pomegranate: the halves open like a book and its 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Pineapple: the halves fall open towards the player and the crown tips away |
+| Open it | Apple: the design team's apple gives way to its spiral-cut copy, whose slices lift (Metal compute shader) while the stem and the leaf rise with the top one, and 3 worms guard the orb. Pomegranate: the halves open like a book and its 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Pineapple: the halves fall open towards the player and the crown tips away |
 | Ingredient found | The orb rises out of the fruit (1.2 s), glowing and pulsing, and floats there for 0.6 s (or until tapped) |
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
 | In orbit | The ingredients go round a small ellipse (26 × 28 cm) 60 cm away, 30° to the player's right and a little below their eyes, facing them, its far side tilted up so they see it whole: always between ~18° and ~42° to the right, never in the middle of the view where the fruit comes close; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). A small label under the orbit counts them |
@@ -174,7 +174,7 @@ which threshold it failed.
 ```
 Sources/Macrowavers/
 ├── Model/Orchard/                       Pure logic (Foundation + simd), unit-tested
-│   ├── AppleShape.swift                   Spiral-cut apple maths, shared with the shader (CPU fallback too)
+│   ├── AppleShape.swift                   Spiral-cut apple maths and the design apple's profile, shared with the shader
 │   ├── WormSwarm.swift                    Worm behaviour: crawl, burrow, speed up, hide when closed
 │   ├── Elixir.swift                       Ingredients in orbit, brew timeline, fusing → brewed → flying → delivered,
 │   │                                      the flask's curves (cork, dives, liquid, colours, slosh, pour)
@@ -192,7 +192,7 @@ Sources/Macrowavers/
         ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, stream, glow); orbit,
         │                                    snap, flight and pour in the system
         ├── HandTracker.swift                ARKit hand tracking → HandSample
-        ├── AppleRig.swift                   LowLevelMesh + Metal compute pipeline, stem, worms
+        ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, worms
         ├── AppleSpiral.metal                `deformApple` kernel (one thread per vertex)
         ├── PomegranateRig.swift             The design team's pomegranate: halves, seed burst
         ├── BananaRig.swift                  Banana.usdz, peel strips on hinges
@@ -277,6 +277,16 @@ elixir's flight (`OrchardComponent.flight`).
   There is no floor in front of the player, and the fruit must close again when it goes back to the tree.
 - **Metal with a safety net.** If Metal or the apple kernel is missing, the apple is deformed on the CPU with the
   same maths (`AppleShape`).
+- **The design team's apple, cut by the code.** A modelled apple cannot be cut along a helix as it is (its
+  triangles would stretch across the cut, with no flesh in the gaps). So `AppleRig` shows `Apple.usdz` while the
+  apple is closed (on the tree, and in front of the player until the stem moves) and, as soon as it opens, the
+  spiral the shader deforms, built as a body of revolution on the asset's silhouette (`AppleShape.designProfile`,
+  the skin's outer radius every 1/24 of its height, both poles kept small) and drawn in the asset's own airbrush
+  materials (`Skin` on the wall, `Flesh` on the slices' faces, both sides). The asset's `Stem` and `Leaf` ride
+  on the stem the player pulls. The two match in size (0.192 m tall, 0.241 m wide) and colours; what changes at
+  the swap is what a body of revolution cannot hold: the slight lobes (±5 mm) and the dimples at the poles. The
+  apple is sized by its width (`AppleShape.width`), as wide as the earlier procedural one. Without the asset the
+  spiral is drawn closed too, in plain materials, with a stick for a stem.
 - **Fruit on the island, focus on a stage.** On the tree the fruit is a child of the island. Focused, it moves to
   a stage ~50 cm from the eyes. The ingredients and the elixir live under the orchard's root, outside the faded
   parts, so they always stay fully visible.
@@ -304,7 +314,8 @@ elixir's flight (`OrchardComponent.flight`).
 | `ChopDetector.Settings` | `speed`, `cooldown` | how fast the hand must come down |
 | `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
 | `WormSwarm.Settings` | `count`, `crawlSpeed`, `speedUpPerCatch`, `burrowInterval`, `burrowDuration` | worm difficulty |
-| `OrchardSceneBuilder` | `…SizeOnTree`, `…SizeFocused` | fruit sizes on the tree and in front of the player |
+| `OrchardSceneBuilder` | `…SizeOnTree`, `…SizeFocused` | fruit sizes on the tree and in front of the player (the apple's is its width) |
+| `AppleShape` | `turns`, `gapPerTurn` | how many slices the apple opens into, how far apart |
 
 ## Assets
 
@@ -316,7 +327,15 @@ elixir's flight (`OrchardComponent.flight`).
 | `Pomegranate.usdz` | The design team's pomegranate, `Assets/Blender/pomegranate/pomegranate_rcp.usdz`, prepared headless by `make_pomegranate_asset.py` (below). Prims: `RightHalf` (skin, flesh, crown), `LeftHalf` (skin, flesh), `Seed_00` … `Seed_39` (origin at each seed's centre); real size, 16 cm wide, centred, cut along x = 0. Without it there is no pomegranate on the tree |
 | `ElixirFlask.usdz` | The design team's flask, `Assets/Blender/elixir-flask/elixir_flask.usdc`, prepared headless by `make_flask_asset.py` (below). Prims: `Glass`, `Liquid` (origin at its bottom), `Cork` (origin at its centre), `neck_top`, `neck_base`. Without it a glowing blue orb stands in and the brew still plays |
 
-The apples are generated in code (they must stay procedural: the shader cuts them).
+`Apple.usdz` is the design team's `apple_RCP.usdz` as it is: `Skin`, `Flesh` (just inside the skin), `Stem`,
+`Leaf`, real size (0.192 m tall, 0.241 m wide), airbrush materials. Closed, the apple is drawn from it; open, from the
+spiral (see the design decisions). If the asset changes, measure its profile again and paste the output into
+`AppleShape` (`designHeight`, `designProfile`):
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+    -P Assets/Blender/apple/measure_apple_profile.py -- Sources/Macrowavers/Resources/Apple.usdz
+```
 
 ### The pomegranate's pipeline
 

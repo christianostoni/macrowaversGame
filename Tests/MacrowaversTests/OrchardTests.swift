@@ -23,12 +23,27 @@ struct AppleShapeTests {
         }
     }
 
+    @Test func profileFollowsTheDesignApple() {
+        let shape = AppleShape()
+        // Interpolated between the samples, exact on them, small at the poles, widest a little above the middle.
+        #expect(abs(shape.radius(atHeight: 0) - shape.profile[0]) < 1e-6)
+        #expect(abs(shape.radius(atHeight: shape.height) - shape.profile[shape.profile.count - 1]) < 1e-6)
+        let step = shape.height / Float(shape.profile.count - 1)
+        let between = shape.radius(atHeight: 2.5 * step)
+        #expect(abs(between - (shape.profile[2] + shape.profile[3]) / 2) < 1e-5)
+        #expect(shape.radius(atHeight: 0) < 0.2 * shape.maxRadius)
+        let widest = (0...100).max { shape.radius(atHeight: Float($0) / 100 * shape.height)
+            < shape.radius(atHeight: Float($1) / 100 * shape.height) } ?? 0
+        #expect(widest > 50 && widest < 65)
+        #expect(abs(shape.width - 2 * shape.maxRadius) < 1e-6)
+    }
+
     @Test func swiftTypesMatchTheMetalShaderLayout() {
-        // AppleSpiral.metal: VertexParams 16 bytes, OutVertex 2 × float3 (16 each), Uniforms 6 × 4 bytes.
+        // AppleSpiral.metal: VertexParams 16 bytes, OutVertex 2 × float3 (16 each), Uniforms 7 × 4 bytes.
         #expect(MemoryLayout<AppleVertexParams>.stride == 16)
         #expect(MemoryLayout<AppleVertex>.stride == 32)
         #expect(MemoryLayout<AppleVertex>.offset(of: \.normal) == 16)
-        #expect(MemoryLayout<AppleUniforms>.size == 24)
+        #expect(MemoryLayout<AppleUniforms>.size == 28)
     }
 }
 

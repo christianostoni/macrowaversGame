@@ -71,7 +71,7 @@ struct OrchardInteractions: ViewModifier {
                 let start = stemDragStart ?? StemDrag(height: height, opening: orchard.appleOpening)
                 stemDragStart = start
                 // Fully open = the stem raised by `maxLift` at the apple's size in front of the player.
-                let lift = orchard.appleShape.maxLift * OrchardSceneBuilder.appleSizeFocused / orchard.appleShape.height
+                let lift = orchard.appleShape.maxLift * OrchardSceneBuilder.appleSizeFocused / orchard.appleShape.width
                 orchard.setAppleOpening(start.opening + (height - start.height) / lift)
             }
             .onEnded { _ in

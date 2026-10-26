@@ -383,9 +383,9 @@ enum OrchardSceneBuilder {
         switch kind {
         case .apple:
             let shape = viewModel.appleShape
-            guard let apple = AppleRig(shape: shape, wormCount: viewModel.wormCount) else { return nil }
-            return RigBuild(rig: .apple(apple), root: apple.root, size: shape.height,
-                            tapShape: .generateSphere(radius: shape.height * 0.9),
+            guard let apple = await AppleRig(shape: shape, wormCount: viewModel.wormCount) else { return nil }
+            return RigBuild(rig: .apple(apple), root: apple.root, size: shape.width,
+                            tapShape: .generateSphere(radius: shape.width * 0.9),
                             treeSize: appleSizeOnTree, focusedSize: appleSizeFocused)
         case .pomegranate:
             guard let pomegranate = await PomegranateRig() else { return nil }

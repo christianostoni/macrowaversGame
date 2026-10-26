@@ -5,15 +5,28 @@ import simd
 /// the worms and the artifact, and as a fallback when Metal is not available.
 ///
 /// The apple is cut along a helix into `turns` slices. Opening it (0 = closed, 1 = fully open) lifts every
-/// slice by `gapPerTurn` per turn, like pulling a spiral-cut apple up by its stem.
+/// slice by `gapPerTurn` per turn, like pulling a spiral-cut apple up by its stem. Its silhouette is the design
+/// team's apple (`Apple.usdz`), measured as a body of revolution.
 /// Origin at the bottom of the apple, y up, metres.
 struct AppleShape: Equatable {
-    var height: Float = 0.24
-    var maxRadius: Float = 0.12
+    var height: Float = Self.designHeight
+    /// Radius at evenly spaced heights, from the bottom (first) to the top (last); at least two.
+    var profile: [Float] = Self.designProfile
     /// Turns that open up.
     var turns: Float = 4
     /// Space between two turns when the apple is fully open.
     var gapPerTurn: Float = 0.05
+
+    /// The design team's apple (`Apple.usdz`): the skin's height and its outer radius every 1/24 of it, printed by
+    /// `Assets/Blender/apple/measure_apple_profile.py`. Both poles are kept small: the spiral ends in flat faces
+    /// drawn with the flesh.
+    static let designHeight: Float = 0.1917
+    static let designProfile: [Float] = [
+        0.0144, 0.0562, 0.0665, 0.0757, 0.0841, 0.0904, 0.0975, 0.1034,
+        0.1084, 0.1124, 0.1159, 0.1184, 0.1199, 0.1204, 0.1203, 0.1198,
+        0.1185, 0.1162, 0.1132, 0.1092, 0.1043, 0.0983, 0.0898, 0.0804,
+        0.0144,
+    ]
 
     /// Which surface of a slice a point lies on.
     enum Surface: UInt32 {
@@ -30,11 +43,17 @@ struct AppleShape: Equatable {
     var thetaEnd: Float { 2 * .pi * (turns + 1) }
     /// How far the stem rises when the apple is fully open.
     var maxLift: Float { gapPerTurn * turns }
+    var maxRadius: Float { profile.max() ?? 0 }
+    /// Widest across: the size the orchard gives the apple.
+    var width: Float { 2 * maxRadius }
 
-    /// Radius of the apple's profile at height `height` (narrow at the poles, round in the middle).
+    /// Radius of the apple's profile at height `height`: `profile` interpolated linearly (as in the shader).
     func radius(atHeight height: Float) -> Float {
-        let along = min(max(height / self.height, 0), 1)
-        return maxRadius * (0.12 + 0.88 * sqrt(max(sin(Float.pi * along), 0)))
+        guard profile.count > 1 else { return profile.first ?? 0 }
+        let along = min(max(height / self.height, 0), 1) * Float(profile.count - 1)
+        let index = min(Int(along), profile.count - 2)
+        let fraction = along - Float(index)
+        return profile[index] + (profile[index + 1] - profile[index]) * fraction
     }
 
     /// How much the slice at angle `theta` is lifted at `opening`.
