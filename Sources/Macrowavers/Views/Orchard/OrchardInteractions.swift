@@ -33,7 +33,7 @@ struct OrchardInteractions: ViewModifier {
             .simultaneousGesture(catchWormGesture)
             .simultaneousGesture(openPomegranateGesture)
             .simultaneousGesture(dragSeedGesture)
-            .simultaneousGesture(peelOrangeGesture)
+            .simultaneousGesture(openOrangeGesture)
             .simultaneousGesture(chopPineappleGesture)
             .simultaneousGesture(tapOrbGesture)
             .simultaneousGesture(dragOrbGesture)
@@ -114,15 +114,17 @@ struct OrchardInteractions: ViewModifier {
             }
     }
 
-    /// Pinch a petal of the orange's peel and pull it outwards and down: the petal follows the hand.
-    private var peelOrangeGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .targetedToEntity(where: .has(OrangePeelComponent.self))
+    /// Two hands moving apart split the orange in two, then fan each half into wedges (in the simulator: hold Option).
+    private var openOrangeGesture: some Gesture {
+        MagnifyGesture()
+            .targetedToEntity(where: .has(OrangeBodyComponent.self))
             .onChanged { value in
-                guard let petal = value.entity.components[OrangePeelComponent.self]?.petal else { return }
-                let hand = value.convert(value.location3D, from: .local, to: .scene)
-                guard let progress = OrangeRig.peelProgress(of: value.entity, handPosition: hand) else { return }
-                orchard.setOrangePeel(petal: petal, progress: progress)
+                let start = pinchStart ?? orchard.orangeOpening
+                pinchStart = start
+                orchard.setOrangeOpening(start + (Float(value.magnification) - 1) / 0.6)
+            }
+            .onEnded { _ in
+                pinchStart = nil
             }
     }
 

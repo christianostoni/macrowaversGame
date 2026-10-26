@@ -41,7 +41,7 @@ enum OrbState: Equatable {
 /// connects it to the dragon (`UntangleViewModel`).
 ///
 /// Every fruit holds one orb, so no choice is wrong: an apple opens by its stem and its worms guard the orb, a
-/// pomegranate is pulled apart with two hands, an orange is peeled petal by petal, a pineapple is chopped.
+/// pomegranate is pulled apart with two hands, an orange is pulled apart into wedges, a pineapple is chopped.
 @MainActor
 @Observable
 final class OrchardViewModel {
@@ -57,8 +57,10 @@ final class OrchardViewModel {
     private(set) var pomegranateOpening: Float = 0
     /// The pomegranate's seeds have burst out.
     private(set) var pomegranateBurst = false
-    /// How far each petal of the orange's peel is pulled down (0 = closed, 1 = hanging fully open).
-    private(set) var orangePeel = Array(repeating: Float(0), count: OrchardViewModel.orangePetals)
+    /// 0 = whole, 0.5 = two halves, 1 = eight wedges (pulled apart with two hands).
+    private(set) var orangeOpening: Float = 0
+    /// The orange has fanned out into its wedges.
+    private(set) var orangeOpened = false
     private(set) var pineappleChopped = false
     /// One orb per fruit, indexed by the fruit's id.
     private(set) var orbs: [OrbState]
@@ -83,9 +85,8 @@ final class OrchardViewModel {
 
     /// Opening at which the pomegranate's seeds burst out.
     static let burstOpening: Float = 0.95
-    static let orangePetals = 6
-    /// A petal pulled past this counts as peeled; every petal peeled frees the orb.
-    static let peeledPetal: Float = 0.8
+    /// Opening at which the orange's wedges count as open and free the orb.
+    static let wedgesOpening: Float = 0.9
     /// Seconds a freed orb takes to rise out of its fruit (it can be tapped into orbit from then on) ...
     static let orbRiseDuration: Float = 1.2
     /// ... and how long it then floats there before joining the orbit by itself (the player sees what they found).
@@ -118,14 +119,13 @@ final class OrchardViewModel {
         switch focusedFruit?.kind {
         case .apple: appleOpening >= wormSettings.minimumOpening
         case .pomegranate: pomegranateBurst
-        case .orange: isOrangePeeled
+        case .orange: orangeOpened
         case .pineapple: pineappleChopped
         case nil: false
         }
     }
 
     var wormCount: Int { wormSettings.count }
-    var isOrangePeeled: Bool { orangePeel.allSatisfy { $0 >= Self.peeledPetal } }
     /// The orb of the focused fruit, if there is a focused fruit.
     var focusedOrb: OrbState? { focusedFruitID.map { orbs[$0] } }
 
@@ -195,12 +195,14 @@ final class OrchardViewModel {
         }
     }
 
-    /// Pulls one petal of the orange's peel (0 = closed, 1 = hanging fully open).
-    func setOrangePeel(petal: Int, progress: Float) {
-        guard focusedFruit?.kind == .orange, orangePeel.indices.contains(petal) else { return }
-        let progress = min(max(progress, 0), 1)
-        if progress != orangePeel[petal] { orangePeel[petal] = progress }
-        if isOrangePeeled { revealFocusedOrb() }
+    func setOrangeOpening(_ value: Float) {
+        guard focusedFruit?.kind == .orange else { return }
+        let opening = min(max(value, 0), 1)
+        if opening != orangeOpening { orangeOpening = opening }
+        if opening >= Self.wedgesOpening && !orangeOpened {
+            orangeOpened = true
+            revealFocusedOrb()
+        }
     }
 
     /// Chops the pineapple in two (a hand coming down through it, or a tap).
@@ -251,7 +253,8 @@ final class OrchardViewModel {
         appleOpening = 0
         pomegranateOpening = 0
         pomegranateBurst = false
-        orangePeel = Array(repeating: 0, count: Self.orangePetals)
+        orangeOpening = 0
+        orangeOpened = false
         pineappleChopped = false
     }
 

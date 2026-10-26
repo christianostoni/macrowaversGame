@@ -37,6 +37,9 @@ struct WormComponent: Component {
 /// The pomegranate's body: pull it apart with two hands.
 struct PomegranateBodyComponent: Component {}
 
+/// The orange's body: pull it apart with two hands, into halves then wedges.
+struct OrangeBodyComponent: Component {}
+
 /// A pomegranate seed.
 struct SeedComponent: Component {}
 
@@ -157,7 +160,7 @@ struct OrchardSystem: System {
         WormComponent.registerComponent()
         PomegranateBodyComponent.registerComponent()
         SeedComponent.registerComponent()
-        OrangePeelComponent.registerComponent()
+        OrangeBodyComponent.registerComponent()
         PineappleBodyComponent.registerComponent()
         OrbComponent.registerComponent()
         FocusComponent.registerComponent()
@@ -205,7 +208,7 @@ struct OrchardSystem: System {
             rig.ease(towards: isFocused ? viewModel.pomegranateOpening : 0,
                      burst: isFocused && viewModel.pomegranateBurst, deltaTime: deltaTime)
         case .orange(let rig):
-            rig.ease(towards: isFocused ? viewModel.orangePeel : rig.displayedPeel.map { _ in 0 }, deltaTime: deltaTime)
+            rig.ease(towards: isFocused ? viewModel.orangeOpening : 0, deltaTime: deltaTime)
         case .pineapple(let rig):
             rig.ease(towards: isFocused && viewModel.pineappleChopped ? 1 : 0, deltaTime: deltaTime)
         }
@@ -386,7 +389,7 @@ enum OrchardSceneBuilder {
         case .orange:
             guard let orange = OrangeRig() else { return nil }
             return RigBuild(rig: .orange(orange), root: orange.root, size: orange.size,
-                            tapShape: .generateSphere(radius: orange.size * 0.7),
+                            tapShape: .generateSphere(radius: orange.radius * 1.8),
                             treeSize: orangeSizeOnTree, focusedSize: orangeSizeFocused)
         case .pineapple:
             guard let pineapple = await PineappleRig() else { return nil }

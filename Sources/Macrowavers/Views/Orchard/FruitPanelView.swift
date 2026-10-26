@@ -84,7 +84,9 @@ struct FruitPanelView: View {
         case .pomegranate:
             return orchard.pomegranateBurst ? "Drag the seeds around for fun." : "Pull it apart with both hands."
         case .orange:
-            return "Pinch a petal of the peel and pull it outwards and down. Peel all six."
+            return orchard.orangeOpened
+                ? "Fresh orange wedges!"
+                : "Pull it apart with both hands: into halves, then into wedges."
         case .pineapple:
             return orchard.isHandTrackingAvailable
                 ? "Chop down through it with the edge of your hand, or tap it."

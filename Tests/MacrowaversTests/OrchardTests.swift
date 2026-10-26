@@ -105,8 +105,7 @@ struct OrchardViewModelTests {
         switch orchard.focusedFruit?.kind {
         case .apple: clearWorms(orchard)
         case .pomegranate: orchard.setPomegranateOpening(1)
-        case .orange:
-            for petal in 0..<OrchardViewModel.orangePetals { orchard.setOrangePeel(petal: petal, progress: 1) }
+        case .orange: orchard.setOrangeOpening(1)
         case .pineapple: orchard.chopPineapple()
         case nil: break
         }
@@ -148,15 +147,18 @@ struct OrchardViewModelTests {
         #expect(orchard.orbs[pomegranate] == .sealed)
         orchard.setPomegranateOpening(1)
         #expect(orchard.pomegranateBurst && orchard.orbs[pomegranate] == .revealed)
+        // Pulling apart a pomegranate does not open the orange.
+        orchard.setOrangeOpening(1)
+        #expect(orchard.orangeOpening == 0 && !orchard.orangeOpened)
         orchard.back()
 
         let orange = id(of: .orange, in: orchard)
         orchard.focus(fruit: orange)
-        for petal in 0..<(OrchardViewModel.orangePetals - 1) { orchard.setOrangePeel(petal: petal, progress: 1) }
-        // Five petals out of six: still closed.
+        orchard.setOrangeOpening(0.5)
+        // Two halves: the wedges are not open yet.
         #expect(orchard.orbs[orange] == .sealed && !orchard.isFocusedFruitExplored)
-        orchard.setOrangePeel(petal: OrchardViewModel.orangePetals - 1, progress: OrchardViewModel.peeledPetal)
-        #expect(orchard.orbs[orange] == .revealed && orchard.isFocusedFruitExplored)
+        orchard.setOrangeOpening(OrchardViewModel.wedgesOpening)
+        #expect(orchard.orangeOpened && orchard.orbs[orange] == .revealed && orchard.isFocusedFruitExplored)
         // Other fruits' gestures do nothing to an orange.
         orchard.setAppleOpening(1)
         orchard.chopPineapple()
