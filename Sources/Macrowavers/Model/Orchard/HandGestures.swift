@@ -20,6 +20,36 @@ struct HandSample: Equatable {
     /// Last joint of the middle finger before its tip (ARKit's `middleFingerIntermediateTip`, the DIP joint).
     var middleDistal: SIMD3<Float>
     var middleTip: SIMD3<Float>
+    /// The other fingers' knuckles and tips, for the cupped hand that turns the fruit (`CupTurn`).
+    var indexKnuckle = SIMD3<Float>.zero
+    var ringKnuckle = SIMD3<Float>.zero
+    var littleKnuckle = SIMD3<Float>.zero
+    var ringTip = SIMD3<Float>.zero
+    var littleTip = SIMD3<Float>.zero
+
+    /// Middle of the palm: halfway from the wrist to the middle knuckle.
+    var palmCentre: SIMD3<Float> { (wrist + knuckle) / 2 }
+
+    /// The palm's orientation, built from the joints alone: z from the wrist to the middle knuckle, x from the
+    /// little knuckle to the index knuckle, y out of the palm's plane. Only its changes matter (how the hand turns),
+    /// so its axes need not match ARKit's.
+    var palmFrame: simd_quatf {
+        let forward = simd_normalize(knuckle - wrist)
+        let across = indexKnuckle - littleKnuckle
+        let side = simd_normalize(across - simd_dot(across, forward) * forward)
+        return simd_quatf(simd_float3x3(columns: (side, simd_cross(forward, side), forward)))
+    }
+
+    /// How far each finger (index, middle, ring, little) is bent, in degrees: the angle between the palm's
+    /// direction (wrist to middle knuckle) and the finger's knuckle-to-tip line. About 0 stretched, 180 in a fist.
+    var fingerBends: [Float] {
+        let forward = simd_normalize(knuckle - wrist)
+        return [(indexKnuckle, indexTip), (knuckle, middleTip), (ringKnuckle, ringTip), (littleKnuckle, littleTip)]
+            .map { base, tip in
+                let cosine = simd_dot(simd_normalize(tip - base), forward)
+                return acos(min(max(cosine, -1), 1)) * 180 / .pi
+            }
+    }
 
     /// Thumb tip to middle tip: far apart right after a snap.
     var snapGap: Float { simd_distance(thumbTip, middleTip) }

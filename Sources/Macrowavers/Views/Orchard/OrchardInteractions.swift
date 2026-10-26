@@ -68,12 +68,14 @@ struct OrchardInteractions: ViewModifier {
             }
     }
 
-    /// Pull the apple's stem up: the slices open.
+    /// Pull the apple's stem up (away from the apple): the slices open.
     private var pullStemGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .targetedToEntity(where: .has(AppleStemComponent.self))
             .onChanged { value in
-                let height = value.convert(value.location3D, from: .local, to: .scene).y
+                // Along the apple's own up axis: the player may have turned it (cupped hand).
+                let up = simd_normalize(value.entity.convert(direction: SIMD3(0, 1, 0), to: nil))
+                let height = simd_dot(value.convert(value.location3D, from: .local, to: .scene), up)
                 let start = stemDragStart ?? StemDrag(height: height, opening: orchard.appleOpening)
                 stemDragStart = start
                 // Fully open = the stem raised by `maxLift` at the apple's size in front of the player.
