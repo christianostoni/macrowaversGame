@@ -1,0 +1,80 @@
+{
+  "fill" : "automatic",
+  "groups" : [
+    {
+      "layers" : [
+
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "Group.png",
+          "name" : "Group",
+          "position" : {
+            "scale" : 1.45,
+            "translation-in-points" : [
+              -45.52284310000016,
+              -7.888442562124169
+            ]
+          }
+        },
+        {
+          "image-name" : "Leaf.svg",
+          "name" : "Leaf",
+          "position" : {
+            "scale" : 1.31,
+            "translation-in-points" : [
+              -86.165211,
+              -286.85074061473165
+            ]
+          }
+        },
+        {
+          "image-name" : "Orange Shine.svg",
+          "name" : "Orange Shine",
+          "position" : {
+            "scale" : 1.05,
+            "translation-in-points" : [
+              -138.45171389750004,
+              -164.3297685728342
+            ]
+          }
+        },
+        {
+          "image-name" : "Orange.svg",
+          "name" : "Orange",
+          "position" : {
+            "scale" : 1.56,
+            "translation-in-points" : [
+              -2.7646942500001614,
+              28.759296035195803
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
