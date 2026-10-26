@@ -128,6 +128,7 @@ struct OrchardComponent: Component {
     /// Interactive things behind the fruit (island rock, dragon colliders): switched off while a fruit is close,
     /// so a pinch that just misses the stem, a worm or the pomegranate never lands on them.
     let background: [Entity]
+    let sounds: OrchardSounds
     /// Focus already applied to the entities (`.some(nil)` = all on the tree).
     var appliedFocus: Int??
     var time: Float = 0
@@ -186,6 +187,7 @@ struct OrchardSystem: System {
             Self.detectSnap(&orchard)
             Self.updateOrbs(orchard: orchard, root: entity, deltaTime: deltaTime)
             Self.updateElixir(&orchard, root: entity, deltaTime: deltaTime)
+            orchard.sounds.update(orchard)
             entity.components.set(orchard)
         }
     }
@@ -352,9 +354,12 @@ enum OrchardSceneBuilder {
         root.addChild(elixir.elixir)
         root.addChild(elixir.hintAnchor)
 
+        let sounds = OrchardSounds()
+        Task { await sounds.load() }
         root.components.set(OrchardComponent(viewModel: viewModel, viewer: player.viewer, hands: player.hands,
                                              island: island.root, stage: stage, fruits: fruits, orbs: orbs,
-                                             elixir: elixir, deliveryTarget: deliveryTarget, background: background))
+                                             elixir: elixir, deliveryTarget: deliveryTarget, background: background,
+                                             sounds: sounds))
         return root
     }
 
