@@ -8,7 +8,7 @@ brew the **elixir**. The flask flies to the dragon and pours the elixir over its
 ([Untangle the Dragon](../untangle-dragon/README.md)).
 
 Origins:
-- The apple and pomegranate come from Isadora's AppleSpiral prototype: a spiral-cut apple deformed by a Metal shader, with worms.
+- The apple and the pomegranate's gestures come from Isadora's AppleSpiral prototype: a spiral-cut apple deformed by a Metal shader, with worms. The pomegranate itself is now the design team's model (`Pomegranate.usdz`).
   The prototype's own Xcode project was removed once ported; it is still in the git history.
 - The banana and pineapple come from the fruit lab prototype (`fruit_test_2`), a separate project that is not in
   this repo: only its exported `Banana.usdz` and `Pineapple.usdz` are.
@@ -45,7 +45,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 |---|---|
 | On the tree | 3 apples, 1 pomegranate, 1 banana and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
 | Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close |
-| Open it | Apple: the spiral slices lift (Metal compute shader) and 3 worms guard the orb. Pomegranate: the halves open like a book and 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Pineapple: the halves fall open towards the player and the crown tips away |
+| Open it | Apple: the spiral slices lift (Metal compute shader) and 3 worms guard the orb. Pomegranate: the halves open like a book and its 80 seeds burst out. Banana: each strip turns on its hinge and hangs down. Pineapple: the halves fall open towards the player and the crown tips away |
 | Ingredient found | The orb rises out of the fruit (1.2 s), glowing and pulsing, and floats there for 0.6 s (or until tapped) |
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
 | In orbit | The ingredients go round a small ellipse (26 × 28 cm) 60 cm away, 30° to the player's right and a little below their eyes, facing them, its far side tilted up so they see it whole: always between ~18° and ~42° to the right, never in the middle of the view where the fruit comes close; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). A small label under the orbit counts them |
@@ -193,7 +193,7 @@ Sources/Macrowavers/
         ├── HandTracker.swift                ARKit hand tracking → HandSample
         ├── AppleRig.swift                   LowLevelMesh + Metal compute pipeline, stem, worms
         ├── AppleSpiral.metal                `deformApple` kernel (one thread per vertex)
-        ├── PomegranateRig.swift             Halves, crown, seed burst
+        ├── PomegranateRig.swift             The design team's pomegranate: halves, seed burst
         ├── BananaRig.swift                  Banana.usdz, peel strips on hinges
         └── PineappleRig.swift               Pineapple.usdz, halves and crown opening
 ```
@@ -309,9 +309,32 @@ elixir's flight (`OrchardComponent.flight`).
 | `Banana.usdz` | Poly Haven `bananas` (CC0), cut into four peel strips by the fruit lab's `build_fruits.py` (external, not in this repo). Prims: `peelPivot_N/peel_N`, `peelBase`, `core`; the prototype's `stand` and `item` are removed at load |
 | `Pineapple.usdz` | Procedural, from the same script. Prims: `pineapple_1`, `pineapple_2`, `crown`; `item` removed at load |
 | `IngredientGem.usdz` | The design team's gem, `Assets/Blender/ingredient-gem/ingredient_gem.usdc`, prepared headless by `make_gem_asset.py` (below). Prim: `Gem` (26 flat faces, 6 cm tall, ~3.5 cm wide, origin at its centre, long axis up). The code colours it |
+| `Pomegranate.usdz` | The design team's pomegranate, `Assets/Blender/pomegranate/pomegranate_rcp.usdz`, prepared headless by `make_pomegranate_asset.py` (below). Prims: `RightHalf` (skin, flesh, crown), `LeftHalf` (skin, flesh), `Seed_00` … `Seed_79` (origin at each seed's centre); real size, 16 cm wide, centred, cut along x = 0. Without it there is no pomegranate on the tree |
 | `ElixirFlask.usdz` | The design team's flask, `Assets/Blender/elixir-flask/elixir_flask.usdc`, prepared headless by `make_flask_asset.py` (below). Prims: `Glass`, `Liquid` (origin at its bottom), `Cork` (origin at its centre), `neck_top`, `neck_base`. Without it a glowing blue orb stands in and the brew still plays |
 
-Apples and pomegranate are generated in code (the apple must stay procedural: the shader cuts it).
+The apples are generated in code (they must stay procedural: the shader cuts them).
+
+### The pomegranate's pipeline
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+    -P Assets/Blender/pomegranate/make_pomegranate_asset.py -- \
+    Assets/Blender/pomegranate/pomegranate_rcp.usdz <output folder>
+```
+
+The source (`pomegranate_RCP.usdz`, prepared in Reality Composer Pro) is at real size, centred and already cut in
+two along x = 0: `RightSkin`/`RightFlesh`, `LeftSkin`/`LeftFlesh` (the flesh is the cut face), a `Crown` and `Seeds`,
+one mesh holding 80 seeds. Its three materials (`Airbrush_Skin`, `Airbrush_Flesh`, `Airbrush_Seeds`) are Reality
+Composer Pro shader graphs, which Blender cannot read. The script groups `RightHalf` (with the crown) and
+`LeftHalf`, splits the seeds into `Seed_00` … `Seed_79` (one object each, origin at its centre, numbered from the
+top down), exports the geometry (Y-up) and copies the materials from the source unchanged with USD (`pxr`),
+binding each mesh to its own. 571 KB.
+
+In the game `PomegranateRig` hangs each half from a pivot it moves and turns (the halves keep their own transforms,
+which carry the file's Z-up → Y-up turn): the right half turns by +72° and the left one, its mirror image, by −72°,
+so both cut faces turn to the player (checked with RealityKit on macOS). The seeds burst out of the open fruit and
+fly back in to their packed places when it closes. It replaces the pomegranate the code used to build (two
+generated half-spheres, a crown of boxes and 40 seed spheres).
 
 ### The gem's pipeline
 

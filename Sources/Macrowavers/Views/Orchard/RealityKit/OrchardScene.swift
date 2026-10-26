@@ -379,7 +379,7 @@ enum OrchardSceneBuilder {
                             tapShape: .generateSphere(radius: shape.height * 0.9),
                             treeSize: appleSizeOnTree, focusedSize: appleSizeFocused)
         case .pomegranate:
-            guard let pomegranate = PomegranateRig() else { return nil }
+            guard let pomegranate = await PomegranateRig() else { return nil }
             return RigBuild(rig: .pomegranate(pomegranate), root: pomegranate.root, size: pomegranate.radius * 2,
                             tapShape: .generateSphere(radius: pomegranate.radius * 1.8),
                             treeSize: pomegranateSizeOnTree, focusedSize: pomegranateSizeFocused)
