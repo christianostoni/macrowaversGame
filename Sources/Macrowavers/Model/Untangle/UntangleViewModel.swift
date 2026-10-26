@@ -117,7 +117,7 @@ final class UntangleViewModel {
     /// 0...1: fades into the sky as it leaves (and stays invisible until it has a place to be).
     var dragonOpacity: Float {
         if phase == .gone { return 0 }
-        guard let flight else { return phase == .captive || phase == .alerted ? 0 : 1 }
+        guard let flight else { return phase.isOnIsland ? 0 : 1 }
         // Fades while moving away, within a couple of metres: before reaching the real room's walls or ceiling.
         let amount = flight.departFade
         return 1 - amount * amount * (3 - 2 * amount)
@@ -145,10 +145,20 @@ final class UntangleViewModel {
         refreshMood()
     }
 
+    /// The elixir is on its way to the dragon: it slows down to a stop on its path around the tree and lifts its
+    /// head to receive it (`DragonFlight.Maneuver.hold`); calm again if it was angry. `callDragon()` takes it from
+    /// there once the elixir is poured.
+    func receiveElixir() {
+        guard phase.isOnIsland, phase != .receivingElixir, let flight else { return }
+        flight.perform([.hold], viewer: Self.transform(viewer, by: worldFromFlight.inverse))
+        phase = .receivingElixir
+        refreshMood()
+    }
+
     /// The dragon leaves the tree: flies to the player, stops to look at them, then settles in front of
-    /// them, tangling itself up. Called when the artifact reaches it (or by the debug button).
+    /// them, tangling itself up. Called once the elixir is poured over it.
     func callDragon() {
-        guard phase == .captive || phase == .alerted, let flight else { return }
+        guard phase.isOnIsland, let flight else { return }
         resetPuzzle()
         // From the island's space to the scene's: from now on it flies free of the island.
         flight.transform(by: worldFromFlight)
@@ -267,7 +277,7 @@ final class UntangleViewModel {
         self.viewerForward = viewerForward
 
         switch phase {
-        case .captive, .alerted, .approaching, .landing:
+        case .captive, .alerted, .receivingElixir, .approaching, .landing:
             updateJourney(deltaTime: deltaTime, orbit: orbit)
         case .untangling:
             updatePuzzle(deltaTime: deltaTime)
@@ -278,7 +288,7 @@ final class UntangleViewModel {
 
     /// From the tree to the play area: the flight follows the script decided when the dragon is called.
     private func updateJourney(deltaTime: Float, orbit: AnchoredOrbit?) {
-        let onIsland = phase == .captive || phase == .alerted
+        let onIsland = phase.isOnIsland
         if flight == nil {
             // The dragon is born around the tree as soon as the island is known. It flies in the tree's space,
             // where the body (same length in the scene) measures 1/scale.

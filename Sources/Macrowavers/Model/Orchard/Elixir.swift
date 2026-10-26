@@ -13,9 +13,11 @@ enum ElixirState: Equatable {
     case brewed
     /// The flask flies to the dragon's head.
     case flying
-    /// Delivered: the flask pours the elixir over the dragon's head and fades; the dragon is soothed and comes to
-    /// the player.
+    /// Delivered: above the dragon's head the flask uncorks, tips over and pours the elixir on it, then fades
+    /// (`Elixir.Pour`).
     case delivered
+    /// Poured: the flask is gone and the dragon, soothed, comes to the player.
+    case poured
 }
 
 /// The elixir that soothes the dragon, brewed in a flask. The flask appears in the middle of the orbit in front of
@@ -36,8 +38,8 @@ struct Elixir: Equatable {
     static let joinDuration: Float = 1.4
     /// Seconds the flask takes to appear with the first ingredient.
     static let appearDuration: Float = 0.6
-    /// Seconds the flask pours the elixir over the dragon's head, then fades.
-    static let pourDuration: Float = 1.6
+    /// Seconds from the flask reaching the dragon to the dragon set free to come (`Pour`).
+    static let pourDuration: Float = Pour.fadeEnd
 
     /// Colours of the ingredients' gems, in the order they join the orbit:
     /// pomegranate red, saffron gold, pistachio green. RGB in 0...1.
@@ -58,6 +60,25 @@ struct Elixir: Equatable {
         static let recorkStart: Float = 2.7
         static let recorkEnd: Float = 3.2
         static let swirlEnd: Float = 3.6
+    }
+
+    /// Seconds of the pour, from the flask reaching the dragon's head: the cork pops, the flask tips over (its neck
+    /// goes below the horizontal at about `streamStart`), the elixir streams out while the liquid drains, reaches
+    /// the head `fall` later, and once the last of it has landed the dragon is soothed and the flask fades.
+    enum Pour {
+        static let corkPop: Float = 0.4
+        static let tipStart: Float = 0.25
+        static let tipEnd: Float = 1.1
+        static let streamStart: Float = 0.75
+        static let streamEnd: Float = 2.4
+        /// Seconds the elixir takes from the neck to the head (13 cm, `ElixirRig.pourClearance − headTop`).
+        static let fall: Float = 0.3
+        /// Seconds the stream takes to open fully, and to thin out to a trickle before it stops.
+        static let streamOpen: Float = 0.2
+        static let streamTail: Float = 0.6
+        static let soothe: Float = streamEnd + fall
+        static let fadeStart: Float = soothe
+        static let fadeEnd: Float = soothe + 0.5
     }
 
     private(set) var orbitingCount = 0
@@ -107,6 +128,8 @@ struct Elixir: Equatable {
             enter(.brewed)
         case .brewed where stateTime >= Self.brewedHold && canFly:
             enter(.flying)
+        case .delivered where stateTime >= Self.pourDuration:
+            enter(.poured)
         default:
             break
         }
@@ -125,7 +148,7 @@ struct Elixir: Equatable {
         switch state {
         case .gathering, .ready: 0
         case .fusing: stateTime
-        case .brewed, .flying, .delivered: Self.fusingDuration
+        case .brewed, .flying, .delivered, .poured: Self.fusingDuration
         }
     }
 
@@ -164,10 +187,20 @@ struct Elixir: Equatable {
         }
     }
 
-    /// Level of the liquid (0 = empty, 1 = the flask's full level). It drains while it is poured.
+    /// Level of the liquid (0 = empty, 1 = the flask's full level). It drains while the elixir streams out, quickest
+    /// at first (the flask is fullest), and is empty when the stream stops.
     var fillLevel: Float {
         let level = shares().reduce(0, +) / Float(Self.ingredientCount)
-        return state == .delivered ? level * (1 - Self.smoothstep(from: 0.45, to: 1.2, stateTime)) : level
+        switch state {
+        case .delivered:
+            let drained = min(max((stateTime - Pour.streamStart) / (Pour.streamEnd - Pour.streamStart), 0), 1)
+            let left = 1 - drained
+            return level * left * left
+        case .poured:
+            return 0
+        default:
+            return level
+        }
     }
 
     /// Colour of the liquid: the ingredients mixed by their share, swirling into the elixir's blue once the cork
@@ -190,13 +223,13 @@ struct Elixir: Equatable {
     /// How far the cork is out of the neck (0 = in, 1 = popped above it, overshooting a little as it pops).
     var corkOut: Float {
         switch state {
-        case .gathering, .ready, .brewed, .flying:
+        case .gathering, .ready, .brewed, .flying, .poured:
             return 0
         case .fusing:
             if stateTime < Timeline.recorkStart { return Self.easeOutBack(stateTime / Timeline.corkPop) }
             return 1 - Self.smoothstep(from: Timeline.recorkStart, to: Timeline.recorkEnd, stateTime)
         case .delivered:
-            return Self.easeOutBack(stateTime / Timeline.corkPop)
+            return Self.easeOutBack(stateTime / Pour.corkPop)
         }
     }
 
@@ -235,23 +268,48 @@ struct Elixir: Equatable {
         case .brewed:
             return presence * (1 + 0.08 * sin(.pi * min(stateTime / Self.popDuration, 1)))
         case .delivered:
-            return presence * (1 - Self.smoothstep(from: Self.pourDuration - 0.35, to: Self.pourDuration, stateTime))
+            return presence * (1 - Self.smoothstep(from: Pour.fadeStart, to: Pour.fadeEnd, stateTime))
+        case .poured:
+            return 0
         }
     }
 
-    /// How far the flask is tipped over the dragon's head (0 = upright, 1 = pouring).
+    /// How far the flask is tipped over the dragon's head (0 = upright, 1 = pouring): slowly, with no jolt at either
+    /// end.
     var pourTilt: Float {
-        state == .delivered ? Self.smoothstep(from: 0.15, to: 0.6, stateTime) : 0
+        state == .delivered ? Self.smootherstep((stateTime - Pour.tipStart) / (Pour.tipEnd - Pour.tipStart)) : 0
+    }
+
+    /// How strongly the elixir streams out of the neck (0...1): it opens quickly, flows, thins to a trickle as the
+    /// flask empties, and stops.
+    var pourFlow: Float {
+        state == .delivered ? Self.flow(at: stateTime) : 0
+    }
+
+    /// How strongly the elixir lands on the dragon's head (0...1): the stream, `Pour.fall` later.
+    var splashFlow: Float {
+        state == .delivered ? Self.flow(at: stateTime - Pour.fall) : 0
     }
 
     /// The elixir streams out of the neck.
     var isPouring: Bool {
-        state == .delivered && stateTime >= 0.45 && stateTime < 1.25
+        pourFlow > 0
+    }
+
+    /// The last of the elixir has landed: the dragon is soothed (a shimmer around its head), the flask fades.
+    var hasSoothed: Bool {
+        (state == .delivered && stateTime >= Pour.soothe) || state == .poured
     }
 
     /// The flask has poured the elixir and faded: nothing left to draw.
     var isFinished: Bool {
-        state == .delivered && stateTime >= Self.pourDuration
+        state == .poured
+    }
+
+    private static func flow(at time: Float) -> Float {
+        guard time >= Pour.streamStart, time < Pour.streamEnd else { return 0 }
+        return smoothstep(from: Pour.streamStart, to: Pour.streamStart + Pour.streamOpen, time)
+            * (1 - 0.75 * smoothstep(from: Pour.streamEnd - Pour.streamTail, to: Pour.streamEnd, time))
     }
 
     /// A decaying wobble: `amplitude · e^(−t / 0.45) · sin(2π · 2.2 t)`.

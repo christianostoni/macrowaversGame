@@ -68,7 +68,17 @@ final class OrchardViewModel {
     private(set) var pineappleChopped = false
     /// One orb per fruit, indexed by the fruit's id.
     private(set) var orbs: [OrbState]
-    private(set) var elixir = Elixir()
+    /// Advanced every frame (its animation clocks): not observed, or every view reading it would be redrawn every
+    /// frame. The systems read it; views read `elixirState` and `orbitingCount`, set only when they change.
+    @ObservationIgnored private(set) var elixir = Elixir() {
+        didSet {
+            if elixir.state != elixirState { elixirState = elixir.state }
+            if elixir.orbitingCount != orbitingCount { orbitingCount = elixir.orbitingCount }
+        }
+    }
+    private(set) var elixirState = ElixirState.gathering
+    /// Ingredients in orbit.
+    private(set) var orbitingCount = 0
     /// The dragon still circles the tree: set by the immersive view. The elixir flies to it only then, and the
     /// orbiting ingredients take the pinch only then (later they would steal the grabs on the dragon's knot).
     var isDragonOnIsland = true

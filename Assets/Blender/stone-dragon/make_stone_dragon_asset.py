@@ -17,8 +17,9 @@ long, with an idle animation on every stone and a jaw animation. What the script
 - Scales everything so the chain, from the head's centre to the tail stone's centre, is `SIM_LENGTH` long (the
   simulated body's length); the game still scales the stones' thickness to the simulated body.
 - Builds `Head`: origin at the face's centre, snout towards +Z, +Y up, with the face, the horns and the (upper)
-  teeth. The face's vertices skinned to the `Jaw` bone are the lower jaw: they become `Jaw`, under `JawHinge` (at
-  the head of that bone), so the game opens the mouth by turning the hinge around its +X. `mouth` and `nostrils`
+  teeth. The face's faces whose vertices all follow the `Jaw` bone are the lower jaw: they become `Jaw`, under
+  `JawHinge` (at the head of that bone), so the game opens the mouth by turning the hinge around its +X. Every
+  other face, those bridging the two included, stays on the head: none is lost at the seam. `mouth` and `nostrils`
   mark where fire and smoke come out.
 - Keeps the design team's materials as they are: `AirbrushGrain_00` (the head) ... `AirbrushGrain_19` (one per
   stone) are Reality Composer Pro shader graphs (unlit: a colour ramp driven by the facing angle and a grain that
@@ -115,17 +116,30 @@ def part(keyword):
 face, horns, teeth = part("Face"), part("Horns"), part("Teeth")
 loose = [item for item in meshes if item not in (face, horns, teeth)]
 
-# The jaw's pieces leave the face for their own object.
+# The jaw's pieces leave the face for their own object, face by face: a face goes to the jaw when all its vertices
+# follow the jaw bone, otherwise it stays on the head (the faces bridging the two too: whole with the mouth closed,
+# they stay with the head as it opens). Splitting by vertices instead deleted, from both parts, the faces that
+# bridge the two (11 of the face's 185: holes in the head).
+def is_jaw(polygon):
+    return all(vertex.index in jaw_vertices for vertex in polygon.verts)
+
+
 jaw_part = face.copy()
 jaw_part.data = face.data.copy()
 scene.collection.objects.link(jaw_part)
-for item, drop in ((face, lambda index: index in jaw_vertices), (jaw_part, lambda index: index not in jaw_vertices)):
+face_count = len(face.data.polygons)
+for item, keeps_jaw in ((face, False), (jaw_part, True)):
     mesh = bmesh.new()
     mesh.from_mesh(item.data)
     mesh.verts.ensure_lookup_table()
-    bmesh.ops.delete(mesh, geom=[vertex for vertex in mesh.verts if drop(vertex.index)], context="VERTS")
+    bmesh.ops.delete(mesh, geom=[polygon for polygon in mesh.faces if is_jaw(polygon) != keeps_jaw],
+                     context="FACES_ONLY")
+    bmesh.ops.delete(mesh, geom=[vertex for vertex in mesh.verts if not vertex.link_faces], context="VERTS")
     mesh.to_mesh(item.data)
     mesh.free()
+if len(face.data.polygons) + len(jaw_part.data.polygons) != face_count:
+    raise SystemExit(f"The face lost faces in the split: {face_count} -> "
+                     f"{len(face.data.polygons)} + {len(jaw_part.data.polygons)}")
 meshes.append(jaw_part)
 bake_scale[jaw_part] = bake_scale[face]
 if face in materials:

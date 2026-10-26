@@ -47,9 +47,14 @@ struct OrchardInteractions: ViewModifier {
             .onChange(of: untangle.phase.isOnIsland, initial: true) { _, isOnIsland in
                 orchard.isDragonOnIsland = isOnIsland
             }
-            // The elixir reached the dragon: soothed, it comes to the player.
-            .onChange(of: orchard.elixir.state) { _, state in
-                if state == .delivered { untangle.callDragon() }
+            // The elixir flies to the dragon: it stops on its path and lifts its head to receive it. Once the elixir
+            // is poured over it, soothed, it comes to the player (not before: the flask would chase it).
+            .onChange(of: orchard.elixirState) { _, state in
+                switch state {
+                case .flying: untangle.receiveElixir()
+                case .poured: untangle.callDragon()
+                default: break
+                }
             }
     }
 

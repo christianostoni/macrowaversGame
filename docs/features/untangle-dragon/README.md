@@ -23,8 +23,8 @@ placeholder is used when it is not in the bundle.
 5. Pick fruit on the tree and open them: each frees an **ingredient** that joins a small orbit on your right (see
    [The tree's fruit](../apple-artifact/README.md)). With three in orbit, snap your fingers (or tap one): they
    dive one by one into the flask in the orbit's middle and brew the **elixir**; the flask flies to the dragon and
-   pours the elixir over its head (`callDragon()`): it flies to you, stops to look at you and settles tangled in
-   front of you.
+   pours the elixir over its head; once the pour is over (`callDragon()`) it flies to you, stops to look at you
+   and settles tangled in front of you.
 6. Pinch and drag the dragon's stones or its head (one per hand), lift them to pass them over or under the
    others. Each stone lights up when you look at it; the head stays where you leave it.
 
@@ -37,7 +37,8 @@ uses a seated eye height of 1.15 m.
 |---|---|
 | Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or the island panel's buttons): its side facing you follows your hand, and the dragon turns with it |
 | Tap the dragon | For ~3 s it gets angry (`DragonPhase.alerted`): circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling |
-| The flask pours the elixir over it | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
+| The elixir flies to it | It stops (`DragonPhase.receivingElixir`, `DragonFlight.Maneuver.hold`): it slows down along its path around the tree to a standstill in ~1.5 s (speed `e^(−2.5 t)` of the orbit's, the body still on the path), lifting its snout (~60° up at a standstill) and opening its mouth a little, wings spread and beating slowly. Calm again if it was angry, and it cannot be tapped. The flask arrives above its head and pours the elixir over it ([The tree's fruit](../apple-artifact/README.md)) |
+| The elixir is poured (`callDragon()`) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), blue pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
 | Grab | The stone (or the head) you look at glows; pinch to grab, one per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly, without snapping after it, and slides through the knot instead of sticking to the hand; pulled taut, it stops stretching but the other hand can still move its part. Two held parts push each other away instead of passing through. The dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard. The head can be held too: it follows the hand and stays where it is let go, settling onto the plane |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils (the placeholder's eyes turn red). Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
@@ -62,7 +63,7 @@ Sources/Macrowavers/
 │   ├── DragonBehavior.swift            Difficulty: idle timer → fit (choreography of DragonAction), DragonMood
 │   ├── DragonFlight.swift              Flights (orbit, approach, landing, farewell) with a "follow the leader" body
 │   ├── DragonFlightSettings.swift      Manoeuvres and flight tuning (default and `.farewell`)
-│   ├── DragonPhase.swift               Story chapters (captive ⇄ alerted → approaching → landing → untangling → free → gone)
+│   ├── DragonPhase.swift               Story chapters (captive ⇄ alerted → receivingElixir → approaching → landing → untangling → free → gone)
 │   ├── HandGrabs.swift                 Which hand holds which node, from the manipulation events
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
@@ -325,8 +326,10 @@ animation. The script:
 - orders the stones from the head to the tail (each the closest to the previous one) as `Stone_00` … `Stone_18`,
   origin at the centre, +Z along the body towards the tail, +Y up;
 - scales the chain, from the head's centre to the tail stone's, to 2.35 m (the simulated body);
-- builds `Head` (origin at the face's centre, snout +Z): the face's vertices skinned to the `Jaw` bone (68 of
-  398, weight 1) become the lower jaw, `Jaw`, under `JawHinge` at the head of that bone; the upper teeth stay on the
+- builds `Head` (origin at the face's centre, snout +Z): the face's faces whose vertices are all skinned to the
+  `Jaw` bone (68 of 398 vertices, weight 1; 22 of 185 faces) become the lower jaw, `Jaw`, under `JawHinge` at the
+  head of that bone, and every other face stays on the head (163). An earlier version split the face by vertices
+  and so dropped, from both parts, the 11 faces bridging them: holes in the head. The upper teeth stay on the
   head; `mouth` and `nostrils` mark where fire and smoke come out. Fitted against the source's jaw animation, the
   jaw turns around exactly that point and the head's sideways axis (within 4 mm), at most 0.489 rad: the rig opens
   it as far (`StoneDragonRig.Asset.jawAngle` 0.49);
@@ -433,7 +436,8 @@ the fit starting with a turn after the delay, the dragon waiting while held, a s
 a taut pull not flickering (pulled 1.5 m apart, so it ends up taut), flight keeping its distance from the player, the orbit never crossing itself, the
 captive dragon turning rigidly with the island, the landing matching the knot, the farewell ending, the free
 dragon staying in front of the player and hovering where they look (two gaze directions), the story flow
-(captive, a tap only makes it angry for `alertDuration`, `callDragon()` → puzzle), tilt clamping, restart and
+(captive, a tap only makes it angry for `alertDuration`, `receiveElixir()` braking to a standstill with no jump
+and staying still past the anger's time, `callDragon()` → puzzle), tilt clamping, restart and
 play again.
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
 elixir flies, when exploring, only landing and untangling focusing on the dragon) and the island's transform (at least the original size, grass at 0.6 m

@@ -123,7 +123,7 @@ final class DragonFlight {
 
         let head: SIMD3<Float>
         switch maneuver {
-        case .orbit:
+        case .orbit, .hold:
             // Fixed path: the velocity is whatever results (the rig and the next manoeuvre need it).
             head = advanceOnOrbit(dt: dt)
             velocity = (head - positions[0]) / dt
@@ -262,6 +262,7 @@ final class DragonFlight {
         case .cruise: [(.swoop, 0.35), (.hover, 0.3), (.loop, 0.2), (.cruise, 0.15)]
         case .swoop, .hover, .loop, .approach, .land, .depart: [(.cruise, 1)]
         case .orbit: [(.orbit, 1)]
+        case .hold: [(.hold, 1)]
         }
         var roll = Float.random(in: 0..<options.reduce(0) { $0 + $1.1 }, using: &random)
         for (option, weight) in options {
@@ -320,7 +321,7 @@ final class DragonFlight {
         case .depart:
             // A target running ahead and gently up: away from the player, fading before the ceiling.
             return positions[0] + (departDirection + SIMD3(0, 0.35, 0)) * 2
-        case .orbit, .land:
+        case .orbit, .hold, .land:
             // They follow a path, they do not steer.
             return positions[0]
         }
@@ -363,9 +364,15 @@ final class DragonFlight {
 // MARK: - Paths (tree, landing)
 
 extension DragonFlight {
+    /// How quickly a `.hold` slows the dragon down on its path (1/s): its speed is `e^(−holdBraking · t)` of the
+    /// orbit's, nearly still after a second.
+    static let holdBraking: Float = 2.5
+
     private func advanceOnOrbit(dt: Float) -> SIMD3<Float> {
         guard let orbit else { return positions[0] }
-        pathAngle += orbit.speed / orbit.radius * dt
+        // Holding, it brakes along the same path: the body stays on it and never crumples.
+        let brake = maneuver == .hold ? exp(-elapsed * Self.holdBraking) : 1
+        pathAngle += orbit.speed * brake / orbit.radius * dt
         // The curve closes every two turns: the angle stays small (Float precision).
         if pathAngle > 4 * .pi { pathAngle -= 4 * .pi }
         return orbit.point(at: pathAngle)
