@@ -14,10 +14,10 @@ The game plays in mixed reality, in the player's room:
    searching for?", then "Chapter I". Tap the text to go on.
 2. **The island.** A floating island fades in, with a dragon bound to the tree at its centre, circling it. Tap the
    dragon and it gets angry for a moment.
-3. **The fruit.** Apples, a pomegranate, an orange and a pineapple hang on the tree. Pick one and it comes close:
-   pull the apple's stem to open its spiral cut and catch the worms guarding it, pull the pomegranate apart with
-   two hands, pull the orange apart into wedges, chop the pineapple. Every fruit frees a glowing ingredient that
-   joins a small orbit on your right.
+3. **The fruit.** Apples, a pomegranate, a banana, an orange and a pineapple hang on the tree. Pick one and it
+   comes close: pull the apple's stem to open its spiral cut and catch the worms guarding it, pull the pomegranate
+   apart with two hands, peel the banana strip by strip, pull the orange apart into wedges, chop the pineapple.
+   Every fruit frees a glowing ingredient that joins a small orbit on your right.
 4. **The elixir.** With three ingredients in orbit, snap your fingers: they dive one by one into the flask in the
    middle of the orbit. The flask flies to the dragon and pours the elixir over its head.
 5. **Untangle the dragon.** Soothed, the dragon comes to you and settles with its long body tied in a knot. Pinch

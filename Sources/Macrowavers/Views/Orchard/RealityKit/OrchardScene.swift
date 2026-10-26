@@ -55,9 +55,13 @@ struct OrbComponent: Component {
     /// The player holds it in orbit: the hand moves and turns it, the orbit waits. Let go, it flies back to its
     /// slot like it came from its fruit (`joinStart` starts over).
     var isHeld = false
+    /// Size the player gave it with two hands (1 = its own). Let go, it eases back to 1.
+    var heldScale: Float = 1
 
     /// Seconds from the fruit to the orbit.
     static let joinDuration = Elixir.joinDuration
+    /// How small and how big two hands can make it.
+    static let heldScaleRange: ClosedRange<Float> = 0.5...3
 }
 
 /// Smoothly moves an entity to `target` (in its parent's space), then removes itself.
@@ -98,6 +102,7 @@ struct OrchardFruit {
     enum Rig {
         case apple(AppleRig)
         case pomegranate(PomegranateRig)
+        case banana(BananaRig)
         case orange(OrangeRig)
         case pineapple(PineappleRig)
     }
@@ -131,6 +136,7 @@ struct OrchardComponent: Component {
     /// Interactive things behind the fruit (island rock, dragon colliders): switched off while a fruit is close,
     /// so a pinch that just misses the stem, a worm or the pomegranate never lands on them.
     let background: [Entity]
+    let sounds: OrchardSounds
     /// Focus already applied to the entities (`.some(nil)` = all on the tree).
     var appliedFocus: Int??
     var time: Float = 0
@@ -160,6 +166,7 @@ struct OrchardSystem: System {
         WormComponent.registerComponent()
         PomegranateBodyComponent.registerComponent()
         SeedComponent.registerComponent()
+        BananaPeelComponent.registerComponent()
         OrangeBodyComponent.registerComponent()
         PineappleBodyComponent.registerComponent()
         OrbComponent.registerComponent()
@@ -189,6 +196,7 @@ struct OrchardSystem: System {
             Self.detectSnap(&orchard)
             Self.updateOrbs(orchard: orchard, root: entity, deltaTime: deltaTime)
             Self.updateElixir(&orchard, root: entity, deltaTime: deltaTime)
+            orchard.sounds.update(orchard)
             entity.components.set(orchard)
         }
     }
@@ -207,6 +215,8 @@ struct OrchardSystem: System {
         case .pomegranate(let rig):
             rig.ease(towards: isFocused ? viewModel.pomegranateOpening : 0,
                      burst: isFocused && viewModel.pomegranateBurst, deltaTime: deltaTime)
+        case .banana(let rig):
+            rig.ease(towards: isFocused ? viewModel.bananaPeel : rig.displayedPeel.map { _ in 0 }, deltaTime: deltaTime)
         case .orange(let rig):
             rig.ease(towards: isFocused ? viewModel.orangeOpening : 0, deltaTime: deltaTime)
         case .pineapple(let rig):
@@ -307,6 +317,8 @@ enum OrchardSceneBuilder {
     static let appleSizeFocused: Float = 0.2
     static let pomegranateSizeOnTree: Float = 0.08
     static let pomegranateSizeFocused: Float = 0.14
+    static let bananaSizeOnTree: Float = 0.1
+    static let bananaSizeFocused: Float = 0.22
     static let orangeSizeOnTree: Float = 0.08
     static let orangeSizeFocused: Float = 0.18
     static let pineappleSizeOnTree: Float = 0.09
@@ -355,9 +367,12 @@ enum OrchardSceneBuilder {
         root.addChild(elixir.elixir)
         root.addChild(elixir.hintAnchor)
 
+        let sounds = OrchardSounds()
+        Task { await sounds.load() }
         root.components.set(OrchardComponent(viewModel: viewModel, viewer: player.viewer, hands: player.hands,
                                              island: island.root, stage: stage, fruits: fruits, orbs: orbs,
-                                             elixir: elixir, deliveryTarget: deliveryTarget, background: background))
+                                             elixir: elixir, deliveryTarget: deliveryTarget, background: background,
+                                             sounds: sounds))
         return root
     }
 
@@ -377,15 +392,20 @@ enum OrchardSceneBuilder {
         switch kind {
         case .apple:
             let shape = viewModel.appleShape
-            guard let apple = AppleRig(shape: shape, wormCount: viewModel.wormCount) else { return nil }
-            return RigBuild(rig: .apple(apple), root: apple.root, size: shape.height,
-                            tapShape: .generateSphere(radius: shape.height * 0.9),
+            guard let apple = await AppleRig(shape: shape, wormCount: viewModel.wormCount) else { return nil }
+            return RigBuild(rig: .apple(apple), root: apple.root, size: shape.width,
+                            tapShape: .generateSphere(radius: shape.width * 0.9),
                             treeSize: appleSizeOnTree, focusedSize: appleSizeFocused)
         case .pomegranate:
             guard let pomegranate = await PomegranateRig() else { return nil }
             return RigBuild(rig: .pomegranate(pomegranate), root: pomegranate.root, size: pomegranate.radius * 2,
                             tapShape: .generateSphere(radius: pomegranate.radius * 1.8),
                             treeSize: pomegranateSizeOnTree, focusedSize: pomegranateSizeFocused)
+        case .banana:
+            guard let banana = await BananaRig() else { return nil }
+            return RigBuild(rig: .banana(banana), root: banana.root, size: banana.size,
+                            tapShape: .generateSphere(radius: banana.size * 0.6),
+                            treeSize: bananaSizeOnTree, focusedSize: bananaSizeFocused)
         case .orange:
             guard let orange = OrangeRig() else { return nil }
             return RigBuild(rig: .orange(orange), root: orange.root, size: orange.size,
@@ -436,6 +456,7 @@ extension OrchardFruit {
         switch rig {
         case .apple(let rig): rig.core
         case .pomegranate(let rig): rig.orbAnchor
+        case .banana(let rig): rig.orbAnchor
         case .orange(let rig): rig.orbAnchor
         case .pineapple(let rig): rig.orbAnchor
         }
@@ -447,6 +468,7 @@ extension OrchardFruit {
         switch rig {
         case .apple(let rig): rig.shape.height / 2 + viewModel.appleOpening * rig.shape.maxLift + 0.07
         case .pomegranate(let rig): rig.radius * 0.9 + 0.07
+        case .banana(let rig): rig.heightAboveAnchor + 0.05
         case .orange(let rig): rig.heightAboveAnchor + 0.05
         case .pineapple(let rig): rig.size / 2 + 0.07
         }
@@ -464,6 +486,7 @@ extension OrchardFruit {
         switch rig {
         case .apple(let rig): rig.setInteractive(isInteractive)
         case .pomegranate(let rig): rig.setInteractive(isInteractive)
+        case .banana(let rig): rig.setInteractive(isInteractive)
         case .orange(let rig): rig.setInteractive(isInteractive)
         case .pineapple(let rig): rig.setInteractive(isInteractive)
         }

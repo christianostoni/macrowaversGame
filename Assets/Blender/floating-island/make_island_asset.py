@@ -5,7 +5,7 @@ Usage (USD's Python API, `pxr`, ships with Blender; Blender itself is not used):
         -P Assets/Blender/floating-island/make_island_asset.py -- \
         Assets/Blender/floating-island/ilha_rcp.usdz <output folder>
 
-The source (`ilha_RCP.usdz`, prepared in Reality Composer Pro) is the island with its tree (Z-up under a root
+The source (`ilha_RCP_v2.usdz`, prepared in Reality Composer Pro) is the island with its tree (Z-up under a root
 that turns it Y-up, ~14 m wide, 64 meshes, a sun and a camera), with Reality Composer Pro shader graph materials
 (unlit "airbrush" colour ramps), several per mesh through face subsets. Blender cannot read those materials, so
 the script edits the USD directly and leaves every mesh, face subset and material as it is. The app expects the
@@ -19,7 +19,7 @@ as they were:
   from the bottom of its trunk to the top of its canopy (island ~2.5 m wide): both on the file's root, after its
   Z-up → Y-up turn. The tree alone sets the scale: a designer reshaping the rock or the grass must not resize the
   whole island.
-- Empty prims `fruit_01` ... `fruit_06` on the outside of the canopy, found by casting rays at the foliage: the
+- Empty prims `fruit_01` ... `fruit_07` on the outside of the canopy, found by casting rays at the foliage: the
   code hangs the fruit there.
 - The source's meshes are already double-sided (RealityKit draws their inner walls), so no faces are turned.
 """
@@ -38,7 +38,7 @@ os.makedirs(OUTPUT, exist_ok=True)
 # Height of the tree, bottom of the trunk to top of the canopy, in metres: the scale the code is tuned for.
 TARGET_TREE_HEIGHT = 1.8415
 # Fruit hang points: (angle in degrees around the canopy, height as a fraction of the canopy, 0 = its bottom).
-FRUIT_SPOTS = [(20, 0.3), (95, 0.42), (160, 0.26), (230, 0.38), (290, 0.32), (340, 0.45)]
+FRUIT_SPOTS = [(20, 0.3), (95, 0.42), (160, 0.26), (230, 0.38), (290, 0.32), (340, 0.45), (260, 0.36)]
 # Distance of the fruit centre from the foliage surface, and how far below the hit it hangs (metres, game scale).
 FRUIT_OFFSET = 0.045
 FRUIT_DROP = 0.02

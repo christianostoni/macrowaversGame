@@ -27,6 +27,7 @@ struct AppleUniforms {
     var turns: Float
     var gapPerTurn: Float
     var vertexCount: UInt32
+    var profileCount: UInt32
 }
 
 /// Compute pipeline of the `deformApple` kernel, created once and shared by every apple.
@@ -53,11 +54,15 @@ final class AppleSpiralPipeline {
     }
 }
 
-/// The spiral-cut apple drawn in RealityKit: the mesh deformed by the Metal shader, the stem to pull and
-/// the worms. It draws and reports nothing: the opening and the worms come from `OrchardViewModel`.
-/// Origin at the centre of the apple.
+/// The spiral-cut apple drawn in RealityKit. Closed, it is the design team's apple (`Apple.usdz`: skin, flesh, stem,
+/// leaf); opened, the spiral that the Metal shader deforms (`AppleShape`, the same silhouette) takes its place, in
+/// the asset's materials, while the stem and the leaf rise with the top slice. Then the worms. It draws and reports
+/// nothing: the opening and the worms come from `OrchardViewModel`. Origin at the centre of the apple.
+/// Without the asset the spiral is drawn closed too, in plain materials, with a stick for a stem.
 @MainActor
 final class AppleRig {
+    static let assetName = "Apple"
+
     let root = Entity()
     let stem = Entity()
     /// Where the orb sits while the apple guards it (centre of the core).
@@ -65,9 +70,14 @@ final class AppleRig {
     let shape: AppleShape
 
     private let body = Entity()
+    /// The deformed spiral, shown once the apple opens.
+    private let spiral: ModelEntity
+    /// The design team's apple without its stem and leaf, shown while it is closed (nil without the asset).
+    private let closedApple: Entity?
     private let lowMesh: LowLevelMesh
     private let params: [AppleVertexParams]
     private let paramsBuffer: MTLBuffer?
+    private let profileBuffer: MTLBuffer?
     private var worms: [Entity] = []
     private var appliedOpening: Float = -1
     /// Opening currently drawn: it eases towards the requested one, so the apple never snaps shut.
@@ -82,28 +92,28 @@ final class AppleRig {
         return material
     }()
 
-    init?(shape: AppleShape, wormCount: Int) {
+    init?(shape: AppleShape, wormCount: Int) async {
         self.shape = shape
         let params = Self.makeParams(shape: shape)
         self.params = params
-        paramsBuffer = AppleSpiralPipeline.shared.flatMap { pipeline in
-            params.withUnsafeBytes { bytes in
-                guard let address = bytes.baseAddress else { return nil }
-                return pipeline.device.makeBuffer(bytes: address, length: bytes.count, options: .storageModeShared)
-            }
-        }
-        guard let mesh = try? Self.makeMesh(shape: shape, params: params),
-              let resource = try? MeshResource(from: mesh) else { return nil }
+        paramsBuffer = AppleSpiralPipeline.shared.flatMap { Self.makeBuffer(params, device: $0.device) }
+        profileBuffer = AppleSpiralPipeline.shared.flatMap { Self.makeBuffer(shape.profile, device: $0.device) }
+        guard shape.profile.count > 1, let mesh = try? Self.makeMesh(shape: shape, params: params),
+              let resource = try? await MeshResource(from: mesh) else { return nil }
         lowMesh = mesh
 
-        let apple = ModelEntity(mesh: resource, materials: [Self.fleshMaterial(), Self.skinMaterial()])
-        body.addChild(apple)
+        let asset = await Self.loadAsset(height: shape.height)
+        closedApple = asset?.apple
+        spiral = ModelEntity(mesh: resource, materials: [asset?.flesh ?? Self.fleshMaterial(),
+                                                         asset?.skin ?? Self.skinMaterial()])
+        body.addChild(spiral)
+        if let closedApple = asset?.apple { body.addChild(closedApple) }
         body.position.y = -shape.height / 2
         root.addChild(body)
 
         core.position = SIMD3(0, shape.height / 2, 0)
         body.addChild(core)
-        buildStem()
+        buildStem(asset?.stemAndLeaf ?? [])
         buildWorms(count: wormCount)
         apply(opening: 0)
     }
@@ -118,10 +128,15 @@ final class AppleRig {
         apply(opening: displayedOpening)
     }
 
-    /// Deforms the mesh (only when the opening changes) and moves the stem with the top slice.
+    /// Deforms the mesh (only when the opening changes) and moves the stem with the top slice. Closed, the design
+    /// team's apple stands in for the spiral.
     func apply(opening: Float) {
         guard opening != appliedOpening else { return }
         appliedOpening = opening
+        if let closedApple {
+            closedApple.isEnabled = opening <= 0
+            spiral.isEnabled = opening > 0
+        }
         if let pipeline = AppleSpiralPipeline.shared, let paramsBuffer {
             deformOnGPU(opening: opening, pipeline: pipeline, paramsBuffer: paramsBuffer)
         } else {
@@ -180,16 +195,18 @@ final class AppleRig {
     // MARK: - Deformation
 
     private func deformOnGPU(opening: Float, pipeline: AppleSpiralPipeline, paramsBuffer: MTLBuffer) {
-        guard let commandBuffer = pipeline.queue.makeCommandBuffer() else { return }
+        guard let profileBuffer, let commandBuffer = pipeline.queue.makeCommandBuffer() else { return }
         // RealityKit hands over the vertex buffer that the GPU will write.
         let vertexBuffer = lowMesh.replace(bufferIndex: 0, using: commandBuffer)
         guard let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
         var uniforms = AppleUniforms(opening: opening, height: shape.height, maxRadius: shape.maxRadius,
-                                     turns: shape.turns, gapPerTurn: shape.gapPerTurn, vertexCount: UInt32(params.count))
+                                     turns: shape.turns, gapPerTurn: shape.gapPerTurn, vertexCount: UInt32(params.count),
+                                     profileCount: UInt32(shape.profile.count))
         encoder.setComputePipelineState(pipeline.pipeline)
         encoder.setBuffer(paramsBuffer, offset: 0, index: 0)
         encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
         encoder.setBytes(&uniforms, length: MemoryLayout<AppleUniforms>.stride, index: 2)
+        encoder.setBuffer(profileBuffer, offset: 0, index: 3)
         encoder.dispatchThreads(MTLSize(width: params.count, height: 1, depth: 1),
                                 threadsPerThreadgroup: MTLSize(width: min(64, pipeline.pipeline.maxTotalThreadsPerThreadgroup),
                                                                height: 1, depth: 1))
@@ -252,6 +269,13 @@ final class AppleRig {
         shape.thetaStart + (shape.thetaEnd - shape.thetaStart) * Float(index) / Float(thetaSamples(shape) - 1)
     }
 
+    private static func makeBuffer<Element>(_ elements: [Element], device: MTLDevice) -> MTLBuffer? {
+        elements.withUnsafeBytes { bytes in
+            guard let address = bytes.baseAddress else { return nil }
+            return device.makeBuffer(bytes: address, length: bytes.count, options: .storageModeShared)
+        }
+    }
+
     private static func makeMesh(shape: AppleShape, params: [AppleVertexParams]) throws -> LowLevelMesh {
         let rows = thetaSamples(shape)
         let fleshFace = rows * radialSamples
@@ -302,12 +326,18 @@ final class AppleRig {
 
     // MARK: - Stem and worms
 
-    private func buildStem() {
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: UIColor(red: 0.35, green: 0.22, blue: 0.12, alpha: 1))
-        let stick = ModelEntity(mesh: .generateCylinder(height: 0.05, radius: 0.006), materials: [material])
-        stick.position = SIMD3(0, 0.025, 0)
-        stem.addChild(stick)
+    /// The asset's stem and leaf, or a stick without the asset.
+    private func buildStem(_ parts: [Entity]) {
+        if parts.isEmpty {
+            var material = PhysicallyBasedMaterial()
+            material.baseColor = .init(tint: UIColor(red: 0.35, green: 0.22, blue: 0.12, alpha: 1))
+            let stick = ModelEntity(mesh: .generateCylinder(height: 0.05, radius: 0.006), materials: [material])
+            stick.position = SIMD3(0, 0.025, 0)
+            stem.addChild(stick)
+        }
+        for part in parts {
+            stem.addChild(part)
+        }
         stem.components.set(AppleStemComponent())
         stem.components.set(CollisionComponent(shapes: [
             // Generous: the stem is thin and the player pinches it while it moves up.
@@ -351,6 +381,57 @@ final class AppleRig {
         var material = PhysicallyBasedMaterial()
         material.baseColor = .init(tint: UIColor(red: 0.78, green: 0.12, blue: 0.15, alpha: 1))
         material.roughness = 0.35
+        material.faceCulling = .none
+        return material
+    }
+}
+
+// MARK: - The design team's apple
+
+extension AppleRig {
+    private struct Asset {
+        /// Skin and flesh, the bottom of the skin on the origin and the apple's axis on the y axis.
+        let apple: Entity
+        /// Its stem and leaf, placed from the top of the skin (the `stem` entity's origin).
+        let stemAndLeaf: [Entity]
+        let skin: ShaderGraphMaterial
+        let flesh: ShaderGraphMaterial
+    }
+
+    /// `Apple.usdz` sized to `height` (the skin's height, as measured for `AppleShape`), split for the rig; nil
+    /// without the file or without its `Skin` and `Flesh`.
+    private static func loadAsset(height: Float) async -> Asset? {
+        guard let asset = try? await Entity(named: assetName, in: .main),
+              let skin = asset.findEntity(named: "Skin"), let flesh = asset.findEntity(named: "Flesh"),
+              let skinMaterial = material(of: skin), let fleshMaterial = material(of: flesh) else {
+            print("⚠️ \(assetName).usdz not found (or without Skin/Flesh): the spiral apple is drawn closed too")
+            return nil
+        }
+        let bounds = skin.visualBounds(relativeTo: asset)
+        guard bounds.extents.y > 0 else { return nil }
+        asset.scale = SIMD3(repeating: height / bounds.extents.y)
+        asset.position = SIMD3(-bounds.center.x, -bounds.min.y, -bounds.center.z) * asset.scale
+        let apple = Entity()
+        apple.name = assetName
+        apple.addChild(asset)
+        // The stem and the leaf leave the apple for the `stem` entity, at the top of the skin.
+        let top = Entity()
+        top.position = SIMD3(0, height, 0)
+        apple.addChild(top)
+        let stemAndLeaf = ["Stem", "Leaf"].compactMap { asset.findEntity(named: $0) }
+        for part in stemAndLeaf {
+            let placement = part.transformMatrix(relativeTo: top)
+            part.removeFromParent()
+            part.transform = Transform(matrix: placement)
+        }
+        top.removeFromParent()
+        return Asset(apple: apple, stemAndLeaf: stemAndLeaf, skin: skinMaterial, flesh: fleshMaterial)
+    }
+
+    /// The airbrush material of an asset part, drawn from both sides (the spiral's faces turn every way).
+    private static func material(of part: Entity) -> ShaderGraphMaterial? {
+        let model = ([part] + part.allDescendants).lazy.compactMap { $0.components[ModelComponent.self] }.first
+        guard var material = model?.materials.first as? ShaderGraphMaterial else { return nil }
         material.faceCulling = .none
         return material
     }

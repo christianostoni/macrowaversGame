@@ -9,9 +9,11 @@ import AppKit
 
 /// Dragon effects shared by every rig: smoke from the nostrils, fire, sounds.
 /// Sounds are optional: if the bundle contains `DragonGrowl`, `DragonRoar`, `DragonRumble`,
-/// `DragonWhoosh` (wav/m4a/mp3) they play as spatial audio from the head.
+/// `DragonWhoosh` (m4a/wav/mp3/caf) they play as spatial audio from the head.
 @MainActor
 final class DragonEffects {
+    nonisolated static let soundNames = ["DragonGrowl", "DragonRoar", "DragonRumble", "DragonWhoosh"]
+
     private let smoke = Entity()
     private let fire = Entity()
     private weak var voiceSource: Entity?
@@ -27,9 +29,6 @@ final class DragonEffects {
         smoke.components.set(Self.smokeEmitter())
         fire.name = "FireBreath"
         fire.components.set(Self.fireEmitter())
-        for name in ["DragonGrowl", "DragonRoar", "DragonRumble", "DragonWhoosh"] {
-            if let sound = Self.loadSound(name) { sounds[name] = sound }
-        }
     }
 
     /// `nostrils` and `mouth` are where smoke and fire come out (children of the head). `voice` is the head
@@ -43,9 +42,9 @@ final class DragonEffects {
         smoke.setOrientation(snout, relativeTo: voice)
         fire.setOrientation(snout, relativeTo: voice)
         voiceSource = voice
-        if !sounds.isEmpty {
-            voice.components.set(SpatialAudioComponent(gain: -6))
-        }
+        voice.components.set(SpatialAudioComponent(gain: -6))
+        // In the background: read here, the files held up the frame that builds the dragon.
+        Task { await loadSounds() }
     }
 
     func update(pose: DragonPose, frame: DragonFrame) {
@@ -103,11 +102,11 @@ final class DragonEffects {
         voiceSource.playAudio(sound)
     }
 
-    private static func loadSound(_ name: String) -> AudioFileResource? {
-        for ext in ["wav", "m4a", "mp3", "caf"] where Bundle.main.url(forResource: name, withExtension: ext) != nil {
-            return try? AudioFileResource.load(named: "\(name).\(ext)")
+    /// A sound missing from the bundle stays silent.
+    private func loadSounds() async {
+        for name in Self.soundNames {
+            if let sound = await GameAudio.load(name) { sounds[name] = sound }
         }
-        return nil
     }
 
     /// Grey puffs of smoke that rise and spread.

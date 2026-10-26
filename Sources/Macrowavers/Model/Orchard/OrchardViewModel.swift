@@ -5,6 +5,7 @@ import simd
 enum FruitKind: Equatable {
     case apple
     case pomegranate
+    case banana
     case orange
     case pineapple
 }
@@ -41,7 +42,8 @@ enum OrbState: Equatable {
 /// connects it to the dragon (`UntangleViewModel`).
 ///
 /// Every fruit holds one orb, so no choice is wrong: an apple opens by its stem and its worms guard the orb, a
-/// pomegranate is pulled apart with two hands, an orange is pulled apart into wedges, a pineapple is chopped.
+/// pomegranate is pulled apart with two hands, a banana is peeled strip by strip, an orange is pulled apart into wedges,
+/// a pineapple is chopped.
 @MainActor
 @Observable
 final class OrchardViewModel {
@@ -57,6 +59,8 @@ final class OrchardViewModel {
     private(set) var pomegranateOpening: Float = 0
     /// The pomegranate's seeds have burst out.
     private(set) var pomegranateBurst = false
+    /// How far each strip of the banana's peel is pulled down (0 = closed, 1 = hanging fully open).
+    private(set) var bananaPeel = Array(repeating: Float(0), count: OrchardViewModel.bananaStrips)
     /// 0 = whole, 0.5 = two halves, 1 = eight wedges (pulled apart with two hands).
     private(set) var orangeOpening: Float = 0
     /// The orange has fanned out into its wedges.
@@ -85,6 +89,9 @@ final class OrchardViewModel {
 
     /// Opening at which the pomegranate's seeds burst out.
     static let burstOpening: Float = 0.95
+    static let bananaStrips = 4
+    /// A strip pulled past this counts as peeled; every strip peeled frees the orb.
+    static let peeledStrip: Float = 0.8
     /// Opening at which the orange's wedges count as open and free the orb.
     static let wedgesOpening: Float = 0.9
     /// Seconds a freed orb takes to rise out of its fruit (it can be tapped into orbit from then on) ...
@@ -92,10 +99,11 @@ final class OrchardViewModel {
     /// ... and how long it then floats there before joining the orbit by itself (the player sees what they found).
     static let orbOrbitDelay: Float = 0.6
 
-    init(apples: Int = 3, pomegranates: Int = 1, oranges: Int = 1, pineapples: Int = 1,
+    init(apples: Int = 3, pomegranates: Int = 1, bananas: Int = 1, oranges: Int = 1, pineapples: Int = 1,
          wormSettings: WormSwarm.Settings = WormSwarm.Settings()) {
         let kinds = Array(repeating: FruitKind.apple, count: apples)
             + Array(repeating: .pomegranate, count: pomegranates)
+            + Array(repeating: .banana, count: bananas)
             + Array(repeating: .orange, count: oranges)
             + Array(repeating: .pineapple, count: pineapples)
         fruits = kinds.enumerated().map { Fruit(id: $0.offset, kind: $0.element) }
@@ -119,6 +127,7 @@ final class OrchardViewModel {
         switch focusedFruit?.kind {
         case .apple: appleOpening >= wormSettings.minimumOpening
         case .pomegranate: pomegranateBurst
+        case .banana: isBananaPeeled
         case .orange: orangeOpened
         case .pineapple: pineappleChopped
         case nil: false
@@ -126,6 +135,7 @@ final class OrchardViewModel {
     }
 
     var wormCount: Int { wormSettings.count }
+    var isBananaPeeled: Bool { bananaPeel.allSatisfy { $0 >= Self.peeledStrip } }
     /// The orb of the focused fruit, if there is a focused fruit.
     var focusedOrb: OrbState? { focusedFruitID.map { orbs[$0] } }
 
@@ -195,6 +205,14 @@ final class OrchardViewModel {
         }
     }
 
+    /// Pulls one strip of the banana's peel (0 = closed, 1 = hanging fully open).
+    func setBananaPeel(strip: Int, progress: Float) {
+        guard focusedFruit?.kind == .banana, bananaPeel.indices.contains(strip) else { return }
+        let progress = min(max(progress, 0), 1)
+        if progress != bananaPeel[strip] { bananaPeel[strip] = progress }
+        if isBananaPeeled { revealFocusedOrb() }
+    }
+
     func setOrangeOpening(_ value: Float) {
         guard focusedFruit?.kind == .orange else { return }
         let opening = min(max(value, 0), 1)
@@ -253,6 +271,7 @@ final class OrchardViewModel {
         appleOpening = 0
         pomegranateOpening = 0
         pomegranateBurst = false
+        bananaPeel = Array(repeating: 0, count: Self.bananaStrips)
         orangeOpening = 0
         orangeOpened = false
         pineappleChopped = false

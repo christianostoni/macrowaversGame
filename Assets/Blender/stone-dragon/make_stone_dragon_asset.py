@@ -5,7 +5,7 @@ Usage:
         -P Assets/Blender/stone-dragon/make_stone_dragon_asset.py -- \
         Assets/Blender/stone-dragon/cartoon_dragon_rcp.usdz <output folder>
 
-The source (`CartoonDragon12_RCP.usdz`, prepared in Reality Composer Pro from a Sketchfab model) is a dragon made
+The source (`CartoonDragon12_RCP_v2.usdz`, prepared in Reality Composer Pro from a Sketchfab model) is a dragon made
 of separate stones: a head (`Cube_Face_0`, skinned to a two-bone skeleton `JawRig` (`Root`, `Jaw`), `Cube_Horns_0`,
 `Cube_Teeth_0`) and a chain of 19 stones (`Block12` meshes) ending in a flat tail stone (`Block12_Tail`), ~13 m
 long, with an idle animation on every stone and a jaw animation. What the script does, and why:
@@ -20,11 +20,13 @@ long, with an idle animation on every stone and a jaw animation. What the script
   teeth. The face's vertices skinned to the `Jaw` bone are the lower jaw: they become `Jaw`, under `JawHinge` (at
   the head of that bone), so the game opens the mouth by turning the hinge around its +X. `mouth` and `nostrils`
   mark where fire and smoke come out.
-- Keeps the design team's materials exactly as they are: `AirbrushGrain_00` (the head) ... `AirbrushGrain_19`
-  (one per stone) are Reality Composer Pro shader graphs (unlit: a colour ramp driven by the facing angle and an
-  animated world-space grain) that Blender cannot read. Blender exports the geometry only and notes which material
-  each mesh had; USD (`pxr`) then copies the material prims from the source unchanged and binds each mesh to its
-  own, as in the source (the lower jaw keeps the face's).
+- Keeps the design team's materials as they are: `AirbrushGrain_00` (the head) ... `AirbrushGrain_19` (one per
+  stone) are Reality Composer Pro shader graphs (unlit: a colour ramp driven by the facing angle and a grain that
+  drifts slowly over the surface) that Blender cannot read. Blender exports the geometry only and notes which
+  material each mesh had; USD (`pxr`) then copies the material prims from the source and binds each mesh to its
+  own, as in the source (the lower jaw keeps the face's). One value changes: the grain is laid out in the mesh's
+  own (object) space, and the bake above resizes every mesh's coordinates, so each material's `GrainScale` is
+  divided by that resize: the grain keeps the size it had on the source.
 - Exports a Y-up USDZ under `/Dragon` (the materials' own paths, so their connections stay valid).
 """
 import os
@@ -76,8 +78,11 @@ meshes = [item for item in scene.objects if item.type == "MESH"]
 # Each mesh's material, by name (the source's material prims have the same names).
 materials = {item: item.data.materials[0].name for item in meshes if item.data.materials and item.data.materials[0]}
 hinge = jaw_hinge.copy()
+# How much the bake resizes each mesh's own coordinates (its world scale; the chain's scale comes later).
+bake_scale = {}
 for item in meshes:
     matrix = item.matrix_world.copy()
+    bake_scale[item] = abs(matrix.to_3x3().determinant()) ** (1 / 3)
     item.data = item.data.copy()
     item.data.transform(matrix)
 for item in list(scene.objects):
@@ -122,6 +127,7 @@ for item, drop in ((face, lambda index: index in jaw_vertices), (jaw_part, lambd
     mesh.to_mesh(item.data)
     mesh.free()
 meshes.append(jaw_part)
+bake_scale[jaw_part] = bake_scale[face]
 if face in materials:
     materials[jaw_part] = materials[face]
 head_centre = centre(face)
@@ -140,6 +146,13 @@ centres = [centre(item) for item in chain]
 length = (centres[0] - head_centre).length + sum((centres[i] - centres[i - 1]).length for i in range(1, len(centres)))
 factor = SIM_LENGTH / length
 print(f"{len(chain)} stones, chain {length:.3f} units -> {SIM_LENGTH} m (x{factor:.5f})")
+# Material -> how much its meshes' own coordinates grew in all (the rotations of `place` below keep sizes).
+resize = {}
+for item, material in materials.items():
+    value = bake_scale[item] * factor
+    if material in resize and abs(resize[material] - value) > 1e-3 * value:
+        raise SystemExit(f"{material}: its meshes are resized differently ({resize[material]} and {value})")
+    resize[material] = value
 
 # Everything scaled around the head's centre, which becomes the origin.
 for item in meshes:
@@ -242,7 +255,16 @@ stage.DefinePrim(MATERIALS, "Scope")
 for material in source_layer.GetPrimAtPath(MATERIALS).nameChildren:
     if not Sdf.CopySpec(source_layer, material.path, stage.GetRootLayer(), material.path):
         raise SystemExit(f"Could not copy {material.path}")
-    print(f"Material {material.path} copied")
+    # A grain laid out in object space keeps its size on the resized meshes (world space would not need it).
+    shader = UsdShade.Material(stage.GetPrimAtPath(material.path))
+    grain_scale = shader.GetInput("GrainScale")
+    position = stage.GetPrimAtPath(material.path.AppendChild("Position"))
+    in_object_space = position and position.GetAttribute("inputs:space").Get() == "object"
+    if grain_scale and in_object_space and material.name in resize:
+        grain_scale.Set(grain_scale.Get() / resize[material.name])
+        print(f"Material {material.path} copied, GrainScale {grain_scale.Get():.2f}")
+    else:
+        print(f"Material {material.path} copied")
 for prim in stage.Traverse():
     if not prim.IsA(UsdGeom.Mesh):
         continue
