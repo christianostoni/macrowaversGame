@@ -57,8 +57,8 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | The flask | With the first ingredient found, an empty, corked glass flask appears in the middle of the orbit (0.6 s) and turns slowly there; the ingredients go round it. Each time one reaches the orbit the flask wobbles and its glass glows in that ingredient's colour |
 | Snap (3.6 s) | The cork pops out and tumbles above the neck (0.4 s). The ingredients dive in **one at a time** (0.75 s each): each leaves its place in an arc up above the neck, drops down into the flask, shrinking, and lands with a burst of bubbles; the liquid rises by a third, sloshes and takes its colour (red, then mixed with gold, then with green). The cork goes back on (2.7–3.2 s) and the liquid swirls into the elixir's glowing blue (3.2–3.6 s) |
 | Brewed (1.2 s) | The flask swells a little with a flash of sparks and floats there, throbbing; bubbles rise, and its glow lights the player's hands |
-| The elixir flies | The flask flies in an arc rising above the straight line, landing on the dragon's head even as it moves. The scene comes back from focus mode. If the dragon has already left the island (debug **Call It Now**), the flask keeps floating in front of the player |
-| Poured (1.6 s) | Above the dragon's head the cork pops, the flask tips over (its neck down) and a sparkling blue stream pours out while the liquid drains; then the flask fades. The dragon, soothed, comes to the player |
+| The elixir flies | The flask flies in an arc rising above the straight line, to just above the dragon's head (upright, its bottom clear of it) even as it moves. The scene comes back from focus mode. If the dragon has already left the island, the flask keeps floating in front of the player |
+| Poured (3.2 s) | The dragon has stopped and lifted its snout. Above its head the flask stops turning and turns side-on to the player, the cork pops, and it tips over slowly around its neck's mouth, held above the head. A thick, glowing blue stream falls straight onto the head, droplets bounce off it, and the flask drains (fastest at first) while the stream thins to a trickle. When the last of it has landed, a shimmer rises around the dragon's head and the flask fades. **Only then** does the dragon, soothed, come to the player |
 | Empty fruit | A fruit whose ingredient already orbits: once opened, the panel says "No ingredient left in this one" and **Back to the Tree** becomes the prominent button. The fruit never leaves by itself |
 | A 4th ingredient | With 3 already in orbit the orb stays above its fruit: "Three ingredients already orbit you: brew the elixir first." |
 | Back to the Tree / Close It Again | The fruit flies back to its branch, closing gently on the way / closes it again. An ingredient already freed still joins the orbit from the branch |
@@ -138,9 +138,27 @@ ingredients' colours weighted by their share of the liquid, mixed into the blue 
 swells by 8 % and back (`sin`, 0.45 s) with a burst of 160 sparks. The ingredients still waiting whirl up to 2.5×
 faster (`fusionSpin` 1.5).
 
-**Pour.** Delivered, the flask stays 12 cm above the dragon's head: the cork pops (0–0.4 s), the flask tips by
-2.2 rad around the axis across its neck (0.15–0.6 s), the stream pours (0.45–1.25 s) while the liquid drains
-(0.45–1.2 s), and the flask fades (1.25–1.6 s).
+**The dragon waits for it.** As soon as the flask takes off (`.flying`), `OrchardInteractions` calls
+`untangle.receiveElixir()`: the dragon slows down to a stop on its path around the tree and lifts its snout
+([Untangle the Dragon](../untangle-dragon/README.md)), so the flask lands over a still head turned up to it.
+
+**Pour** (`Elixir.Pour`, seconds from the arrival). Heights are above the dragon's head node (`deliveryTarget`):
+with the snout up the drawn head rises up to ~9 cm above it, its top ~13 cm (`ElixirRig.headTop`). The flask
+arrives upright 32 cm above the node (`ElixirRig.arrivalHeight`) and follows it. Over the first 0.25 s it stops turning on itself and turns
+side-on to the player (its tipping axis towards them, `OrchardComponent.pourYaw`), so they see it pour in profile.
+The cork pops (0–0.4 s); the flask tips by 2.2 rad around the axis across its neck, slowly and without jolts
+(smootherstep, 0.25–1.1 s), and as it tips it moves from its arrival point to the pose that holds its neck's mouth
+26 cm above the node (`pourClearance`), 13 cm above the raised head's top: the glass never sinks into the head. The stream flows from 0.75 s (the neck below the horizontal) to 2.4 s (`pourFlow`: open in 0.2 s, thinning to
+a quarter over the last 0.6 s); the liquid drains over the same time as `(1 − t)²`, fastest while the flask is
+fullest. The elixir reaches the head 0.3 s after it leaves the neck (`fall`): the splash follows the same flow,
+delayed (`splashFlow`). At 2.7 s the last of it has landed (`soothe`): a shimmer bursts around the head and the
+flask fades by 3.2 s (`pourDuration`). Then the elixir is `.poured` and the dragon is called.
+
+The stream, the splash and the shimmer live in the orchard's root, upright (`ElixirRig.pourEffects`), not under the
+tipped flask: their gravity points down whichever way the flask is turned. The stream leaves the neck's mouth
+along the neck (read every frame), 520 particles/s at full flow, living just long enough (0.32 s) to reach the
+head's top; the splash sends droplets out from there, falling back (300/s at full flow); the shimmer is a burst of
+260 sparkles rising slowly around the head.
 
 **Flight.** A quadratic Bézier `B(t) = (1 − t)² P₀ + 2(1 − t)t P₁ + t² P₂`, with `P₀` where it was brewed, `P₂` the
 dragon's head (read every frame: it moves) and `P₁` the midpoint lifted by `0.25 + 0.1 · |P₂ − P₀|`. `t` is the
@@ -178,11 +196,13 @@ Sources/Macrowavers/
 ├── Model/Orchard/                       Pure logic (Foundation + simd), unit-tested
 │   ├── AppleShape.swift                   Spiral-cut apple maths and the design apple's profile, shared with the shader
 │   ├── WormSwarm.swift                    Worm behaviour: crawl, burrow, speed up, hide when closed
-│   ├── Elixir.swift                       Ingredients in orbit, brew timeline, fusing → brewed → flying → delivered,
+│   ├── Elixir.swift                       Ingredients in orbit, brew and pour timelines, fusing → … → delivered → poured,
 │   │                                      the flask's curves (cork, dives, liquid, colours, slosh, pour)
 │   ├── ElixirOrbit.swift                  The ellipse to the player's right, lazy follow, the dive into the neck, ElixirFlight
+│   ├── LiquidVolume.swift                 The flask's liquid at any level: the glass's profile (32 heights), its mesh
 │   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
 │   └── OrchardViewModel.swift             @Observable: fruit focus, openings, worms, one ingredient per fruit, elixir
+│                                          (not observed: views read `elixirState` and `orbitingCount`)
 └── Views/Orchard/
     ├── FruitPanelView.swift               Panel under the focused fruit (RealityView attachment, not a window)
     ├── ElixirPanelView.swift              Label under the orbit: ingredients in orbit, how to brew
@@ -191,8 +211,10 @@ Sources/Macrowavers/
     └── RealityKit/
         ├── OrchardScene.swift               Components, OrchardSystem, FocusSystem, builder, per-fruit drawing
         ├── OrbScene.swift                   The ingredients: gem template (shine, glow, glints), colours, trail, where each one is every frame
-        ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, stream, glow); orbit,
+        ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, glow); orbit,
         │                                    snap, flight and pour in the system
+        ├── ElixirParticles.swift            The flash, the bubbles, the pour's stream, splash and shimmer
+        ├── LiquidLevels.swift               One liquid mesh per level step (48), built once when the flask loads
         ├── HandTracker.swift                ARKit hand tracking → HandSample
         ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, worms
         ├── AppleSpiral.metal                `deformApple` kernel (one thread per vertex)
@@ -210,7 +232,7 @@ share them.
 
 ```
 OrbState:     sealed ──open──▶ revealed ──1.8 s or tap──▶ orbiting(slot) ──fused──▶ spent
-ElixirState:  gathering ──3rd ingredient──▶ ready ──snap──▶ fusing ──3.6 s──▶ brewed ──1.2 s, dragon on the island──▶ flying ──arrived──▶ delivered
+ElixirState:  gathering ──3rd ingredient──▶ ready ──snap──▶ fusing ──3.6 s──▶ brewed ──1.2 s, dragon on the island──▶ flying ──arrived──▶ delivered ──3.2 s (pour)──▶ poured
 ```
 
 The view model owns both (`orbs`, `elixir`); the RealityKit layer only draws them and keeps what is purely visual:
@@ -232,8 +254,9 @@ elixir's flight (`OrchardComponent.flight`).
 7. **Orbs.** It moves each orb: sealed, rising above its fruit, flying into its slot, orbiting, diving into the flask.
 8. **Elixir.** `ElixirRig.apply` draws the flask from `Elixir`'s curves (size, wobble, cork, liquid level, colour,
    glow and slosh, glass glow, bubbles, stream, light), splashes for each landing, flashes it, flies it. On arrival
-   it calls `orchard.elixirDelivered()`; `OrchardInteractions` sees `.delivered` and calls `untangle.callDragon()`
-   while the flask pours over the dragon's head.
+   it calls `orchard.elixirDelivered()`, and the flask pours over the dragon's head (`OrchardSystem.pour`, the
+   stream and splash in `ElixirParticles.swift`). When the pour is over the elixir is `.poured`;
+   `OrchardInteractions` sees it and calls `untangle.callDragon()`.
 
 ## Design decisions (and why)
 
@@ -248,7 +271,8 @@ elixir's flight (`OrchardComponent.flight`).
 - **Two view models, connected by the view.** `OrchardViewModel` knows nothing about the dragon. The immersive
   view tells it whether the dragon is still on the island (`isDragonOnIsland`). The elixir only flies then, and the
   orbiting ingredients only take the pinch then (and never while a fruit is close): during the untangling they
-  would steal the grabs on the knot. The view calls `callDragon()` when the elixir arrives.
+  would steal the grabs on the knot. The view calls `callDragon()` once the elixir is poured: called on arrival,
+  the dragon flew off at once and the flask chased it while pouring.
 - **The chop and the snap use ARKit hand tracking, the rest are SwiftUI gestures.** SwiftUI has no "fast hand
   coming down" or "snap". The detectors are pure structs fed with `HandSample`s, so they are unit-tested.
   - **Two poses, not a trajectory.** See [The snap](#the-snap): robust at the tracking's rate.
@@ -273,9 +297,31 @@ elixir's flight (`OrchardComponent.flight`).
     behind them (a see-through square crossing the flask). A sort group draws the glow first, then the gem;
   - **glints:** a particle emitter around the gem (7 per second, 4 mm, quick fade in and out, additive), in its
     colour;
-  - **no hover effect:** visionOS highlights every mesh under the looked-at entity, so the glow's square quad lit
-    up too, a box around the gem when it was looked at or pinched. The glow and the gestures are feedback enough.
+  - **no hover highlight on the glow:** visionOS highlights every mesh under the looked-at entity, so the glow's
+    square quad lit up too, a box around the gem. The orb has no hover effect of its own (the glow and the gestures
+    are feedback enough), and it never sits in a fruit's hierarchy: it lives in the orchard's root from the start and
+    is placed from its fruit's anchor (`setPosition(_:relativeTo:)`) while sealed or rising; under the fruit, the
+    fruit's own hover highlight drew the box until the gem left for the orbit.
   Without the asset a sphere stands in for the gem, with the same glow.
+- **Nothing heavy in a frame.** The elixir's rise and pour used to stutter. What was fixed, and what to keep that way:
+  - **The liquid's meshes.** `LiquidVolume` samples the glass's profile at 32 heights (the designers' liquid has
+    ~500 distinct ring heights; one ring at each made every level ~24k vertices and ~48k triangles, ~25 ms to build)
+    and builds each level with 32 segments (~1.1k vertices, 2k triangles). `LiquidLevels.prepare()` builds the 48
+    steps once, asynchronously, when the flask loads (~20 ms in all); rising and draining only swap them.
+  - **Materials in steps.** The liquid's and the glass's colour and glow change in steps (1/24 per channel, 1/12 of
+    glow), each material made once, cached and swapped only when the step changes; the brewed elixir's throb goes
+    to its light, not the material (it re-created the material every frame).
+  - **Components set only on a change, in steps.** Bubbles in steps of 3 a second, the stream and the splash in steps
+    of a tenth of their rate (`ElixirRig.emit`), the light in steps of 60 and removed while dark (a point light costs
+    every surface near it), input targets through `Entity.setInputTargetEnabled` (the component's setter runs even
+    with the same value), the halo's scale only when it changes; the orb's spinning gem, glow, glints and trail are
+    found once (`OrbParts`), not by name every frame.
+  - **Observation.** `OrchardViewModel.elixir` changes every frame (its clocks) and is `@ObservationIgnored`: views
+    read `elixirState` and `orbitingCount`, assigned only when they change. Observed, it redrew every view reading it
+    (and rebuilt the orchard's gestures) every frame.
+  - **Music streamed.** The music is read from its file as it plays (`GameAudio.load(streams:)`); preloaded, its
+    minutes of decoded audio took ~150 MB. The short sounds stay preloaded, to start without delay.
+  - The app is run in Debug (`-Onone`) from Xcode: measure frame rate with Instruments on a Release build.
 - **The pineapple opens with an eased animation, not physics.** The prototype launched the halves as dynamic bodies.
   There is no floor in front of the player, and the fruit must close again when it goes back to the tree.
 - **Metal with a safety net.** If Metal or the apple kernel is missing, the apple is deformed on the CPU with the
@@ -304,11 +350,12 @@ elixir's flight (`OrchardComponent.flight`).
 | `OrchardViewModel` | `peeledStrip`, `wedgesOpening`, `burstOpening` | when a banana counts as peeled, when the orange's wedges count as open, when the pomegranate bursts |
 | `OrangeRig` | `halfShift`, `halfTurn`, `wedgeOut`, `wedgeTilt` | how far the halves move and turn, how far the wedges fall open |
 | `OrchardViewModel` | `orbRiseDuration`, `orbOrbitDelay` | how long an ingredient rises, how long it floats before joining the orbit |
-| `Elixir` | `ingredientCount`, `brewedHold`, `popDuration`, `appearDuration`, `pourDuration` | ingredients needed, how long the elixir waits before flying, the flask's pop, appearance and pour |
+| `Elixir` | `ingredientCount`, `brewedHold`, `popDuration`, `appearDuration` | ingredients needed, how long the elixir waits before flying, the flask's pop and appearance |
+| `Elixir.Pour` | `corkPop`, `tipStart`, `tipEnd`, `streamStart`, `streamEnd`, `fall`, `streamOpen`, `streamTail`, `fadeEnd` | the pour's rhythm (`pourDuration` = `fadeEnd`; the dragon comes after it) |
 | `Elixir.Timeline` | `corkPop`, `firstDive`, `diveSpacing`, `diveDuration`, `rise`, `recorkStart`, `recorkEnd`, `swirlEnd` | the brew's rhythm (`fusingDuration` = `swirlEnd`) |
 | `Elixir` | `ingredientColors`, `elixirColor`, `dampedWave` | ingredient and elixir colours, how the liquid sloshes and the flask wobbles |
 | `ElixirOrbit` | `diveArc`, `diveClearance`, `diveLift`, `diveDepth` | the dive's shape |
-| `ElixirRig` | `flaskScale`, `pourAngle`, `corkRise`, `corkSide`, `pourHeight` | the flask's size in the orbit, how it pours, how far the cork flies |
+| `ElixirRig` | `flaskScale`, `pourAngle`, `corkRise`, `corkSide`, `arrivalHeight`, `pourClearance`, `headTop`, `streamRate`, `splashRate` | the flask's size in the orbit, how it pours and how high above the head, how far the cork flies, how thick the stream and the splash are |
 | `ElixirOrbit.Settings` | `bearing`, `distance`, `drop`, `lateralRadius`, `depthRadius`, `tilt`, `period` | where the orbit is (side, distance, height), its size, tilt and speed |
 | `ElixirOrbit.Settings` | `followResponsiveness`, `turnDeadZone`, `turnSettled`, `turnResponsiveness` | how the orbit follows the player |
 | `ElixirOrbit.Settings` | `fusionSpin`, `hintDrop` | how the ingredients whirl, where the label floats |
@@ -426,7 +473,8 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   fingers that do not curl, a pinch, repeated readings, cooldown, one hand at a time); the elixir's slots and
   timing; the flask appearing and wobbling when an ingredient arrives, the cork popping before the first dive and
   going back on after the last, the dives one at a time in order, the liquid rising by thirds and turning blue,
-  the slosh dying down, no jumps between states, the pour and the fade; the orbit's place to the right and its
+  the slosh dying down, no jumps between states, the pour (cork, tip, stream, its fall onto the head, the drain
+  fastest at first, the trickle, the soothing) and the fade, and `.poured` only after it; the orbit's place to the right and its
   shape (always seen whole, to the side, clear of the fruit), period, lazy follow and the dive into the neck; the
   flight's arc and arrival.
 

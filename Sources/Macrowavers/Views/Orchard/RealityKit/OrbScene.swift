@@ -15,7 +15,8 @@ extension OrchardSystem {
         for fruit in orchard.fruits {
             let id = fruit.fruit.id
             guard let orb = orchard.orbs[id], viewModel.orbs.indices.contains(id) else { continue }
-            if orb.isEnabled { OrchardSceneBuilder.spinGem(orb, time: orchard.time, phase: Float(id) * 1.3) }
+            let parts = orb.components[OrbComponent.self]?.parts
+            if orb.isEnabled { OrchardSceneBuilder.spinGem(parts?.spin, time: orchard.time, phase: Float(id) * 1.3) }
             let isFocused = id == viewModel.focusedFruitID
             switch viewModel.orbs[id] {
             case .sealed:
@@ -31,19 +32,21 @@ extension OrchardSystem {
                 orb.setScale(SIMD3(repeating: scale), relativeTo: nil)
             case .spent:
                 orb.isEnabled = false
-                setEmitting(orb, OrchardSceneBuilder.orbTrailName, false)
+                setEmitting(parts?.trail, false)
             }
         }
     }
 
-    /// Locked in the fruit: visible only between the open apple's slices, never tappable.
+    /// Locked in the fruit: visible only between the open apple's slices, never tappable. Like every orb it stays in
+    /// the orchard's root, placed from the fruit's anchor: under the fruit, the fruit's hover highlight lit up its
+    /// square glow (a box around the gem).
     @MainActor
     private static func showSealed(_ orb: Entity, in fruit: OrchardFruit, isVisible: Bool) {
         orb.isEnabled = isVisible
-        orb.components[InputTargetComponent.self]?.isEnabled = false
+        orb.setInputTargetEnabled(false)
         guard isVisible else { return }
-        attach(orb, to: fruit.orbAnchor, preservingWorldTransform: false)
-        orb.position = .zero
+        orb.setPosition(.zero, relativeTo: fruit.orbAnchor)
+        orb.orientation = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
         orb.setScale(SIMD3(repeating: 0.7), relativeTo: nil)
     }
 
@@ -52,13 +55,14 @@ extension OrchardSystem {
     @MainActor
     private static func showRevealed(_ orb: Entity, above fruit: OrchardFruit, viewModel: OrchardViewModel,
                                      time: Float, follow: Float) {
-        attach(orb, to: fruit.orbAnchor, preservingWorldTransform: true)
         orb.isEnabled = true
         let rise = min(viewModel.orbRevealTimes[fruit.fruit.id] / OrchardViewModel.orbRiseDuration, 1)
         let eased = rise * rise * (3 - 2 * rise)
+        // In the fruit's anchor's space (it moves and turns with the fruit), the orb itself in the orchard's root.
         let target = SIMD3<Float>(0, fruit.orbHeight(viewModel: viewModel) * eased + 0.01 * sin(time * 2), 0)
-        orb.position = simd_mix(orb.position, target, SIMD3(repeating: follow))
-        orb.components[InputTargetComponent.self]?.isEnabled = rise >= 1 && viewModel.isDragonOnIsland
+        let current = orb.position(relativeTo: fruit.orbAnchor)
+        orb.setPosition(simd_mix(current, target, SIMD3(repeating: follow)), relativeTo: fruit.orbAnchor)
+        orb.setInputTargetEnabled(rise >= 1 && viewModel.isDragonOnIsland)
     }
 
     /// Flies from its fruit to its slot on the orbit (an eased arc), takes its ingredient's colour and leaves a
@@ -79,10 +83,11 @@ extension OrchardSystem {
         let dive = elixir.state == .fusing || elixir.state == .brewed ? elixir.diveProgress(slot: slot) : 0
         // Into the flask: the glow (a 12 cm quad, wider than the neck, drawn without depth) and the sparks would show
         // through the glass, so they are gone before the gem drops into the neck. The gem itself is opaque.
-        setEmitting(orb, OrchardSceneBuilder.orbTrailName, dive < Self.diveSparksStop)
-        setEmitting(orb, OrchardSceneBuilder.orbGlintsName, dive < Self.diveSparksStop)
+        setEmitting(journey.parts.trail, dive < Self.diveSparksStop)
+        setEmitting(journey.parts.glints, dive < Self.diveSparksStop)
         let glow = 1 - Elixir.smoothstep(from: Self.diveGlowFade.lowerBound, to: Self.diveGlowFade.upperBound, dive)
-        orb.findEntity(named: OrchardSceneBuilder.orbHaloName)?.scale = SIMD3(repeating: max(glow, 0.001))
+        let haloScale = SIMD3<Float>(repeating: max(glow, 0.001))
+        if let halo = journey.parts.halo, halo.scale != haloScale { halo.scale = haloScale }
         // Held while the elixir is brewed (a snap with the other hand): it lets go and dives with the others.
         if journey.isHeld, !elixir.letsIngredientsBeHeld {
             journey.isHeld = false
@@ -91,8 +96,8 @@ extension OrchardSystem {
         }
         // Pinch an ingredient to drag and turn it, or tap it to brew the elixir (without hand tracking); never while
         // a fruit is close or the dragon is away.
-        orb.components[InputTargetComponent.self]?.isEnabled = elixir.letsIngredientsBeHeld
-            && viewModel.focusedFruitID == nil && viewModel.isDragonOnIsland
+        orb.setInputTargetEnabled(elixir.letsIngredientsBeHeld && viewModel.focusedFruitID == nil
+            && viewModel.isDragonOnIsland)
         guard !journey.isHeld else {
             orb.components.set(journey)
             return
@@ -124,11 +129,11 @@ extension OrchardSystem {
     private static func resetJourney(_ orb: Entity) {
         guard var journey = orb.components[OrbComponent.self], journey.tintedSlot != nil else { return }
         OrchardSceneBuilder.tint(orb, color: OrchardSceneBuilder.sealedColor)
-        journey = OrbComponent(fruitID: journey.fruitID)
+        journey = OrbComponent(fruitID: journey.fruitID, parts: journey.parts)
         orb.components.set(journey)
-        setEmitting(orb, OrchardSceneBuilder.orbTrailName, false)
-        setEmitting(orb, OrchardSceneBuilder.orbGlintsName, true)
-        orb.findEntity(named: OrchardSceneBuilder.orbHaloName)?.scale = SIMD3(repeating: 1)
+        setEmitting(journey.parts.trail, false)
+        setEmitting(journey.parts.glints, true)
+        journey.parts.halo?.scale = SIMD3(repeating: 1)
     }
 
     /// Share of its dive (`Elixir.diveProgress`) over which an ingredient's glow fades: gone well before the neck.
@@ -136,11 +141,10 @@ extension OrchardSystem {
     /// Its trail and glints stop here, while it is still above the flask.
     static let diveSparksStop: Float = 0.5
 
-    /// Starts or stops one of the orb's particle emitters (`orbTrailName`, `orbGlintsName`).
+    /// Starts or stops one of the orb's particle emitters (its trail, its glints).
     @MainActor
-    private static func setEmitting(_ orb: Entity, _ name: String, _ isEmitting: Bool) {
-        guard let entity = orb.findEntity(named: name),
-              var emitter = entity.components[ParticleEmitterComponent.self], emitter.isEmitting != isEmitting else {
+    private static func setEmitting(_ entity: Entity?, _ isEmitting: Bool) {
+        guard let entity, var emitter = entity.components[ParticleEmitterComponent.self], emitter.isEmitting != isEmitting else {
             return
         }
         emitter.isEmitting = isEmitting
@@ -266,11 +270,10 @@ extension OrchardSceneBuilder {
         }
     }
 
-    /// Turns the gem slowly around its long axis (each orb starts at its own angle).
+    /// Turns the gem (the orb's `OrbParts.spin`) slowly around its long axis (each orb starts at its own angle).
     @MainActor
-    static func spinGem(_ orb: Entity, time: Float, phase: Float) {
-        orb.findEntity(named: orbSpinName)?.orientation = simd_quatf(angle: 2 * .pi * gemSpinSpeed * time + phase,
-                                                                      axis: SIMD3(0, 1, 0))
+    static func spinGem(_ spin: Entity?, time: Float, phase: Float) {
+        spin?.orientation = simd_quatf(angle: 2 * .pi * gemSpinSpeed * time + phase, axis: SIMD3(0, 1, 0))
     }
 
     /// The design team's crystal, tinted and opaque: a see-through gem looked washed out in the room, and its

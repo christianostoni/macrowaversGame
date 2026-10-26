@@ -164,7 +164,7 @@ final class AppleRig {
             worm.position = swarm.position(of: index, opening: opening) - SIMD3(0, 0.012 * (1 - state.visibility), 0)
             worm.orientation = simd_quatf(angle: swarm.heading(of: index), axis: SIMD3(0, 1, 0))
             worm.scale = SIMD3(repeating: max(state.visibility, 0.01))
-            worm.components[InputTargetComponent.self]?.isEnabled = swarm.isCatchable(index)
+            worm.setInputTargetEnabled(swarm.isCatchable(index))
             // Wriggle: the segments sway as it crawls.
             for (segment, part) in worm.children.enumerated() {
                 part.position.z = 0.002 * sin(time * 12 + Float(segment) * 1.8)

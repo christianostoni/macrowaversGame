@@ -1,8 +1,9 @@
 import RealityKit
 import simd
 
-/// Shows the flask's liquid at its level (`LiquidVolume`): one mesh per step of level, built the first time it is
-/// needed (a brew uses a few dozen) and swapped into the liquid's model, which keeps its material.
+/// Shows the flask's liquid at its level (`LiquidVolume`): one mesh per step of level, all built once in the
+/// background when the flask loads (`prepare()`), and swapped into the liquid's model, which keeps its material.
+/// Built while the liquid rose, they held up frames.
 @MainActor
 final class LiquidLevels {
     /// Steps of level: under 2 mm each in the flask.
@@ -22,24 +23,32 @@ final class LiquidLevels {
         self.volume = volume
     }
 
+    /// Builds every step's mesh (light ones: ~1k vertices each), without holding up a frame.
+    func prepare() async {
+        for step in 1...Self.steps where meshes[step] == nil {
+            meshes[step] = try? await MeshResource(from: [Self.descriptor(volume.mesh(level: Float(step) / Float(Self.steps)))])
+        }
+    }
+
     /// The liquid filled to `fill` (0…1).
     func show(_ fill: Float) {
         let step = max(1, Int((min(max(fill, 0), 1) * Float(Self.steps)).rounded()))
         guard step != shown else { return }
         if meshes[step] == nil {
-            meshes[step] = try? Self.resource(volume.mesh(level: Float(step) / Float(Self.steps)))
+            // Not prepared yet (the flask has just loaded): built now.
+            meshes[step] = try? MeshResource.generate(from: [Self.descriptor(volume.mesh(level: Float(step) / Float(Self.steps)))])
         }
         guard let mesh = meshes[step] else { return }
         model.model?.mesh = mesh
         shown = step
     }
 
-    private static func resource(_ mesh: LiquidVolume.Mesh) throws -> MeshResource {
+    private static func descriptor(_ mesh: LiquidVolume.Mesh) -> MeshDescriptor {
         var descriptor = MeshDescriptor(name: "Liquid")
         descriptor.positions = MeshBuffers.Positions(mesh.positions)
         descriptor.normals = MeshBuffers.Normals(mesh.normals)
         descriptor.primitives = .triangles(mesh.indices)
-        return try MeshResource.generate(from: [descriptor])
+        return descriptor
     }
 
     /// Every vertex of the mesh, in its model's space.

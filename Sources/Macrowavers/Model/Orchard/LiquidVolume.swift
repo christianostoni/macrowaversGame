@@ -21,9 +21,13 @@ struct LiquidVolume {
     let base: SIMD3<Float>
     /// Height of the full liquid.
     let height: Float
-    /// The inside of the glass: radius (`y`) at each height of the full liquid's rings of vertices (`x`, from its
-    /// bottom), in a straight line from one ring to the next as in its mesh.
+    /// The inside of the glass: radius (`y`) at `profileSamples` evenly spaced heights of the full liquid (`x`,
+    /// from its bottom), in a straight line from one to the next.
     let profile: [SIMD2<Float>]
+
+    /// Heights the profile is sampled at. The designers' liquid has ~500 distinct ring heights (its subdivided rings
+    /// are not flat): one ring of the mesh at each made every level ~24k vertices, built while the liquid rose.
+    static let profileSamples = 32
 
     /// - Parameters:
     ///   - points: the full liquid's vertices.
@@ -55,17 +59,25 @@ struct LiquidVolume {
             }
         }
         guard profile.count >= 2 else { return nil }
+        let measured = profile
 
         self.up = up
         self.across = across
         self.toward = toward
         self.base = across * centre.x + toward * centre.y + up * bottom
         self.height = height
-        self.profile = profile
+        self.profile = (0..<Self.profileSamples).map { sample in
+            let elevation = height * Float(sample) / Float(Self.profileSamples - 1)
+            return SIMD2(elevation, Self.radius(at: elevation, along: measured))
+        }
     }
 
     /// Radius of the inside of the glass `elevation` above the bottom of the liquid.
     func radius(at elevation: Float) -> Float {
+        Self.radius(at: elevation, along: profile)
+    }
+
+    private static func radius(at elevation: Float, along profile: [SIMD2<Float>]) -> Float {
         guard let above = profile.firstIndex(where: { $0.x >= elevation }) else { return profile[profile.count - 1].y }
         guard above > 0 else { return profile[0].y }
         let lower = profile[above - 1], upper = profile[above]
@@ -83,7 +95,7 @@ struct LiquidVolume {
     /// The liquid filled to `level` (0…1 of the full liquid): its side along the glass (a ring at each of the full
     /// liquid's rings below the level, so it never cuts across the glass), its bottom and its flat surface, every
     /// face turned outwards.
-    func mesh(level: Float, segments: Int = 48) -> Mesh {
+    func mesh(level: Float, segments: Int = 32) -> Mesh {
         let surface = min(max(level, 0), 1) * height
         var mesh = Mesh()
         guard surface > 1e-5, segments >= 3 else { return mesh }
@@ -92,6 +104,9 @@ struct LiquidVolume {
             return across * cos(angle) + toward * sin(angle)
         }
         let elevations = [0] + profile.map(\.x).filter { $0 > 1e-6 && $0 < surface - 1e-6 } + [surface]
+        mesh.positions.reserveCapacity((elevations.count + 2) * (segments + 1))
+        mesh.normals.reserveCapacity((elevations.count + 2) * (segments + 1))
+        mesh.indices.reserveCapacity((elevations.count + 1) * segments * 6)
 
         // Side: a ring at each elevation, its normal across the slope of the glass there.
         for (ring, elevation) in elevations.enumerated() {
@@ -110,7 +125,7 @@ struct LiquidVolume {
                 let lowRight = ring * count + (segment + 1) % count
                 let highRight = (ring + 1) * count + (segment + 1) % count
                 let highLeft = (ring + 1) * count + segment
-                mesh.indices += [lowLeft, highRight, lowRight, lowLeft, highLeft, highRight]
+                mesh.indices.append(contentsOf: [lowLeft, highRight, lowRight, lowLeft, highLeft, highRight])
             }
         }
 
@@ -128,7 +143,7 @@ struct LiquidVolume {
             for segment in 0..<count {
                 let first = centre + 1 + segment
                 let next = centre + 1 + (segment + 1) % count
-                mesh.indices += normal == up ? [centre, next, first] : [centre, first, next]
+                mesh.indices.append(contentsOf: normal == up ? [centre, next, first] : [centre, first, next])
             }
         }
         return mesh

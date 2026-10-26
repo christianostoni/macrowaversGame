@@ -282,17 +282,43 @@ struct ElixirTests {
         #expect(Elixir.smootherstep(0) == 0 && Elixir.smootherstep(1) == 1 && Elixir.smootherstep(0.5) == 0.5)
     }
 
-    @Test func theFlaskPoursOverTheDragonThenFades() {
+    @Test func theFlaskPoursOverTheDragonThenFadesAndOnlyThenIsPoured() {
         var elixir = brewing(seconds: Elixir.fusingDuration)
         elixir.update(deltaTime: Elixir.brewedHold, canFly: true)
         #expect(elixir.state == .flying && elixir.pourTilt == 0 && !elixir.isPouring)
         elixir.delivered()
-        #expect(abs(elixir.displayScale - 1) < 1e-4 && elixir.corkOut == 0)
-        elixir.update(deltaTime: 0.7, canFly: true)
-        #expect(elixir.isPouring && elixir.pourTilt == 1 && elixir.corkOut == 1)
-        #expect(elixir.fillLevel < 1)
+        #expect(abs(elixir.displayScale - 1) < 1e-4 && elixir.corkOut == 0 && abs(elixir.fillLevel - 1) < 1e-4)
+        // Uncorked and tipping over, nothing flowing yet.
+        elixir.update(deltaTime: Elixir.Pour.corkPop, canFly: true)
+        #expect(elixir.corkOut == 1 && elixir.pourTilt > 0 && elixir.pourTilt < 1 && !elixir.isPouring)
+        // The neck goes below the horizontal: the elixir streams out, and reaches the head only after its fall.
+        elixir.update(deltaTime: Elixir.Pour.streamStart + 0.05 - Elixir.Pour.corkPop, canFly: true)
+        #expect(elixir.isPouring && elixir.splashFlow == 0)
+        // Tipped over: full stream, landing on the head, the flask draining.
+        elixir.update(deltaTime: Elixir.Pour.tipEnd - Elixir.Pour.streamStart - 0.05, canFly: true)
+        #expect(elixir.pourTilt > 0.999 && elixir.pourFlow > 0.99 && elixir.splashFlow > 0)
+        #expect(elixir.fillLevel > 0 && elixir.fillLevel < 1)
+        // The stream has stopped and the last of it landed: soothed, the flask fades, the dragon still waits.
+        elixir.update(deltaTime: Elixir.Pour.soothe + 0.01 - Elixir.Pour.tipEnd, canFly: true)
+        #expect(!elixir.isPouring && elixir.splashFlow == 0 && elixir.fillLevel == 0 && elixir.hasSoothed)
+        #expect(elixir.state == .delivered && !elixir.isFinished && elixir.displayScale > 0)
+        // Faded: poured, the dragon may come.
         elixir.update(deltaTime: Elixir.pourDuration, canFly: true)
-        #expect(elixir.isFinished && !elixir.isPouring && elixir.displayScale == 0 && elixir.fillLevel == 0)
+        #expect(elixir.state == .poured && elixir.isFinished && elixir.hasSoothed)
+        #expect(!elixir.isPouring && elixir.displayScale == 0 && elixir.fillLevel == 0 && elixir.corkOut == 0)
+    }
+
+    @Test func theFlaskDrainsWhileItPoursQuickestAtFirst() {
+        var elixir = brewing(seconds: Elixir.fusingDuration)
+        elixir.update(deltaTime: Elixir.brewedHold, canFly: true)
+        elixir.delivered()
+        let middle = (Elixir.Pour.streamStart + Elixir.Pour.streamEnd) / 2
+        elixir.update(deltaTime: middle, canFly: true)
+        // Half the stream's time, three quarters of the elixir out.
+        #expect(abs(elixir.fillLevel - 0.25) < 0.01)
+        elixir.update(deltaTime: Elixir.Pour.streamEnd - 0.1 - middle, canFly: true)
+        // A trickle at the end.
+        #expect(elixir.pourFlow > 0 && elixir.pourFlow < 0.5)
     }
 }
 

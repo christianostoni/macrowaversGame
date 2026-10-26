@@ -423,6 +423,48 @@ struct UntangleViewModelTests {
         #expect(zip(viewModel.displayPositions, expected).allSatisfy { simd_distance($0, $1) < 0.001 })
     }
 
+    @Test func theDragonStopsForTheElixirThenComesWhenCalled() {
+        let viewModel = UntangleViewModel(shape: .trefoil)
+        let orbit = islandOrbit(yaw: 0.4)
+        let frame = { viewModel.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0),
+                                       worldFromLocal: matrix_identity_float4x4, orbit: orbit) }
+        for _ in 0..<60 { frame() }
+        viewModel.tapDragon()
+        frame()
+        let beforeHold = viewModel.displayPositions
+        viewModel.receiveElixir()
+        // Calm again, untouchable, still on the island; stopping does not make the body jump.
+        #expect(viewModel.phase == .receivingElixir && viewModel.phase.isOnIsland)
+        #expect(viewModel.mood == .calm && viewModel.phase.interaction == .none)
+        #expect(viewModel.flightManeuver == .hold)
+        #expect(zip(viewModel.displayPositions, beforeHold).allSatisfy { simd_distance($0, $1) < 0.001 })
+
+        // It brakes smoothly to a standstill, longer than the fit of anger would last: no going back to circling.
+        var previous = viewModel.displayPositions
+        var largestStep: Float = 0
+        for _ in 0..<Int(60 * (viewModel.alertDuration + 1)) {
+            frame()
+            largestStep = max(largestStep, simd_distance(viewModel.displayPositions[0], previous[0]))
+            previous = viewModel.displayPositions
+        }
+        #expect(viewModel.phase == .receivingElixir)
+        #expect(largestStep < 0.01)
+        frame()
+        #expect(simd_distance(viewModel.displayPositions[0], previous[0]) < 0.0005)
+        // Tapping it does nothing now.
+        viewModel.tapDragon()
+        #expect(viewModel.phase == .receivingElixir)
+
+        viewModel.callDragon()
+        #expect(viewModel.phase == .approaching)
+        var frames = 0
+        while viewModel.phase != .untangling && frames < 60 * 30 {
+            frame()
+            frames += 1
+        }
+        #expect(viewModel.phase == .untangling)
+    }
+
     @Test func callingTheDragonBringsItToThePuzzle() {
         let viewModel = UntangleViewModel(shape: .trefoil)
         var transform = float4x4(PlayAreaPlacement.seated.rotation)
