@@ -12,10 +12,18 @@ struct OrchardInteractions: ViewModifier {
     @State private var stemDragStart: StemDrag?
     @State private var pinchStart: Float?
     @State private var seedGrabOffset: SIMD3<Float>?
+    @State private var orbGrab: OrbGrab?
 
     private struct StemDrag {
         let height: Float
         let opening: Float
+    }
+
+    /// An ingredient in the hand: its offset from the pinch, and the hand's and its own rotation when it was taken.
+    private struct OrbGrab {
+        let offset: SIMD3<Float>
+        let handRotation: simd_quatf?
+        let orientation: simd_quatf
     }
 
     func body(content: Content) -> some View {
@@ -28,6 +36,7 @@ struct OrchardInteractions: ViewModifier {
             .simultaneousGesture(peelBananaGesture)
             .simultaneousGesture(chopPineappleGesture)
             .simultaneousGesture(tapOrbGesture)
+            .simultaneousGesture(dragOrbGesture)
             // The elixir flies to the dragon (and the ingredients take the pinch) only while it circles the tree.
             .onChange(of: untangle.phase.isOnIsland, initial: true) { _, isOnIsland in
                 orchard.isDragonOnIsland = isOnIsland
@@ -139,6 +148,42 @@ struct OrchardInteractions: ViewModifier {
                 case .orbiting: orchard.brewElixir()
                 case .sealed, .spent: break
                 }
+            }
+    }
+}
+
+extension OrchardInteractions {
+    /// Pinch an ingredient in orbit and move it: it follows the hand and turns with the wrist. Let go, it flies back
+    /// to its slot around the flask. A pinch that does not move stays a tap (`tapOrbGesture`).
+    private var dragOrbGesture: some Gesture {
+        DragGesture()
+            .targetedToEntity(where: .has(OrbComponent.self))
+            .onChanged { value in
+                let orb = value.entity
+                guard var journey = orb.components[OrbComponent.self], let parent = orb.parent,
+                      orchard.orbs.indices.contains(journey.fruitID), case .orbiting = orchard.orbs[journey.fruitID],
+                      orchard.elixir.letsIngredientsBeHeld else { return }
+                let hand = value.convert(value.location3D, from: .local, to: parent)
+                let wrist = value.inputDevicePose3D.map { value.convert($0.rotation, from: .local, to: parent) }
+                let grab = orbGrab ?? OrbGrab(offset: orb.position - hand, handRotation: wrist,
+                                              orientation: orb.orientation)
+                orbGrab = grab
+                if !journey.isHeld {
+                    journey.isHeld = true
+                    orb.components.set(journey)
+                }
+                orb.position = hand + grab.offset
+                if let wrist, let start = grab.handRotation {
+                    orb.orientation = wrist * start.inverse * grab.orientation
+                }
+            }
+            .onEnded { value in
+                orbGrab = nil
+                guard var journey = value.entity.components[OrbComponent.self], journey.isHeld else { return }
+                journey.isHeld = false
+                journey.joinStart = nil
+                journey.joinElapsed = 0
+                value.entity.components.set(journey)
             }
     }
 }

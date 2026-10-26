@@ -5,8 +5,9 @@ room, and a dragon is coiled around the tree. The player taps the dragon, which 
 the air in front of them, tangled in a knot. The player grabs the body with their hands and untangles it.
 Once free, the dragon thanks the player and flies away into the sky.
 
-Status: on `main`, playable with a temporary Sketchfab dragon (see
-[Temporary asset](#temporary-asset)); the code-generated placeholder is used when the asset is not in the bundle.
+Status: on `main`, playable with the design team's **stone dragon** (see [The stone dragon](#the-stone-dragon)):
+a head and a chain of separate stones, each of which the player grabs to untangle it. The code-generated
+placeholder is used when it is not in the bundle.
 
 ## How to try it
 
@@ -24,7 +25,8 @@ Status: on `main`, playable with a temporary Sketchfab dragon (see
    dive one by one into the flask in the orbit's middle and brew the **elixir**; the flask flies to the dragon and
    pours the elixir over its head (`callDragon()`): it flies to you, stops to look at you and settles tangled in
    front of you.
-6. Pinch and drag the dragon's body (one part per hand), lift parts to pass them over or under the others.
+6. Pinch and drag the dragon's stones or its head (one per hand), lift them to pass them over or under the
+   others. Each stone lights up when you look at it; the head stays where you leave it.
 
 Two-handed grabbing and the dragon looking at you need a real device; the simulator only does one hand and
 uses a seated eye height of 1.15 m.
@@ -36,11 +38,11 @@ uses a seated eye height of 1.15 m.
 | Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or the island panel's buttons): its side facing you follows your hand, and the dragon turns with it |
 | Tap the dragon | For ~3 s it gets angry (`DragonPhase.alerted`): circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling |
 | The flask pours the elixir over it | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
-| Puzzle | Dragon tied in a trefoil knot (3 crossings), red pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
-| Grab | The part you look at glows; pinch to grab, one part per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly (no shaking with a shaky hand, no flicker when pulled taut); the dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard |
+| Puzzle | Dragon tied in a trefoil knot (3 crossings), blue pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
+| Grab | The stone (or the head) you look at glows; pinch to grab, one per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly, without snapping after it, and slides through the knot instead of sticking to the hand; pulled taut, it stops stretching but the other hand can still move its part. Two held parts push each other away instead of passing through. The dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard. The head can be held too: it follows the hand and stays where it is let go, settling onto the plane |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils (the placeholder's eyes turn red). Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, spreads its wings (the placeholder also turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Game** in the island panel starts over |
-| Play area | Invisible: the knot floats at knee/table height in front of the player. Rotate it with the panel buttons, tilt it with the slider, reset it. Default is tuned for a seated player |
+| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, lifts its head (the placeholder also spreads its wings and turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Game** in the island panel starts over |
+| Play area | Invisible: the knot floats at knee/table height in front of the player, placed for a seated player (`PlayAreaPlacement.seated`). There are no controls to move it: the dragon panel that rotated and tilted it was removed |
 
 Everything is in English: user-facing text, code comments and tooling.
 
@@ -54,7 +56,8 @@ Sources/Macrowavers/
 ├── Model/Story/, Views/Story/        Storytelling screens (see ../storytelling/README.md)
 ├── Model/SceneFocus.swift            Focus mode: what fades back (none / fruit / dragon)
 ├── Model/Untangle/                   Pure game logic: Foundation + simd only, unit-tested
-│   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet) and crossing count
+│   ├── TangleSimulation.swift          Rope physics of the body (PBD/Verlet): grabs with a leash and per-grab
+│   │                                     tension, friction, flatten, crossing count (drawn and simulated)
 │   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight, loop)
 │   ├── DragonBehavior.swift            Difficulty: idle timer → fit (choreography of DragonAction), DragonMood
 │   ├── DragonFlight.swift              Flights (orbit, approach, landing, farewell) with a "follow the leader" body
@@ -63,7 +66,7 @@ Sources/Macrowavers/
 │   ├── HandGrabs.swift                 Which hand holds which node, from the manipulation events
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
-│   └── UntangleViewModel.swift         @Observable @MainActor view model shared by panel and immersive space
+│   └── UntangleViewModel.swift         @Observable @MainActor view model shared by the island panel and the space
 └── Views/Untangle/
     ├── DragonImmersiveView.swift       RealityView, island, island panel, island spin, grab events, tap on the dragon
     └── RealityKit/                     Draws, never decides
@@ -74,12 +77,15 @@ Sources/Macrowavers/
         ├── DragonRig.swift               DragonRig protocol, DragonFrame, DragonPose, DragonLifeAnimator
         ├── DragonEffects.swift           Smoke, fire, optional spatial audio, placeholder wings
         ├── ViewerTracker.swift           Player head position and gaze (ARKit world tracking, no permission needed)
-        ├── ProceduralDragonRig.swift     Placeholder dragon built from primitives
-        └── SkeletalDragonRig.swift       Rig for the real asset, picked automatically when it is in the bundle
-Sources/Macrowavers/Resources/DragonBody.usdz, DragonHead.usdz   Temporary dragon asset (Git LFS)
+        ├── DragonCurve.swift             The stone dragon's curve: spline, point at a distance, neck
+        ├── StoneDragonRig.swift          Rig for the design team's stone dragon, used when it is in the bundle
+        └── ProceduralDragonRig.swift     Placeholder dragon built from primitives
+Sources/Macrowavers/Model/Untangle/StoneDragonLayout.swift        Where each stone sits on the body, which node holds it
+Sources/Macrowavers/Resources/StoneDragon.usdz                    The design team's stone dragon (Git LFS)
 Sources/Macrowavers/Resources/FloatingIsland.usdz                 Floating island with the tree (Git LFS)
-Assets/Blender/untangle-dragon/       Blender scripts that generate the assets (not in the app)
-Tests/MacrowaversTests/UntangleTests.swift, SceneFocusTests.swift
+Assets/Blender/floating-island/       The island's source and make_island_asset.py (not in the app)
+Assets/Blender/stone-dragon/          The stone dragon's source and make_stone_dragon_asset.py (not in the app)
+Tests/MacrowaversTests/UntangleTests.swift, SceneFocusTests.swift, StoneDragonTests.swift
 ```
 
 MVVM: the Model does not import SwiftUI or RealityKit; the view model does not import RealityKit;
@@ -93,7 +99,7 @@ SwiftUI views and the RealityKit layer only read state and forward user actions.
    runs the flight or the dragon's behaviour, the physics step, crossings, mood and win;
 3. `DetanglingStateComponent` applies the chapter to the entities (only when it changes) and fades the dragon;
 4. moves the other colliders to the simulated (or flying) positions;
-5. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the red spheres.
+5. `rig.update(DragonFrame)` draws the dragon; `CrossingMarkers` moves the blue spheres.
 
 Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/WillEnd`, subscribed in
 `DragonImmersiveView`.
@@ -137,8 +143,9 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   which is what the `SpatialTapGesture` targets, so it never steals the pinch from grabbing), *grab*
   (`ManipulationComponent`, head excluded), *none* while flying.
 - **No visible platform.** The knot lies on an invisible plane (`y = 0` of the play area): a floor appearing
-  in the room when the dragon arrives looked out of place. The play area can still be rotated, tilted and reset
-  from the panel; it cannot be dragged by hand any more.
+  in the room when the dragon arrives looked out of place. The play area cannot be dragged by hand, and since the
+  dragon panel was removed it is not rotated or tilted from a panel either: it stays at `PlayAreaPlacement.seated`
+  (`UntangleViewModel.setTilt` remains for code and tests).
 - **Orbit = a two-turn torus curve around the trunk (`OrbitPath`).** After one turn radius and height swap, so
   the 2.35 m body (more than one turn) wraps the tree without crossing itself (headless: closest gap 14 cm,
   6 cm needed). The head advances at a fixed speed per second (frame-rate independent) and the body follows its
@@ -158,9 +165,36 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   old 48 (~3.5 ms per tick in a debug build, 0.1 ms optimised).
 - **Friction, anchored head and a tension limit.** Without friction the knot slipped loose by itself; with
   both ends free a single pull solved the puzzle; without a tension limit a taut body tunnels through itself.
+  The head is anchored only while nobody holds it: the player can grab it like the stones (`grab(0)`), it follows
+  the hand, and let go it stays where it was put, anchored again there (settling back onto the plane in ~0.2 s if
+  it was let go in the air; the dragon never looks at its own head when the player holds it).
+- **The untangling physics, retuned (October 2026).** Measured headless (the Model at 90 Hz on the trefoil knot,
+  before → after): hand-to-stone gap pulling the tail at 0.5 m/s 0.73 → 0.17 m, direction reversals 14 → 0, a
+  stone let go 20 cm up falls at 7.0 → 0.88 m/s, two held parts pushed together 4.1 → 8.0 cm apart, phantom
+  crossings between near segments 77 → 0, the untouched knot keeps its 3 crossings for 18 → 60+ s, a taut body
+  under a shaky hand moves 0.04 → 0.23 mm per frame.
+  - *Friction once per sub-step, Coulomb-like* (`applyFriction`): it ran in all 10 solver iterations, taking
+    ~97 % of the sliding away per sub-step, so the knot stuck to the hand that pulled it, which juddered. Now a
+    contact holds a slip back by at most `selfFriction` × its depth, and a contact barely touching holds nothing
+    (a fixed minimum made a taut body stick and slip).
+  - *Tension per grab, directional* (`grabTensions`): the single most stretched segment of the whole body (4 %,
+    1.5 mm) used to hold back every grab at once. Now each grab looks at the mean stretch of the `tensionReach`
+    (8) segments on each side, and only the part of its move that stretches a taut side stops: sideways it still
+    follows its hand slowly (15 % per sub-step), back towards that side freely. So one hand pulling the body
+    taut does not lock the other (it can still lift its part; test), and the pulling one gives way.
+  - *A leash on the hand* (`grabLeash`, 8 cm): the collider follows the hand however far the body is held back;
+    the node then rushed after it like a rubber band. The target stays within 8 cm of the node.
+  - *Held parts collide*: two held nodes (or a held node and the anchored head) have infinite mass, so the
+    constraint moved neither and they passed through each other; now each gives way by half.
+  - *The pull towards the plane builds up no speed* (`previous` moves with it) and is half as strong
+    (`flattenStrength` 0.02): stones let go in the air no longer slam down. At 0.04 with that change the resting
+    knot loosened by itself.
+  - *Crossings of near segments are ignored* (`crossingSkip`, 8 segments): small kinks showed phantom markers
+    and blocked the win. The markers sit on the body as it is drawn (`drawnCrossings`, interpolated), not on the
+    60 Hz simulation.
 - **Grabs are filtered, the tension limit is soft.** The hand drives the node through a 60 ms low-pass filter
-  (`grabSmoothing`), so tracking noise does not shake the body; near `maxTension` the node slows down
-  gradually (`tensionSoftness`) and gives way in proportion to the overstretch. The old hard stop made a taut
+  (`grabSmoothing`), so tracking noise does not shake the body; near `maxTension` the stretching part of the move
+  slows down gradually (`tensionSoftness`) and the node gives way in proportion to the overstretch. The old hard stop made a taut
   node flicker between following the hand and giving way every sub-step (headless: 42 direction reversals in
   3 s of a taut pull, 162 with a shaky hand; now 0). The dragon's reaction is visual and slow: strain is
   filtered (`strainResponsiveness`), no per-vertebra tremble while held (it was a 40 Hz buzz that read as a
@@ -177,11 +211,12 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   are not a clean begin/end pair per hand: a hand holds one node at a time (a missed release used to leave a
   node frozen in the simulation), a node passes between hands without being dropped, and the end of a released
   grab arriving after a quick re-grab of the same node no longer drops the new grab (the old code released on
-  every `WillEnd`). The anchored head has no collider at all during the puzzle (its 9 cm tap sphere used to sit
-  over the neck and swallow pinches), the grab spheres are 1.2× the body radius instead of 1.5× (neighbouring
+  every `WillEnd`). The head is grabbable with its own sphere (half the gap to the first stone: it used to have
+  no collider at all, so its 9 cm tap sphere would not sit over the neck and swallow pinches), the grab spheres are 1.2× the body radius instead of 1.5× (neighbouring
   spheres overlap less, so two hands close together pick two nodes instead of sharing one), and colliders have
-  no shape while the dragon flies. One hand pulling the body taut does not lock the other: the pulling node
-  gives way between sub-steps, so the other node keeps following its hand (test).
+  no shape while the dragon flies. One hand pulling the body taut does not lock the other: tension is measured
+  per grab and only holds back the move that stretches the taut side, so the other node keeps following its hand
+  and the pulling one gives way (test).
 - **Colliders are separate from the visuals.** One invisible collider per node handles input; the visuals are
   a swappable `DragonRig`. When the asset arrives only the rig changes, not the game.
 - **Hover highlights the part you look at.** visionOS highlights the children of the looked-at entity, so the
@@ -214,54 +249,47 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
 
 ## Floating island
 
-`Sources/Macrowavers/Resources/FloatingIsland.usdz` is generated from the design team's latest island export
-(`last.ttttttttusdc.usdc`, a raw Blender export of the island with its tree). Compared with the first export
-(`Tree_FloatingIsland.usdc`) only two meshes changed: the rock body is a little wider and the grass top was
-remodelled (501 vertices instead of 121, a shorter, more regular fringe); the tree, the floating rocks and
-everything else are identical:
+`Sources/Macrowavers/Resources/FloatingIsland.usdz` comes from the design team's `ilha_RCP.usdz`
+(`Assets/Blender/floating-island/ilha_rcp.usdz`): the island with its tree, prepared in Reality Composer Pro, with
+its materials. It is prepared headless with USD's Python API (`pxr`, which ships with Blender; Blender itself is
+not used):
 
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-    -P Assets/Blender/untangle-dragon/make_island_asset.py -- <island source .usdc> <output folder>
+    -P Assets/Blender/floating-island/make_island_asset.py -- \
+    Assets/Blender/floating-island/ilha_rcp.usdz <output folder>
 ```
 
-The source is Z-up and ~14 m wide, with ~90 loose meshes, a camera, a sun and a dome light. The script turns it
-into the same asset contract the code has always used, so no Swift code changed with the new island:
+The source is Z-up under a root that turns it Y-up, ~14 m wide, with 64 meshes, a sun and a camera. Its 13
+materials are Reality Composer Pro shader graphs (unlit "airbrush" colour ramps: grass, rock, trunk, canopy,
+stones, flowers), several per mesh through face subsets; Blender cannot read them and re-exporting the meshes
+would drop the face subsets. So the script edits the USD directly, leaves every mesh, face subset and material
+as it is, and gives the code the same asset contract it has always used (no Swift code changed with the new
+island):
 
-- **Three parts, as before:** the meshes are joined into `Island` (grass, rock, roots, stones, bushes, flowers:
-  its bounds give the rock's collider), `Tree` (trunk, branch, canopy) and `FloatingRocks` (debris and small
-  floating islands, which bob on their own). Camera and lights are dropped: the room lights the island.
-- **Plain material colours**, no textures and no vertex colours (nothing to bake): exported as UsdPreviewSurface,
-  matte (roughness 0.85); the tree's anonymous materials become `Tree_Bark` and `Tree_Leaves`. 247 KB, validated
-  with `usdchecker --arkit`.
-- **Inside-out meshes turned the right way:** the source's rock body (`Island_RockBody`) has its faces wound
-  inwards (signed volume −564, −586 in the latest export). Blender draws both sides of every face, so it looks fine there; RealityKit culls
-  back faces, so the rock looked hollow from the outside, its far inner walls showing through. Every closed mesh
-  (≤ 5 % open edges, `MAX_OPEN_EDGES`) with a negative signed volume gets its faces recalculated outwards and its
-  normals recomputed; open meshes (petals, grass cards) are left alone, their volume's sign means nothing.
-  Stray vertices without faces are deleted first (the latest export has one in the rock: it misled Blender's
-  guess of the outside), and if the volume is still negative every face is reversed, so the result never depends on it.
-  Ask the design team to check *Face Orientation* (Viewport Overlays: blue outside, red inside) on new assets.
-- **Origin moved to the base of the trunk, on the grass:** the code uses the origin as the orbit centre with no
-  offsets.
-- **Scaled by the tree alone** (`TARGET_TREE_HEIGHT`: 1.8415 m from the bottom of the trunk to the top of the
-  canopy; island ~2.5 m wide): `IslandPlacement.standard`, the dragon's orbit (`OrbitPath.aroundTree`: no trunk,
-  branch or bush inside it), the fruit and the floor occluder stay as they were. Not the island's width nor the
-  grass: the wider rock would have shrunk everything by 0.4 %. With the latest export the tree, the fruit points
-  and the floating rocks match the previous asset within 0.001 mm across and 0.5 mm in height (the grass by the
-  trunk, where the origin sits, rose by half a millimetre).
-- Y-up export with *Convert Orientation* (rotation on the file root, so the code never overwrites the loaded
-  entity's transform).
-- Six empty objects `fruit_01` … `fruit_06` mark where the fruit hangs: the script casts rays at the canopy from
-  outside (the canopy is made of separate blobs, so it looks around each wanted spot when a ray slips between
-  them) and puts each point just off the foliage, 1.2–1.35 m above the grass. Move them in Blender to move the
-  fruit.
-- 3 meshes / 20 materials, ~5.9k triangles. The code adds a collider only below the ground (the rock, to spin
-  the island).
-- Asset size: island ~2.5 m (floating rocks ~3.6 m), tree 1.84 m, canopy from ~0.97 m above the ground, rock and
-  roots 0.91 m deep below the grass. In the scene it is at **real size** (scale 1, `IslandPlacement.standard`),
-  2.8 m away, **grass at 0.6 m** (`IslandPlacement.grassHeight`), treetop ~2.45 m. If it is missing, the dragon
-  circles an empty spot.
+- **Three parts:** `Island` (grass, rock, roots, stones, bushes, flowers, and the loose stones on the ground: its
+  bounds give the rock's collider), `Tree` (trunk and canopy, the source's `Vert_001`) and `FloatingRocks` (the
+  `Island_Debris_*` and `Island_Floater_*` pieces, which bob on their own): 42, 7 and 14 meshes. The sun, the
+  camera and an empty mesh are removed: the island's materials are unlit, and the room's light does not change
+  them.
+- **Origin at the base of the trunk, on the grass, and scaled by the tree alone** (`TARGET_TREE_HEIGHT`: 1.8415 m
+  from the bottom of the trunk to the top of the canopy): both on the file's root, after its Z-up → Y-up turn.
+  The result matches the previous island: `Island` spans (−1.16, −0.91, −1.15)…(1.32, 0.14, 1.34) m, 2.48 m wide,
+  as before, so `IslandPlacement.standard`, the dragon's orbit (`OrbitPath.aroundTree`), the rock's collider and
+  the floor occluder are unchanged.
+- **Six empty prims `fruit_01` … `fruit_06`** mark where the fruit hangs: the script casts rays at the canopy
+  (the meshes with `Airbrush_Canopy`) from outside, at the same angles and heights as before (it looks around a
+  spot when a ray slips between the canopy's blobs), and puts each point 4.5 cm off the foliage, 1.14–1.36 m
+  above the grass.
+- No faces to turn: the source's meshes are double-sided (the earlier export's rock was wound inwards and looked
+  hollow; this one is drawn from both sides).
+- 184 KB, 91 `ShaderGraphMaterial`s once loaded (checked with RealityKit on macOS), validated with `usdchecker`.
+
+In the scene:
+
+- Asset size: island ~2.5 m (floating rocks ~3.7 m), tree 1.84 m, rock and roots 0.91 m deep below the grass.
+  It is at **real size** (scale 1, `IslandPlacement.standard`), 2.8 m away, **grass at 0.6 m**
+  (`IslandPlacement.grassHeight`), treetop ~2.45 m. If it is missing, the dragon circles an empty spot.
 - Scale and height are independent: the origin is on the grass and the transform is translation × rotation ×
   uniform positive scale, so changing the scale grows the island around the grass and never moves it (test).
 - At that height the rock's roots end ~0.3 m below the real floor and the lowest floating rocks just above it.
@@ -270,76 +298,99 @@ into the same asset contract the code has always used, so no Swift code changed 
   covered whichever way the island is turned, outside the island so it never turns, bobs or fades): seen from
   above it hides only what is under the floor, and the island seems to rise out of it.
 
-## Asset specification (for the design team)
+## The stone dragon
 
-`SkeletalDragonRig` is used automatically when `DragonBody` is in the app bundle (put exports under
-`Sources/Macrowavers/Resources/`); otherwise the placeholder is used.
-
-**`DragonBody`** (required; USDZ loaded from the app bundle)
-- One skinned mesh: neck + body + tail.
-- Bone chain `spine_00` (neck, near the head) … `spine_NN` (tail tip), each child of the previous one,
-  names sortable alphabetically (two digits). 24–64 bones (the temporary asset has 64), straight rest pose,
-  equal bone lengths.
-- **No animation on the spine bones**: code drives them every frame.
-- Any scale: code scales the asset so the spine matches the simulated body (~2.35 m). Body thickness about
-  1/40 of its length (3 cm radius at game size, `SkeletalDragonRig.Asset.modelledRadius`): the rig thickens it
-  to `TangleConfig.radius` (4 cm) with a uniform scale on `spine_00`, shortening every child bone's offset by
-  the same factor, so the skin swells around the spine without the body getting longer. Wings keep their size;
-  the head grows with the neck.
-- Wings (recommended): joints `wing_L` and `wing_R`, children of a shoulder vertebra (~10% down the spine),
-  **folded** in the rest pose. Code opens them around their local Z axis (`SkeletalDragonRig.Asset.wingFlareAxis`).
-
-**`DragonHead`** (recommended)
-- Separate head so its animations never fight the spine. Origin at the neck joint, snout towards **+Z**.
-- Named animations (an `AnimationLibraryComponent` on the root or named USD clips).
-  Looping, per mood: `idle`, `annoyed`, `restless`, `wriggle`, `happy`.
-  One-shot, per move: `roar` (~1.6 s, mouth wide open between 35% and 75%), `turn`, `lash`, `coil`.
-  Missing clips fall back to `idle`.
-- Two empty child entities: `nostrils` (smoke) and `mouth` (fire, pointing +Z).
-
-**Sounds** (optional; wav/m4a/mp3/caf in the bundle): `DragonGrowl`, `DragonRoar`, `DragonRumble`,
-`DragonWhoosh`. Played as spatial audio from the head.
-
-**General**: PBR materials (they pick up the real room light), moderate polygon count (passthrough is on).
-Per-part hover on a single skinned mesh needs a ShaderGraph material using the hover input.
-
-On the code side the spine follows a Catmull-Rom spline through the simulated nodes (not the polyline, which
-showed corners), and the first stretch of neck (`SkeletalDragonRig.Asset.neckBlendLength`) leaves the back of
-the head in the head's direction, so the rigid head and the neck do not show a seam when the head turns (when
-it looks up the neck is lifted a little so it does not sink below the knot plane). The head sits inside a
-container entity: the code moves the container and never overwrites the transform of the asset's root.
-
-### Temporary asset
-
-Until the design team's dragon is ready, `Sources/Macrowavers/Resources/DragonBody.usdz` and `DragonHead.usdz`
-come from **"Chinese dragon" by MAXDESIGN-3D on Sketchfab, licensed CC BY 4.0: it must be credited in the
-app credits.** Remove both files to go back to the placeholder dragon.
-
-They are generated without opening Blender by the scripts in `Assets/Blender/untangle-dragon/`:
+`StoneDragon.usdz` comes from the design team's `CartoonDragon12_RCP.usdz` (`Assets/Blender/stone-dragon/`),
+prepared headless:
 
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-    -P Assets/Blender/untangle-dragon/make_dragon_asset.py -- <scene.gltf> <output folder>
+    -P Assets/Blender/stone-dragon/make_stone_dragon_asset.py -- \
+    Assets/Blender/stone-dragon/cartoon_dragon_rcp.usdz <output folder>
 ```
 
-`make_dragon_asset.py` runs the step scripts `1_prepare_and_remove_legs.py`, `2_detach_head_and_clean.py`,
-`3_rename_spine.py` and `4_material.py` in order (each can also be run by hand from Blender's Scripting tab)
-plus the steps in between. The script removes the legs and closes the holes with curved patches (the hole border is unrolled on the
-body cylinder, triangulated in 2D and wrapped back, so no flat patches), detaches the head, slims the body,
-builds a 64-bone spine with smooth weights (skin that bends instead of kinking), adds `nostrils`/`mouth`,
-fixes the material and exports `DragonBody.usdz` and `DragonHead.usdz` (validated with `usdchecker`).
+The source (Y-up, ~13 m long, a Sketchfab model prepared in Reality Composer Pro) is a head (face, horns, upper
+teeth; the face skinned to a two-bone skeleton `JawRig`, `Root` and `Jaw`) and 19 separate stones with dorsal
+spikes (`Block12` meshes), the last a flat tail (`Block12_Tail`), each with an idle animation, and a jaw
+animation. The script:
 
-Notes: use the glTF download (Sketchfab's USDZ loses the texture and the bone names); the model's "emissive"
-texture is not its colour (the body uses a solid red); Blender's export with *Convert Orientation* puts a
-rotation on the file's root, which is why the head is wrapped in a container.
+- reads the rest pose and drops the animation and the skeleton (the stones' transform caches, the face's
+  armature);
+- orders the stones from the head to the tail (each the closest to the previous one) as `Stone_00` … `Stone_18`,
+  origin at the centre, +Z along the body towards the tail, +Y up;
+- scales the chain, from the head's centre to the tail stone's, to 2.35 m (the simulated body);
+- builds `Head` (origin at the face's centre, snout +Z): the face's vertices skinned to the `Jaw` bone (68 of
+  398, weight 1) become the lower jaw, `Jaw`, under `JawHinge` at the head of that bone; the upper teeth stay on the
+  head; `mouth` and `nostrils` mark where fire and smoke come out. Fitted against the source's jaw animation, the
+  jaw turns around exactly that point and the head's sideways axis (within 4 mm), at most 0.489 rad: the rig opens
+  it as far (`StoneDragonRig.Asset.jawAngle` 0.49);
+- keeps the design team's materials unchanged: `AirbrushGrain_00` (head, horns, teeth, jaw) and `AirbrushGrain_01`
+  … `AirbrushGrain_19` (one per stone, from behind the head to the tail), Reality Composer Pro shader graphs: unlit,
+  a colour ramp driven by the facing angle plus a world-space grain re-rolled 24 times a second. Blender cannot read
+  them, so Blender exports the geometry only and notes each mesh's material by name; USD (`pxr`, bundled with
+  Blender) copies `/Dragon/Materials` from the source as it is and binds each mesh to its own, as in the source.
+  RealityKit loads them as `ShaderGraphMaterial` (checked on macOS).
+
+The asset is 192 KB (the Sketchfab dragon it replaces, `DragonBody` + `DragonHead`, was 11.6 MB). Earlier exports:
+`CartoonDragon_airbrush.usdc` had no usable material (Blender's MaterialX graph, which RealityKit does not render,
+with the grain frozen at one position: flat grey boxes); `CartoonDragon_RCP.usdz` had one material for the whole
+dragon and opened the mouth in a mesh animation of the face (the script then took the face's pieces that move in
+it as the jaw).
+
+**`StoneDragonRig`** (picked first by `DragonRigLoader`):
+
+- `StoneDragonLayout` (Model, tested) keeps each stone's distance from the head along the body, scaled to the
+  simulated length, and gives it the closest node: increasing, one per stone, never the head's node 0.
+- Every frame each stone sits on the smoothed body (`DragonCurve`) at its distance, turned along it (+Y as close
+  to world up as the body allows), breathing with its node and floating 3 mm on its own; the head follows node 0
+  like the other rigs (look, neck lift, jaw turning 0.49 rad when wide open, smoke and fire).
+- One scale for stones and head: the design's proportions along the simulated body, at 0.9
+  (`Asset.stoneScale`): a thin gap between the stones (1–2 cm; at 1 they nearly touch, as modelled), the widest
+  stone ~13 cm, the head ~25 cm long. The simulated body is 8 cm thick, so where the dragon crosses itself the
+  stones may touch a little.
+- **Every stone is grabbable.** Each stone hangs from the collider of the node that holds it, so looking at it
+  lights it up and pinching it grabs that node. In the mini-game only those 19 nodes and the head (node 0, whose
+  collider carries the head) are grabbable (`DragonRig.grabTargets`), with a sphere 0.95 × half the distance to
+  the closest neighbour (~6 cm for a stone, ~9 cm for the head; the stones are ~12 cm apart), so neighbouring
+  spheres barely touch and two hands take two different pieces. The nodes in between carry no grab;
+  the simulation moves them with their neighbours. While the dragon circles the tree every node is still a tap
+  target, as before.
+- No wings and no separate eyes: the pose's wing and blink values are not drawn.
+
+## Asset specification (for the design team)
+
+`StoneDragonRig` uses `StoneDragon.usdz` when it is in the bundle (made by `make_stone_dragon_asset.py` from the
+design team's file, see [The stone dragon](#the-stone-dragon)); without it the procedural placeholder is used.
+What the rig expects:
+
+- **`Stone_00` … `Stone_NN`** (two digits, from behind the head to the tail): one rigid piece each, origin at its
+  centre, +Z along the body towards the tail, +Y up. Any number of stones (one node each, up to the node count);
+  their rest distances from the head set where they sit on the body. No animation: the code places them.
+- **`Head`**: origin at the head's centre, snout towards **+Z**, +Y up, with `JawHinge` (the lower jaw hangs from
+  it; the code turns it around its +X to open the mouth) and two empty children, `nostrils` (smoke) and `mouth`
+  (fire, pointing +Z).
+- Materials: anything RealityKit renders (the design team's are Reality Composer Pro shader graphs). The code
+  does not replace them.
+- Sounds (optional; wav/m4a/mp3/caf in the bundle): `DragonGrowl`, `DragonRoar`, `DragonRumble`,
+  `DragonWhoosh`, played as spatial audio from the head.
+
+The stones follow a Catmull-Rom spline through the simulated nodes (`DragonCurve`), and the first stretch of
+neck (`StoneDragonRig.Asset.neckBlendLength`) leaves the back of the head in the head's direction, so the rigid
+head and the stones behind it do not show a seam when the head turns. The head sits inside a container entity:
+the code moves the container and never overwrites the asset's own transforms.
+
+The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit it in the app if it asks to.
 
 ## Tuning
 
 | Where | Parameter | Effect |
 |---|---|---|
 | `TangleConfig` | `selfFriction` | higher = harder knot |
-| `TangleConfig` | `anchorHead` | `false` = much easier |
-| `TangleConfig` | `maxTension`, `tensionSoftness` | lower = fewer glitches when pulling hard, softer grab |
+| `TangleConfig` | `anchorHead` | `false` = much easier (the head drifts when the tail is pulled) |
+| `TangleConfig` | `maxTension`, `tensionSoftness`, `tensionReach` | lower = fewer glitches when pulling hard, softer grab; how much body around a grab counts |
+| `TangleConfig` | `grabLeash` | how far ahead of its node a hand may pull (lower = no rubber band, more lag) |
+| `TangleConfig` | `flattenStrength` | how fast the body settles onto the plane (higher loosens the resting knot) |
+| `TangleConfig` | `crossingSkip` | segments this close never count as crossings |
 | `TangleConfig` | `nodeCount`, `segmentLength`, `radius` | spline control points, body length (keep ~2.35 m), body thickness (rigs follow it) |
 | `TangleConfig` | `grabSmoothing` | higher = calmer but laggier grab |
 | `TangleShape` | `.trefoil` / `.figureEight` / `.loop` | starting knot (3 / 4 / 0 crossings) |
@@ -357,11 +408,13 @@ rotation on the file's root, which is why the head is wrapped in a container.
 ## Tests
 
 `Tests/MacrowaversTests/UntangleTests.swift` (Swift Testing) covers the Model and the view model: initial
-crossings, the knot not untying by itself, rigid turns keeping crossings, the anchored head, two-handed grabs,
-one hand pulling taut not locking the other, hand tracking (one node per hand, hand-off, late end after a
+crossings, the knot not untying by itself, rigid turns keeping crossings, the head staying put unless held,
+following the hand when held (even in the air) and staying where it is left, settling onto the plane, two-handed
+grabs,
+one hand pulling taut not locking the other (the knot slides first, so the test pulls 1.6 m), hand tracking (one node per hand, hand-off, late end after a
 re-grab, cancelled grab), left and right hands dragging two parts independently through the view model,
 the fit starting with a turn after the delay, the dragon waiting while held, a shaky hand not shaking the body,
-a taut pull not flickering, flight keeping its distance from the player, the orbit never crossing itself, the
+a taut pull not flickering (pulled 1.5 m apart, so it ends up taut), flight keeping its distance from the player, the orbit never crossing itself, the
 captive dragon turning rigidly with the island, the landing matching the knot, the farewell ending, the free
 dragon staying in front of the player and hovering where they look (two gaze directions), the story flow
 (captive, a tap only makes it angry for `alertDuration`, `callDragon()` → puzzle), tilt clamping, restart and
@@ -371,12 +424,23 @@ elixir flies, when exploring, only landing and untangling focusing on the dragon
 whatever the scale, positive uniform scale), the island's spin (the side facing the player follows the hand from
 any side of the island, movement towards it or up does not turn it, no jump with the player above the trunk), and
 the speaking dragon keeping only itself visible.
+`StoneDragonTests.swift` covers the stone dragon's layout (stones along the whole body in the asset's
+proportions, each held by its own node next to it, increasing and never the head, even when crowded).
 `StoryTests.swift` covers the free dragon waiting for the player's answer (and taking off on its own without the
 story).
 
 ## Known limits
 
 - Pulling very hard can make one part clip through another for a moment (see `maxTension`).
+- The stone dragon's look (thickness, gaps between the stones) and its grab spheres are first guesses: check them
+  on device (`StoneDragonRig.Asset`). The stones are ~13 cm wide but the simulated body is 8 cm thick
+  (`TangleConfig.radius`), so where the dragon crosses itself the stones may touch or slightly overlap. A thicker
+  body (radius 5–5.5 cm, with a retuned starting knot) or smaller stones (`stoneScale` ~0.7) would fix it, at the
+  cost of changing the puzzle's difficulty.
+- The physics was retuned headless; how it feels in the hand (the leash, the sideways give of a taut grab, the
+  friction) needs checking on device. A taut grab may stretch one segment by up to ~9 % for a moment.
+- Damping, ground friction, the pull towards the plane and the friction are per sub-step: changing `substeps`
+  silently changes them too (they should become per-second values).
 - While rearing up the neck is raised only visually; colliders stay on the play area plane for ~1 s.
 - Smoke and fire sizes are eyeballed and need tuning on device.
 - The island (2.8 m away, ~2.5 m wide, floating rocks ~3.6 m) does not know the room: reduce

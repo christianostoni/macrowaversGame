@@ -43,18 +43,22 @@ protocol DragonRig: AnyObject {
     /// colliders: visionOS's hover effect lights up the children of the entity being looked at.
     func attach(to colliders: [Entity])
     func update(_ frame: DragonFrame, deltaTime: Float)
+    /// The nodes the player can grab in the mini-game, with the radius of their grab sphere (m). nil: every node
+    /// but the anchored head, with the default sphere.
+    var grabTargets: [Int: Float]? { get }
 }
 
 extension DragonRig {
     func attach(to colliders: [Entity]) {}
+    var grabTargets: [Int: Float]? { nil }
 }
 
 enum DragonRigLoader {
-    /// Uses the design team's asset when it is in the bundle, otherwise the procedural placeholder.
+    /// Uses the design team's stone dragon when it is in the bundle, otherwise the procedural placeholder.
     @MainActor
     static func load(config: TangleConfig) async -> DragonRig {
-        if let skeletal = await SkeletalDragonRig.load(config: config) {
-            return skeletal
+        if let stones = await StoneDragonRig.load(config: config) {
+            return stones
         }
         return ProceduralDragonRig(config: config)
     }

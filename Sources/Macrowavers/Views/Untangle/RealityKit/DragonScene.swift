@@ -67,7 +67,8 @@ struct DragonBodySystem: System {
             // Story chapter: tap on the island, grab in the mini-game, nothing while flying; the dragon fades
             // in and out.
             if var state = entity.components[DetanglingStateComponent.self] {
-                state.apply(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config)
+                state.apply(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config,
+                            grabTargets: body.rig.grabTargets)
                 state.fade(dragonOpacity: viewModel.dragonOpacity, dragon: entity, deltaTime: deltaTime)
                 entity.components.set(state)
             }
@@ -151,11 +152,12 @@ enum DragonSceneBuilder {
 
     /// Each node is grabbed with one hand: with two hands two nodes are held together.
     /// `ManipulationComponent` handles one grab per hand; the SwiftUI gesture would handle only one.
+    /// `radius`: the rig's grab sphere for this node (a stone's size), or nil for the default.
     @MainActor
-    static func makeGrabbable(_ collider: Entity, config: TangleConfig) {
+    static func makeGrabbable(_ collider: Entity, config: TangleConfig, radius: Float? = nil) {
         // A bit larger than the body, easy to look at and grab, but not much: the spheres of nearby nodes
         // overlap less, so two hands close together pick two different nodes instead of sharing one.
-        let shape = ShapeResource.generateSphere(radius: max(config.radius * 1.2, config.segmentLength * 0.75))
+        let shape = ShapeResource.generateSphere(radius: radius ?? max(config.radius * 1.2, config.segmentLength * 0.75))
         #if os(visionOS)
         ManipulationComponent.configureEntity(
             collider,
@@ -177,8 +179,8 @@ enum DragonSceneBuilder {
     }
 }
 
-/// Red pulsing spheres on the crossings: they show where the dragon is still tangled.
-/// Independent from the rig, so they also work with the real asset's skinned mesh.
+/// Blue pulsing spheres on the crossings: they show where the dragon is still tangled.
+/// Independent from the rig, so they work with any dragon.
 @MainActor
 final class CrossingMarkers {
     let entity = Entity()
@@ -188,7 +190,7 @@ final class CrossingMarkers {
 
     init(radius: Float) {
         mesh = .generateSphere(radius: radius)
-        var material = UnlitMaterial(color: PlatformColor(red: 1, green: 0.25, blue: 0.2, alpha: 1))
+        var material = UnlitMaterial(color: PlatformColor(red: 0.2, green: 0.5, blue: 1, alpha: 1))
         material.blending = .transparent(opacity: .init(floatLiteral: 0.55))
         self.material = material
         entity.name = "CrossingMarkers"
