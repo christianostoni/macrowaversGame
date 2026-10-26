@@ -11,8 +11,8 @@ struct BananaPeelComponent: Component {
     let outward: SIMD3<Float>
 }
 
-/// The banana drawn in RealityKit (`Banana.usdz`, ported from the fruit lab prototype): four strips of peel turn
-/// on hinges at their bottom edge, like a banana peeled by hand. How far each strip is pulled comes from
+/// The banana drawn in RealityKit (`Banana.usdz`, the design team's, with Reality Composer Pro airbrush materials):
+/// four strips of peel turn on hinges at their bottom edge, like a banana peeled by hand. How far each strip is pulled comes from
 /// `OrchardViewModel`. Origin at the centre of the fruit.
 @MainActor
 final class BananaRig {
@@ -43,12 +43,11 @@ final class BananaRig {
             print("⚠️ Banana.usdz not found: no banana on the tree")
             return nil
         }
-        // The prototype's wooden stand and its golden item: the orchard has its own orb.
-        asset.findEntity(named: "stand")?.removeFromParent()
-        asset.findEntity(named: "item")?.removeFromParent()
+        // The asset's golden gem: the orchard has its own orb.
+        asset.findEntity(named: "gem")?.removeFromParent()
         let bounds = asset.visualBounds(relativeTo: asset)
-        let core = asset.findEntity(named: "core")
-        let coreCenter = core?.visualBounds(relativeTo: asset).center ?? bounds.center
+        let flesh = asset.findEntity(named: "flesh")
+        let coreCenter = flesh?.visualBounds(relativeTo: asset).center ?? bounds.center
         size = bounds.extents.y
         heightAboveAnchor = bounds.max.y - coreCenter.y
 

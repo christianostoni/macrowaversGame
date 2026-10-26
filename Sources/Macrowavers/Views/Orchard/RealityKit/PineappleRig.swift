@@ -4,9 +4,10 @@ import simd
 /// The pineapple's body: chop down through it with the hand, or tap it.
 struct PineappleBodyComponent: Component {}
 
-/// The pineapple drawn in RealityKit (`Pineapple.usdz`, from the fruit lab prototype): two halves split down
-/// the middle and a crown. Chopped, the halves fall open like a book showing the flesh to the player and the
-/// crown tips away; sent back to the tree it closes gently. Origin at the centre of the body.
+/// The pineapple drawn in RealityKit (`Pineapple.usdz`, the design team's, with Reality Composer Pro airbrush
+/// materials): two halves split down the middle and a crown of leaves. Chopped, the halves fall open like a book
+/// showing the flesh to the player and the crown tips away; sent back to the tree it closes gently. Origin at the
+/// centre of the body.
 @MainActor
 final class PineappleRig {
     let root = Entity()
@@ -37,7 +38,8 @@ final class PineappleRig {
             print("⚠️ Pineapple.usdz not found: no pineapple on the tree")
             return nil
         }
-        asset.findEntity(named: "item")?.removeFromParent()
+        // The asset's golden gem: the orchard has its own orb.
+        asset.findEntity(named: "gem")?.removeFromParent()
         let halves = ["pineapple_1", "pineapple_2"].compactMap { asset.findEntity(named: $0) }
         guard halves.count == 2 else { return nil }
         let body = halves.map { $0.visualBounds(relativeTo: asset) }.reduce(halves[0].visualBounds(relativeTo: asset)) {
@@ -53,7 +55,7 @@ final class PineappleRig {
             let side: Float = half.visualBounds(relativeTo: asset).center.x < body.center.x ? -1 : 1
             parts.append(Half(entity: half, rest: half.transform, side: side))
         }
-        if let crownEntity = asset.findEntity(named: "crown") {
+        if let crownEntity = asset.findEntity(named: "leaves") {
             crown = (crownEntity, crownEntity.transform)
         }
 

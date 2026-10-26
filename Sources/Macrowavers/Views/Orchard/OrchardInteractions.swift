@@ -13,6 +13,9 @@ struct OrchardInteractions: ViewModifier {
     @State private var pinchStart: Float?
     @State private var seedGrabOffset: SIMD3<Float>?
     @State private var orbGrab: OrbGrab?
+    /// Two hands on an ingredient: its size and its rotation when they took it.
+    @State private var orbScaleStart: Float?
+    @State private var orbTurnStart: simd_quatf?
 
     private struct StemDrag {
         let height: Float
@@ -37,6 +40,8 @@ struct OrchardInteractions: ViewModifier {
             .simultaneousGesture(chopPineappleGesture)
             .simultaneousGesture(tapOrbGesture)
             .simultaneousGesture(dragOrbGesture)
+            .simultaneousGesture(scaleOrbGesture)
+            .simultaneousGesture(turnOrbGesture)
             // The elixir flies to the dragon (and the ingredients take the pinch) only while it circles the tree.
             .onChange(of: untangle.phase.isOnIsland, initial: true) { _, isOnIsland in
                 orchard.isDragonOnIsland = isOnIsland
@@ -160,31 +165,93 @@ extension OrchardInteractions {
             .targetedToEntity(where: .has(OrbComponent.self))
             .onChanged { value in
                 let orb = value.entity
-                guard var journey = orb.components[OrbComponent.self], let parent = orb.parent,
-                      orchard.orbs.indices.contains(journey.fruitID), case .orbiting = orchard.orbs[journey.fruitID],
-                      orchard.elixir.letsIngredientsBeHeld else { return }
+                guard hold(orb), let parent = orb.parent else { return }
                 let hand = value.convert(value.location3D, from: .local, to: parent)
                 let wrist = value.inputDevicePose3D.map { value.convert($0.rotation, from: .local, to: parent) }
                 let grab = orbGrab ?? OrbGrab(offset: orb.position - hand, handRotation: wrist,
                                               orientation: orb.orientation)
-                orbGrab = grab
-                if !journey.isHeld {
-                    journey.isHeld = true
-                    orb.components.set(journey)
-                }
                 orb.position = hand + grab.offset
-                if let wrist, let start = grab.handRotation {
-                    orb.orientation = wrist * start.inverse * grab.orientation
+                if orbTurnStart != nil {
+                    // Two hands turn it: the wrist takes over from where they leave it.
+                    orbGrab = OrbGrab(offset: grab.offset, handRotation: wrist, orientation: orb.orientation)
+                } else {
+                    orbGrab = grab
+                    if let wrist, let start = grab.handRotation {
+                        orb.orientation = wrist * start.inverse * grab.orientation
+                    }
                 }
             }
             .onEnded { value in
                 orbGrab = nil
-                guard var journey = value.entity.components[OrbComponent.self], journey.isHeld else { return }
-                journey.isHeld = false
-                journey.joinStart = nil
-                journey.joinElapsed = 0
-                value.entity.components.set(journey)
+                releaseIfFree(value.entity)
             }
+    }
+
+    /// Two hands moving apart or together make an ingredient in orbit bigger or smaller (in the simulator: hold
+    /// Option). Let go, it takes back its own size on the way to its slot.
+    private var scaleOrbGesture: some Gesture {
+        MagnifyGesture()
+            .targetedToEntity(where: .has(OrbComponent.self))
+            .onChanged { value in
+                let orb = value.entity
+                guard hold(orb), var journey = orb.components[OrbComponent.self] else { return }
+                let start = orbScaleStart ?? journey.heldScale
+                orbScaleStart = start
+                let range = OrbComponent.heldScaleRange
+                let scale = min(max(start * Float(value.magnification), range.lowerBound), range.upperBound)
+                guard journey.heldScale != scale else { return }
+                journey.heldScale = scale
+                orb.components.set(journey)
+            }
+            .onEnded { value in
+                orbScaleStart = nil
+                releaseIfFree(value.entity)
+            }
+    }
+
+    /// Two hands turning around an ingredient in orbit turn it, about any axis (in the simulator: hold Option). Let
+    /// go, it turns upright again on the way to its slot.
+    private var turnOrbGesture: some Gesture {
+        RotateGesture3D()
+            .targetedToEntity(where: .has(OrbComponent.self))
+            .onChanged { value in
+                let orb = value.entity
+                guard hold(orb), let parent = orb.parent else { return }
+                let start = orbTurnStart ?? orb.orientation
+                orbTurnStart = start
+                // SwiftUI space has y pointing down: the axis keeps its y and flips its x and z in RealityKit space.
+                let turn = value.rotation.quaternion
+                let sceneTurn = simd_quatf(ix: Float(-turn.imag.x), iy: Float(turn.imag.y), iz: Float(-turn.imag.z),
+                                           r: Float(turn.real))
+                let frame = parent.orientation(relativeTo: nil)
+                orb.orientation = frame.inverse * sceneTurn * frame * start
+            }
+            .onEnded { value in
+                orbTurnStart = nil
+                releaseIfFree(value.entity)
+            }
+    }
+
+    /// Takes an ingredient out of its orbit while a gesture holds it; false when it cannot be held (not in orbit,
+    /// or the elixir is brewing).
+    private func hold(_ orb: Entity) -> Bool {
+        guard var journey = orb.components[OrbComponent.self], orchard.orbs.indices.contains(journey.fruitID),
+              case .orbiting = orchard.orbs[journey.fruitID], orchard.elixir.letsIngredientsBeHeld else { return false }
+        if !journey.isHeld {
+            journey.isHeld = true
+            orb.components.set(journey)
+        }
+        return true
+    }
+
+    /// The last gesture on an ingredient ended: it flies back to its slot like it came from its fruit.
+    private func releaseIfFree(_ orb: Entity) {
+        guard orbGrab == nil, orbScaleStart == nil, orbTurnStart == nil,
+              var journey = orb.components[OrbComponent.self], journey.isHeld else { return }
+        journey.isHeld = false
+        journey.joinStart = nil
+        journey.joinElapsed = 0
+        orb.components.set(journey)
     }
 }
 

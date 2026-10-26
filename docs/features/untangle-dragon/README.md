@@ -249,7 +249,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
 
 ## Floating island
 
-`Sources/Macrowavers/Resources/FloatingIsland.usdz` comes from the design team's `ilha_RCP.usdz`
+`Sources/Macrowavers/Resources/FloatingIsland.usdz` comes from the design team's `ilha_RCP_v2.usdz`
 (`Assets/Blender/floating-island/ilha_rcp.usdz`): the island with its tree, prepared in Reality Composer Pro, with
 its materials. It is prepared headless with USD's Python API (`pxr`, which ships with Blender; Blender itself is
 not used):
@@ -271,7 +271,12 @@ island):
   bounds give the rock's collider), `Tree` (trunk and canopy, the source's `Vert_001`) and `FloatingRocks` (the
   `Island_Debris_*` and `Island_Floater_*` pieces, which bob on their own): 42, 7 and 14 meshes. The sun, the
   camera and an empty mesh are removed: the island's materials are unlit, and the room's light does not change
-  them.
+  them. Their grain lies in each mesh's own coordinates (still: `GrainSpeed` 0), which the script never touches
+  (it scales the file's root only), so they need no change. v2 has the same geometry as the first export, with
+  these new materials. Each face shines with `EmissionBase + (1 − edge) · EmissionBoost` times its ramp colour (1 on the
+  silhouette, the boost added on the faces seen head-on): the source's boost (−1.2) turns those faces black and
+  the island looked dark, so the code sets `EmissionBoost` to `IslandSceneBuilder.islandEmissionBoost` (−0.7,
+  head-on faces at 30 %) on every material when it loads the island; the asset is unchanged.
 - **Origin at the base of the trunk, on the grass, and scaled by the tree alone** (`TARGET_TREE_HEIGHT`: 1.8415 m
   from the bottom of the trunk to the top of the canopy): both on the file's root, after its Z-up → Y-up turn.
   The result matches the previous island: `Island` spans (−1.16, −0.91, −1.15)…(1.32, 0.14, 1.34) m, 2.48 m wide,
@@ -300,7 +305,7 @@ In the scene:
 
 ## The stone dragon
 
-`StoneDragon.usdz` comes from the design team's `CartoonDragon12_RCP.usdz` (`Assets/Blender/stone-dragon/`),
+`StoneDragon.usdz` comes from the design team's `CartoonDragon12_RCP_v2.usdz` (`Assets/Blender/stone-dragon/`),
 prepared headless:
 
 ```sh
@@ -324,12 +329,21 @@ animation. The script:
   head; `mouth` and `nostrils` mark where fire and smoke come out. Fitted against the source's jaw animation, the
   jaw turns around exactly that point and the head's sideways axis (within 4 mm), at most 0.489 rad: the rig opens
   it as far (`StoneDragonRig.Asset.jawAngle` 0.49);
-- keeps the design team's materials unchanged: `AirbrushGrain_00` (head, horns, teeth, jaw) and `AirbrushGrain_01`
-  … `AirbrushGrain_19` (one per stone, from behind the head to the tail), Reality Composer Pro shader graphs: unlit,
-  a colour ramp driven by the facing angle plus a world-space grain re-rolled 24 times a second. Blender cannot read
-  them, so Blender exports the geometry only and notes each mesh's material by name; USD (`pxr`, bundled with
-  Blender) copies `/Dragon/Materials` from the source as it is and binds each mesh to its own, as in the source.
-  RealityKit loads them as `ShaderGraphMaterial` (checked on macOS).
+- keeps the design team's materials: `AirbrushGrain_00` (head, horns, teeth, jaw) and `AirbrushGrain_01` …
+  `AirbrushGrain_19` (one per stone, from behind the head to the tail), Reality Composer Pro shader graphs: unlit,
+  a colour ramp driven by the facing angle (each stone also shifted along a body gradient, `BodyT`) plus a fine
+  grain drifting slowly over the surface (`GrainSpeed` 0.15). Blender cannot read them, so Blender exports the
+  geometry only and notes each mesh's material by name; USD (`pxr`, bundled with Blender) copies
+  `/Dragon/Materials` from the source and binds each mesh to its own, as in the source. RealityKit loads them as
+  `ShaderGraphMaterial` (checked on macOS);
+- resizes the grain with the mesh: the grain is laid out in the mesh's own coordinates (object space), and the
+  bake and the chain's scale resize those coordinates (the stones by ×0.043, from 2.6 source units to ~11 cm), so
+  each material's `GrainScale` is divided by its meshes' resize (`AirbrushGrain_01` 506 → 11 841 per metre): every
+  stone keeps the ~1 300 grain cells across it that the design team set, instead of a grain 23 times coarser.
+
+The v2 source is the design team's fix for the head, parts of which did not show: the geometry is the same as in
+the first export, only the materials changed (the first ones used a world-space grain re-rolled 24 times a second,
+`GrainFPS`).
 
 The asset is 192 KB (the Sketchfab dragon it replaces, `DragonBody` + `DragonHead`, was 11.6 MB). Earlier exports:
 `CartoonDragon_airbrush.usdc` had no usable material (Blender's MaterialX graph, which RealityKit does not render,
@@ -401,6 +415,7 @@ The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit
 | `SceneFocus` / `FocusDimmingComponent` | `dimmedOpacity` / `responsiveness` | how much the faded parts fade in focus mode, how fast |
 | `PlayAreaPlacement.seated` | default placement | comfort for a seated player |
 | `IslandPlacement.standard` | island position, scale, yaw | island distance and size |
+| `IslandSceneBuilder` | `islandEmissionBoost` | how bright the island is (towards 0 = brighter, flatter; the asset's −1.2 = darkest) |
 | `OrbitPath.aroundTree` | radius, height, swings, speed (asset metres) | how the dragon wraps the tree |
 | `DragonFlight.Settings` | `approachDistance`, `landingSpeed` | where it stops in front of the player, landing duration |
 | `DetanglingStateComponent` | `tapRadius`, `fadeDuration` | how easy the dragon is to tap, fades |

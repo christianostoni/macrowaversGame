@@ -52,9 +52,13 @@ struct OrbComponent: Component {
     /// The player holds it in orbit: the hand moves and turns it, the orbit waits. Let go, it flies back to its
     /// slot like it came from its fruit (`joinStart` starts over).
     var isHeld = false
+    /// Size the player gave it with two hands (1 = its own). Let go, it eases back to 1.
+    var heldScale: Float = 1
 
     /// Seconds from the fruit to the orbit.
     static let joinDuration = Elixir.joinDuration
+    /// How small and how big two hands can make it.
+    static let heldScaleRange: ClosedRange<Float> = 0.5...3
 }
 
 /// Smoothly moves an entity to `target` (in its parent's space), then removes itself.

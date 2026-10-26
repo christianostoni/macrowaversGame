@@ -5,7 +5,7 @@ Usage (USD's Python API, `pxr`, ships with Blender; Blender itself is not used):
         -P Assets/Blender/floating-island/make_island_asset.py -- \
         Assets/Blender/floating-island/ilha_rcp.usdz <output folder>
 
-The source (`ilha_RCP.usdz`, prepared in Reality Composer Pro) is the island with its tree (Z-up under a root
+The source (`ilha_RCP_v2.usdz`, prepared in Reality Composer Pro) is the island with its tree (Z-up under a root
 that turns it Y-up, ~14 m wide, 64 meshes, a sun and a camera), with Reality Composer Pro shader graph materials
 (unlit "airbrush" colour ramps), several per mesh through face subsets. Blender cannot read those materials, so
 the script edits the USD directly and leaves every mesh, face subset and material as it is. The app expects the
