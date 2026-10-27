@@ -1,17 +1,47 @@
 import Foundation
+import Observation
 import RealityKit
 import simd
 import UIKit
 
 /// The ride on the dragon's back (`DragonRide`), drawn around the player: the dragon under them, a glow that brings
-/// it out of the dark into the sky (an airbrushed dome, white clouds shaped like the tree's canopy, specks of air
-/// rushing past), the rush of air. Then chapter II (`DragonFeast`): fruit float among the clouds and the dragon eats
-/// the ones it likes, spitting out the bananas.
+/// it out of the dark into the night sky (an airbrushed dome with Persian clouds, lanterns, mountains far below,
+/// glitter wound around the dragon (`RideScenery`), specks of air rushing past), the rush of air. Then chapter II
+/// (`DragonFeast`): fruit float in the sky and the dragon eats the ones it likes, spitting out the bananas; each one
+/// colours a petal of a Persian star medallion in the sky (`ShamsehSky`). Once it is full, the dragon flies into the
+/// medallion's heart, and the ride is over.
 /// The player never moves: `root` stays at their eyes and the sky moves around it.
+/// What the ride's panels need to know about the player's hands (`DragonRideView` shows how to hold the horns).
+@MainActor
+@Observable
+final class RideStatus {
+    /// Out of the dark: the player can steer.
+    var isFlying = false
+    /// The hands are tracked (otherwise the autopilot flies, and there is nothing to explain).
+    var canSteer = false
+    /// Both hands hold the horns.
+    var isHolding = false
+}
+
 struct DragonRideComponent: Component {
     var ride = DragonRide()
+    /// Each hand's pinch: both pinching hold the horns.
+    var pinches: [HandSample.Chirality: Pinch] = [:]
+    let status: RideStatus
     /// Chapter II's fruit, from the moment the player starts feeding the dragon.
     var feast: DragonFeast?
+    /// Chapter II's constellation, coloured by the fruit the dragon eats, and its drawing in the sky.
+    var shamseh: Shamseh
+    var shamsehSky: ShamsehSky
+    /// Lanterns, mountains below and the glitter around the dragon (nil without the cloud asset's airbrush
+    /// material).
+    var scenery: RideScenery?
+    /// The finale: seconds since it began, and since the dragon set off into the medallion's heart (nil before).
+    var finaleTime: Float?
+    var approachTime: Float?
+    /// The rush of light flying into the medallion, and the light that fills the view at its heart.
+    let rush: Entity
+    let flash: Entity
     let story: StoryViewModel
     let viewer: ViewerTracker
     let hands: HandTracker
@@ -48,6 +78,9 @@ struct DragonRideSystem: System {
 
     /// The stone dragon (2.35 m) made big enough to ride: about 6 m long.
     static let dragonScale: Float = 2.6
+    /// The dragon's airbrush emission in the night sky (`EmissionBoost`, `EmissionBase`): on the island its faces
+    /// are darkened (-1.2) to a stony dark; here it glows.
+    static let dragonGlow: (boost: Float, base: Float) = (-0.15, 1.25)
     /// The player sits this far behind the head (m) and this high above the body.
     static let seat: Float = 1.4
     static let seatHeight: Float = 0.55
@@ -56,9 +89,10 @@ struct DragonRideSystem: System {
     /// The specks of air: how many, and how far away they are recycled ahead of the player (m).
     static let speckCount = 160
     static let skyRadius: Float = 16
-    /// The clouds: how many, how far away they are recycled ahead (m), how big (m across) and how close they come
-    /// before fading (distance from their centre over their size), so the player never sits inside one.
-    static let cloudCount = 40
+    /// The clouds: how many (none for now: the night sky is tried without the canopy-shaped clouds), how far away
+    /// they are recycled ahead (m), how big (m across) and how close they come before fading (distance from their
+    /// centre over their size), so the player never sits inside one.
+    static let cloudCount = 0
     static let cloudRadius: Float = 110
     static let cloudSize: ClosedRange<Float> = 14...38
     static let cloudFade: ClosedRange<Float> = 0.4...1
@@ -69,12 +103,18 @@ struct DragonRideSystem: System {
     static let viewerWait: Float = 1.5
     /// After the arrival, a moment of flight before chapter II's title appears (s).
     static let titleDelay: Float = 2
+    /// The finale (s): at most this long turning towards the medallion, then the flight into its heart, then the
+    /// light held before the end.
+    static let finaleTurn: Float = 6
+    static let finaleFlight: Float = 7
+    static let finaleHold: Float = 1.2
 
     enum Sound: String, CaseIterable {
         case appleOpen = "AppleOpen"
         case pineappleChop = "PineappleChop"
         case pomegranateBurst = "PomegranateBurst"
         case growl = "DragonGrowl"
+        case roar = "DragonRoar"
 
         static func eating(_ fruit: FruitKind) -> Sound {
             switch fruit {
@@ -107,18 +147,39 @@ struct DragonRideSystem: System {
                 Self.start(&state, root: root)
             }
 
-            let hands = state.hands.samples
-            let left = hands[.left].map { root.convert(position: $0.knuckle, from: nil) }
-            let right = hands[.right].map { root.convert(position: $0.knuckle, from: nil) }
+            // Each hand steers from its pinch (between thumb and index), only while it pinches.
+            var grips: [HandSample.Chirality: SIMD3<Float>] = [:]
+            for chirality in HandSample.Chirality.allCases {
+                var pinch = state.pinches[chirality] ?? Pinch()
+                if let sample = state.hands.samples[chirality] {
+                    pinch.update(thumbTip: sample.thumbTip, indexTip: sample.indexTip)
+                    if pinch.isPinching {
+                        grips[chirality] = root.convert(position: (sample.thumbTip + sample.indexTip) / 2, from: nil)
+                    }
+                } else {
+                    pinch.release()
+                }
+                state.pinches[chirality] = pinch
+            }
+            let left = grips[.left]
+            let right = grips[.right]
             state.ride.holdHorns(left: left, right: right)
             state.ride.update(deltaTime: deltaTime, left: left, right: right,
                               isHandTrackingAvailable: state.hands.isTracking)
 
+            Self.report(state)
             Self.moveSky(&state)
             let mouth = Self.drawDragon(state, deltaTime: deltaTime)
+            let (ride, bank) = (state.ride, state.dragon.orientation)
+            state.scenery?.update(ride: ride, daylight: smoothstep(0.55, 1, ride.arrival), bank: bank,
+                                  deltaTime: deltaTime)
             Self.drawArrival(state)
             Self.followStory(&state)
             Self.feed(&state, mouth: mouth, deltaTime: deltaTime)
+            Self.flyIntoShamseh(&state, deltaTime: deltaTime)
+            state.shamsehSky.draw(state.shamseh, ride: state.ride,
+                                  isFeasting: state.story.step == .feast || state.story.step == .finale,
+                                  deltaTime: deltaTime)
             if let controller = state.windController {
                 controller.gain = Self.windGain(state.ride)
             }
@@ -144,6 +205,18 @@ struct DragonRideSystem: System {
     }
 
     // MARK: - Frame
+
+    /// Tells the panels about the hands, only when something changes (it is observed by SwiftUI).
+    @MainActor
+    private static func report(_ state: DragonRideComponent) {
+        let status = state.status
+        let isFlying = !state.ride.isArriving
+        let canSteer = state.hands.isTracking
+        let isHolding = state.ride.isHolding
+        if status.isFlying != isFlying { status.isFlying = isFlying }
+        if status.canSteer != canSteer { status.canSteer = canSteer }
+        if status.isHolding != isHolding { status.isHolding = isHolding }
+    }
 
     /// The sky turns and slides around the player; specks and clouds left behind come back far ahead.
     @MainActor
@@ -225,9 +298,43 @@ struct DragonRideSystem: System {
         }
     }
 
-    /// The fruit in the sky: floating, swallowed, or spat out.
+    /// The finale: once the full medallion has swelled, the dragon roars and turns to it on its own, then flies
+    /// into its heart as light rushes past; the light fills the view, and the ride is over.
+    @MainActor
+    private static func flyIntoShamseh(_ state: inout DragonRideComponent, deltaTime: Float) {
+        if state.story.step == .feast, state.shamsehSky.isCelebrated {
+            state.story.feastCelebrated()
+        }
+        guard state.story.step == .finale, let direction = state.shamsehSky.direction else { return }
+        if state.finaleTime == nil { play(.roar, from: state.mouth, sounds: state.sounds) }
+        let time = (state.finaleTime ?? 0) + deltaTime
+        state.finaleTime = time
+        state.ride.destination = direction
+        // Off into it once facing it (or after a while anyway).
+        if state.approachTime == nil, simd_dot(state.ride.forward, direction) > 0.995 || time > finaleTurn {
+            state.approachTime = 0
+        }
+        guard let approachTime = state.approachTime else { return }
+        let elapsed = approachTime + deltaTime
+        state.approachTime = elapsed
+        let flight = min(elapsed / finaleFlight, 1)
+        state.shamsehSky.approach = flight
+        state.rush.components[ParticleEmitterComponent.self]?.mainEmitter.birthRate = 900 * smoothstep(0, 0.4, flight)
+        state.flash.isEnabled = flight > 0.75
+        state.flash.components.set(OpacityComponent(opacity: smoothstep(0.8, 1, flight)))
+        if elapsed > finaleFlight + finaleHold {
+            state.story.rideEnded()
+        }
+    }
+
+    /// The fruit in the sky: floating, swallowed, or spat out; they fade away in the finale.
     @MainActor
     private static func feed(_ state: inout DragonRideComponent, mouth: SIMD3<Float>, deltaTime: Float) {
+        if state.story.step == .finale {
+            let fade = 1 - smoothstep(0, 1.5, state.finaleTime ?? 0)
+            state.fruit.values.forEach { $0.entity.components.set(OpacityComponent(opacity: fade)) }
+            return
+        }
         guard var feast = state.feast else { return }
         let events = feast.update(deltaTime: deltaTime, mouth: state.ride.skyFromRide(mouth), ride: state.ride,
                                   using: &state.random)
@@ -236,6 +343,7 @@ struct DragonRideSystem: System {
             switch event {
             case .ate(let fruit):
                 state.story.dragonAte(fruit)
+                if state.story.step == .feast { state.shamseh.colour(with: fruit) }
                 play(.eating(fruit), from: state.mouth, sounds: state.sounds)
             case .refused(let fruit):
                 state.story.dragonAte(fruit)
@@ -322,11 +430,13 @@ enum DragonRideSceneBuilder {
     /// above the dragon's head).
     static let panelSpot = SIMD3<Float>(0, 0.02, -1.35)
     static let tallySpot = SIMD3<Float>(0, 0.34, -1.6)
+    /// How to hold the horns: low, over the dragon's head, where the hands go.
+    static let hintSpot = SIMD3<Float>(0, -0.2, -1.1)
 
     /// Builds the ride, ready to add to the scene (it starts on its first frame). nil when the stone dragon is not in
     /// the bundle.
     @MainActor
-    static func makeRide(story: StoryViewModel, viewer: ViewerTracker, hands: HandTracker,
+    static func makeRide(story: StoryViewModel, status: RideStatus, viewer: ViewerTracker, hands: HandTracker,
                          config: TangleConfig = TangleConfig()) async -> Entity? {
         guard let rig = await StoneDragonRig.load(config: config) else {
             print("⚠️ StoneDragon.usdz not found: no ride on the dragon's back")
@@ -344,6 +454,9 @@ enum DragonRideSceneBuilder {
         dragon.name = "RideDragon"
         dragon.scale = SIMD3(repeating: DragonRideSystem.dragonScale)
         dragon.components.set(OpacityComponent(opacity: 0))
+        // Lit up in the night sky: its faces no longer darkened.
+        let glow = DragonRideSystem.dragonGlow
+        RideAirbrush.brighten(rig.entity, boost: glow.boost, base: glow.base)
         dragon.addChild(rig.entity)
         let mouth = Entity()
         mouth.name = "RideMouth"
@@ -355,18 +468,38 @@ enum DragonRideSceneBuilder {
         sky.name = "RideSky"
         let specks = makeSpecks()
         specks.forEach { sky.addChild($0) }
-        let clouds = await makeClouds()
+        let cloud = try? await Entity(named: cloudAssetName, in: .main)
+        if cloud == nil { print("⚠️ \(cloudAssetName).usdz not found: no clouds, lanterns or mountains in the sky") }
+        // Everything made in code shares the clouds' airbrush material, recoloured.
+        let airbrush = cloud.flatMap { RideAirbrush(cloud: $0) }
+        let clouds = cloud.map(makeClouds) ?? []
         clouds.forEach { sky.addChild($0) }
+        let scenery = airbrush.map { RideScenery(airbrush: $0) }
+        if let scenery {
+            sky.addChild(scenery.holder)
+            root.addChild(scenery.glitter)
+        }
         root.addChild(sky)
 
         let beacon = makeBeacon()
         root.addChild(beacon)
 
+        let rush = makeRush()
+        root.addChild(rush)
+        let flash = makeFlash()
+        root.addChild(flash)
+
+        let shamseh = Shamseh(folds: StoryViewModel.plantsGoal)
+        let shamsehSky = ShamsehSky(shamseh, airbrush: airbrush)
+        root.addChild(shamsehSky.pivot)
+
         var sounds: [DragonRideSystem.Sound: AudioFileResource] = [:]
         for sound in DragonRideSystem.Sound.allCases {
             sounds[sound] = await GameAudio.load(sound.rawValue)
         }
-        root.components.set(DragonRideComponent(story: story, viewer: viewer, hands: hands, rig: rig, config: config,
+        root.components.set(DragonRideComponent(status: status, shamseh: shamseh, shamsehSky: shamsehSky,
+                                                scenery: scenery, rush: rush, flash: flash, story: story,
+                                                viewer: viewer, hands: hands, rig: rig, config: config,
                                                 dragon: dragon, sky: sky, specks: specks, clouds: clouds, dome: dome,
                                                 beacon: beacon, mouth: mouth, fruitModels: await makeFruitModels(),
                                                 sounds: sounds, wind: await GameAudio.load("RideWind", loops: true)))
@@ -393,14 +526,10 @@ enum DragonRideSceneBuilder {
         return dome
     }
 
-    /// White clouds made of the tree canopy's low-poly puffs (`RideCloud.usdz`, made by
+    /// Clouds made of the tree canopy's low-poly puffs (`RideCloud.usdz`, made by
     /// `Assets/Blender/ride-sky/make_cloud_asset.py`), scattered around the player, each its own size and turn.
     @MainActor
-    private static func makeClouds() async -> [Entity] {
-        guard let cloud = try? await Entity(named: cloudAssetName, in: .main) else {
-            print("⚠️ \(cloudAssetName).usdz not found: no clouds in the sky")
-            return []
-        }
+    private static func makeClouds(_ cloud: Entity) -> [Entity] {
         return (0..<DragonRideSystem.cloudCount).map { _ in
             let copy = cloud.clone(recursive: true)
             copy.scale = SIMD3(repeating: .random(in: DragonRideSystem.cloudSize))
@@ -448,10 +577,12 @@ enum DragonRideSceneBuilder {
     @MainActor
     private static func makeSpecks() -> [Entity] {
         let mesh = MeshResource.generateSphere(radius: 1)
+        // Stars, and golden lights like sparks from the lanterns.
         let tints: [UIColor] = [
             UIColor(white: 1, alpha: 1),
-            UIColor(red: 0.85, green: 0.9, blue: 1, alpha: 1),
+            UIColor(red: 1, green: 0.85, blue: 0.5, alpha: 1),
             UIColor(red: 0.7, green: 0.75, blue: 1, alpha: 1),
+            UIColor(red: 1, green: 0.7, blue: 0.35, alpha: 1),
         ]
         let materials = tints.map { UnlitMaterial(color: $0) }
         return (0..<DragonRideSystem.speckCount).map { index in
@@ -465,6 +596,48 @@ enum DragonRideSceneBuilder {
             speck.position = point * DragonRideSystem.skyRadius
             return speck
         }
+    }
+
+    /// The finale's rush of light: specks born far ahead that stream past the player, in the flowers' gold and
+    /// lilac (silent until the dragon flies into the medallion).
+    @MainActor
+    private static func makeRush() -> Entity {
+        let rush = Entity()
+        rush.name = "RideRush"
+        rush.position = SIMD3(0, 0, -30)
+        var emitter = ParticleEmitterComponent()
+        emitter.emitterShape = .box
+        emitter.emitterShapeSize = SIMD3(26, 18, 4)
+        emitter.birthLocation = .volume
+        emitter.emissionDirection = SIMD3(0, 0, 1)
+        emitter.speed = 22
+        emitter.speedVariation = 6
+        emitter.mainEmitter.birthRate = 0
+        emitter.mainEmitter.lifeSpan = 1.6
+        emitter.mainEmitter.size = 0.05
+        emitter.mainEmitter.sizeVariation = 0.03
+        emitter.mainEmitter.spreadingAngle = 0.05
+        emitter.mainEmitter.opacityCurve = .quickFadeInOut
+        emitter.mainEmitter.blendMode = .additive
+        emitter.mainEmitter.isLightingEnabled = false
+        emitter.mainEmitter.color = .evolving(start: .single(RidePalette.uiColor(RidePalette.paleGold)),
+                                              end: .single(RidePalette.uiColor(RidePalette.lilac)))
+        rush.components.set(emitter)
+        return rush
+    }
+
+    /// The light at the medallion's heart: it fills the view, all around the player, at the very end.
+    @MainActor
+    private static func makeFlash() -> Entity {
+        var material = UnlitMaterial(applyPostProcessToneMap: false)
+        material.color = .init(tint: RidePalette.uiColor(simd_mix(RidePalette.paleGold, SIMD3(repeating: 1),
+                                                                  SIMD3(repeating: 0.6))))
+        material.faceCulling = .front
+        let flash = ModelEntity(mesh: .generateSphere(radius: 0.4), materials: [material])
+        flash.name = "RideFlash"
+        flash.isEnabled = false
+        flash.components.set(OpacityComponent(opacity: 0))
+        return flash
     }
 
     /// The small blue glow that comes out of the dark (the storyboard's third frame).

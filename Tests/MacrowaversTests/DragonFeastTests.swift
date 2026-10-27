@@ -110,4 +110,25 @@ struct DragonFeastTests {
         story.reset()
         #expect(story.step == .start && story.plantsEaten == 0 && story.bananasRefused == 0)
     }
+
+    @MainActor
+    @Test func onceFullTheDragonFliesIntoTheMedallionAndTheRideEnds() {
+        let story = StoryViewModel()
+        story.skipToRide()
+        story.rideArrived()
+        story.advance()
+        // Not full yet: no finale.
+        story.feastCelebrated()
+        story.rideEnded()
+        #expect(story.step == .feast && !story.isRideOver)
+        for _ in 0..<StoryViewModel.plantsGoal { story.dragonAte(.orange) }
+        story.feastCelebrated()
+        #expect(story.step == .finale && story.step.isFullyImmersed && story.step.page == nil)
+        story.dragonAte(.apple)
+        #expect(story.plantsEaten == StoryViewModel.plantsGoal)
+        story.rideEnded()
+        #expect(story.isRideOver)
+        story.reset()
+        #expect(story.step == .start && !story.isRideOver)
+    }
 }

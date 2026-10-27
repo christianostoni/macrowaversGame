@@ -2,7 +2,7 @@ import Foundation
 
 /// The storytelling screens around the game, in order: the start, the narrator's words before the island
 /// appears, the game itself, the dragon's words once it is free, then the ride on its back: chapter II, where the
-/// player feeds the dragon in the sky.
+/// player feeds the dragon in the sky, until it flies into the star medallion its fruit lit up.
 enum StoryStep: Equatable, CaseIterable {
     /// Screen 1: a lone "Start" button in the room (the launch window).
     case start
@@ -23,6 +23,9 @@ enum StoryStep: Equatable, CaseIterable {
     case secondChapter
     /// Fruit float in the sky: the player steers the dragon into the ones it likes (not the bananas).
     case feast
+    /// The dragon is full: it flies on its own into the heart of the shamseh, in a rush of light, and the game ends
+    /// (for now): back to the start.
+    case finale
 
     /// Where a page is shown.
     enum Anchor: Equatable {
@@ -51,7 +54,7 @@ enum StoryStep: Equatable, CaseIterable {
     /// The text of the screens shown inside the immersive space (`start` is the launch window's button).
     var page: Page? {
         switch self {
-        case .start, .adventure, .ride, .feast:
+        case .start, .adventure, .ride, .feast, .finale:
             nil
         case .searching:
             Page(title: "What are you searching for?", lines: ["I can see you are eager to find…"],
@@ -78,7 +81,7 @@ enum StoryStep: Equatable, CaseIterable {
     var revealsWorld: Bool {
         switch self {
         case .start, .searching, .chapter: false
-        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast: true
+        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast, .finale: true
         }
     }
 
@@ -88,7 +91,7 @@ enum StoryStep: Equatable, CaseIterable {
     /// The room is gone: the player is in the sky (full immersion), on the dragon's back.
     var isFullyImmersed: Bool {
         switch self {
-        case .ride, .secondChapter, .feast: true
+        case .ride, .secondChapter, .feast, .finale: true
         case .start, .searching, .chapter, .adventure, .gratitude, .safety: false
         }
     }

@@ -12,6 +12,8 @@ final class StoryViewModel {
     private(set) var plantsEaten = 0
     /// Bananas the player fed it anyway.
     private(set) var bananasRefused = 0
+    /// The dragon has flown into the shamseh: the ride is over (the immersive space closes).
+    private(set) var isRideOver = false
 
     /// Fruit to feed the dragon in chapter II.
     static let plantsGoal = 8
@@ -32,7 +34,7 @@ final class StoryViewModel {
         case .gratitude: .safety
         case .safety: .ride
         case .secondChapter: .feast
-        case .start, .adventure, .ride, .feast: nil
+        case .start, .adventure, .ride, .feast, .finale: nil
         }
         if let next { step = next }
     }
@@ -70,6 +72,18 @@ final class StoryViewModel {
         }
     }
 
+    /// The dragon is full and its medallion complete: it flies off into it.
+    func feastCelebrated() {
+        guard step == .feast, isFeastComplete else { return }
+        step = .finale
+    }
+
+    /// The dragon has flown into the heart of the medallion: the end, for now.
+    func rideEnded() {
+        guard step == .finale else { return }
+        isRideOver = true
+    }
+
     #if DEBUG
     /// Debug builds launched with `-StoryStartsAtRide` (Xcode: scheme > Run > Arguments) open straight on the ride,
     /// to try it without playing the whole story.
@@ -87,5 +101,6 @@ final class StoryViewModel {
         if step != .start { step = .start }
         plantsEaten = 0
         bananasRefused = 0
+        isRideOver = false
     }
 }
