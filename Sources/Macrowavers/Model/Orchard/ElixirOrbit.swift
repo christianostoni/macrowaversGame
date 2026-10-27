@@ -37,7 +37,7 @@ struct ElixirOrbit: Equatable {
         var drop: Float = 0.18
         /// Tilt of the plane, far side up (radians): the player sees the ellipse open, not edge-on.
         var tilt: Float = 35 * .pi / 180
-        /// Seconds per turn (~0.13 m/s along the ellipse).
+        /// Seconds per turn (~0.09 m/s along the ellipse).
         var period: Float = 9
         /// How fast the centre follows the eyes (1/s).
         var followResponsiveness: Float = 3

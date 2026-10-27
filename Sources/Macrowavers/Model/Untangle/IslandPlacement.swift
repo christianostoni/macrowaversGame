@@ -11,7 +11,7 @@ struct IslandPlacement: Equatable {
     /// The asset is in "real" metres (island ~2.5 m wide, tree ~1.84 m tall): scaled down for the room.
     var scale: Float
 
-    /// The asset at its real size: island ~2.5 m wide (floating rocks ~3.6 m), 2.8 m from the player, grass at
+    /// The asset at its real size: island ~2.5 m wide (floating rocks ~3.7 m), 2.8 m from the player, grass at
     /// table height (0.6 m), treetop at ~2.45 m. The rock and its roots below the grass (0.91 m deep) sink into
     /// the real floor: `IslandSceneBuilder` hides what is under the floor with an occluder, so the island seems
     /// to rise out of it.
