@@ -13,7 +13,7 @@ struct StoryTests {
         #expect(story.step == .start)
 
         story.begin()
-        #expect(story.step == .searching)
+        #expect(story.step == .scroll)
         story.advance()
         #expect(story.step == .chapter)
         story.advance()
@@ -45,18 +45,18 @@ struct StoryTests {
         let intro = StoryViewModel()
         intro.begin()
         intro.dragonRecaptured()
-        #expect(intro.step == .searching)
+        #expect(intro.step == .scroll)
 
         story.reset()
         #expect(story.step == .start)
     }
 
     @Test func pagesDimTheRoomAndSitWhereTheWireframesPutThem() {
+        // The scroll is no page, but its room is darkened too.
         for step in StoryStep.allCases {
-            #expect(step.dimsSurroundings == (step.page != nil))
+            #expect(step.dimsSurroundings == (step.page != nil || step == .scroll))
         }
-        #expect(StoryStep.start.page == nil)
-        #expect(StoryStep.searching.page?.anchor == .viewer)
+        #expect(StoryStep.start.page == nil && StoryStep.scroll.page == nil)
         #expect(StoryStep.chapter.page?.anchor == .viewer)
         #expect(StoryStep.gratitude.page?.anchor == .dragon)
         #expect(StoryStep.safety.page?.anchor == .dragon)
@@ -64,7 +64,7 @@ struct StoryTests {
         #expect(StoryStep.safety.page?.advance == .answer("I'm Ready"))
         #expect(StoryStep.gratitude.focusesOnDragon && !StoryStep.chapter.focusesOnDragon)
         // The island appears only after the chapter's title.
-        #expect(StoryStep.allCases.filter { !$0.revealsWorld } == [.start, .searching, .chapter])
+        #expect(StoryStep.allCases.filter { !$0.revealsWorld } == [.start, .scroll, .chapter])
         // No placeholder text left from the wireframes.
         let text = StoryStep.allCases.compactMap(\.page).flatMap { [$0.title] + $0.lines }
         #expect(!text.contains { $0.contains("XXX") })

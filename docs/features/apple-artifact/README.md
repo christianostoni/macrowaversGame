@@ -22,8 +22,8 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 
 1. Install Xcode's Metal Toolchain once: `xcodebuild -downloadComponent MetalToolchain`. It's needed to compile
    `AppleSpiral.metal`.
-2. Run the app and choose **Start**. Tap through the narrator's pages ("What are you searching for?", "Chapter I"):
-   the island fades in. Look at a fruit on the tree and pinch (fruit can be picked only while the dragon is still on
+2. Run the app and choose **Start**. Skip the story's scroll (or read it), then tap "Chapter I": the island
+   fades in. Look at a fruit on the tree and pinch (fruit can be picked only while the dragon is still on
    the island).
 3. Open the fruit:
 
