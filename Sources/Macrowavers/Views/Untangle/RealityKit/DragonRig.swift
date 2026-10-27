@@ -314,6 +314,16 @@ struct DragonLifeAnimator {
             look = simd_normalize(look + SIMD3(0, 1.2 * roar, 0))
         case .loop:
             target.wingFlap = 0.4 * sin(time * 7)
+        case .hold:
+            // Stopped for the elixir: as it slows down it lifts its snout (about 60° up at a standstill) and opens
+            // its mouth a little, wings spread and beating slowly, no smoke: the elixir pours over its head.
+            let lift = 1 - smoothstep(0.03, 0.3, speed)
+            var forward = frame.positions[0] - frame.positions[1]
+            forward.y = 0
+            let flat = simd_length(forward) > 1e-4 ? simd_normalize(forward) : look
+            look = simd_normalize(flat + SIMD3(0, 1.7 * lift, 0))
+            target.wingFlap = 0.3 * sin(time * 3)
+            target.jawOpen = 0.25 * lift
         case .orbit, .approach, .land, .depart:
             animateJourney(flight, frame: frame, target: &target, look: &look, toward: toward)
         }

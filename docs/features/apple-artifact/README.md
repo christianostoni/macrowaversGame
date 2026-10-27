@@ -48,6 +48,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 |---|---|
 | On the tree | 3 apples, 1 pomegranate, 1 banana, 1 orange and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
 | Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close |
+| Turn it | With hand tracking, cup a hand next to the close fruit (all four fingers curled like a bowl, the thumb off the index, the palm within ~16 cm) and turn the hand: the fruit turns with it, in every direction, about its centre. Open the hand and it stays as it is; back on the tree it eases to its home pose, and it comes close upright again. The panel says so under the hint. Not in the simulator |
 | Open it | Apple: the design team's apple gives way to its spiral-cut copy, whose slices lift (Metal compute shader) while the stem and the leaf rise with the top one, and 3 worms guard the orb. Pomegranate: the halves open like a book and its 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Orange: the halves move apart and turn their cut faces to the player, then the 8 wedges fall open into a ring around the orb, showing their flesh and white rind. Pineapple: the halves fall open towards the player and the crown tips away |
 | Ingredient found | The orb rises out of the fruit (1.2 s), glowing and pulsing, and floats there for 0.6 s (or until tapped) |
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
@@ -57,8 +58,8 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | The flask | With the first ingredient found, an empty, corked glass flask appears in the middle of the orbit (0.6 s) and turns slowly there; the ingredients go round it. Each time one reaches the orbit the flask wobbles and its glass glows in that ingredient's colour |
 | Snap (3.6 s) | The cork pops out and tumbles above the neck (0.4 s). The ingredients dive in **one at a time** (0.75 s each): each leaves its place in an arc up above the neck, drops down into the flask, shrinking, and lands with a burst of bubbles; the liquid rises by a third, sloshes and takes its colour (red, then mixed with gold, then with green). The cork goes back on (2.7–3.2 s) and the liquid swirls into the elixir's glowing blue (3.2–3.6 s) |
 | Brewed (1.2 s) | The flask swells a little with a flash of sparks and floats there, throbbing; bubbles rise, and its glow lights the player's hands |
-| The elixir flies | The flask flies in an arc rising above the straight line, landing on the dragon's head even as it moves. The scene comes back from focus mode. If the dragon has already left the island (debug **Call It Now**), the flask keeps floating in front of the player |
-| Poured (1.6 s) | Above the dragon's head the cork pops, the flask tips over (its neck down) and a sparkling blue stream pours out while the liquid drains; then the flask fades. The dragon, soothed, comes to the player |
+| The elixir flies | The flask flies in an arc rising above the straight line, to just above the dragon's head (upright, its bottom clear of it) even as it moves. The scene comes back from focus mode. If the dragon has already left the island, the flask keeps floating in front of the player |
+| Poured (3.2 s) | The dragon has stopped and lifted its snout. Above its head the flask stops turning and turns side-on to the player, the cork pops, and it tips over slowly around its neck's mouth, held above the head. A thick, glowing blue stream falls straight onto the head, droplets bounce off it, and the flask drains (fastest at first) while the stream thins to a trickle. When the last of it has landed, a shimmer rises around the dragon's head and the flask fades. **Only then** does the dragon, soothed, come to the player |
 | Empty fruit | A fruit whose ingredient already orbits: once opened, the panel says "No ingredient left in this one" and **Back to the Tree** becomes the prominent button. The fruit never leaves by itself |
 | A 4th ingredient | With 3 already in orbit the orb stays above its fruit: "Three ingredients already orbit you: brew the elixir first." |
 | Back to the Tree / Close It Again | The fruit flies back to its branch, closing gently on the way / closes it again. An ingredient already freed still joins the orbit from the branch |
@@ -138,9 +139,27 @@ ingredients' colours weighted by their share of the liquid, mixed into the blue 
 swells by 8 % and back (`sin`, 0.45 s) with a burst of 160 sparks. The ingredients still waiting whirl up to 2.5×
 faster (`fusionSpin` 1.5).
 
-**Pour.** Delivered, the flask stays 12 cm above the dragon's head: the cork pops (0–0.4 s), the flask tips by
-2.2 rad around the axis across its neck (0.15–0.6 s), the stream pours (0.45–1.25 s) while the liquid drains
-(0.45–1.2 s), and the flask fades (1.25–1.6 s).
+**The dragon waits for it.** As soon as the flask takes off (`.flying`), `OrchardInteractions` calls
+`untangle.receiveElixir()`: the dragon slows down to a stop on its path around the tree and lifts its snout
+([Untangle the Dragon](../untangle-dragon/README.md)), so the flask lands over a still head turned up to it.
+
+**Pour** (`Elixir.Pour`, seconds from the arrival). Heights are above the dragon's head node (`deliveryTarget`):
+with the snout up the drawn head rises up to ~9 cm above it, its top ~13 cm (`ElixirRig.headTop`). The flask
+arrives upright 32 cm above the node (`ElixirRig.arrivalHeight`) and follows it. Over the first 0.25 s it stops turning on itself and turns
+side-on to the player (its tipping axis towards them, `OrchardComponent.pourYaw`), so they see it pour in profile.
+The cork pops (0–0.4 s); the flask tips by 2.2 rad around the axis across its neck, slowly and without jolts
+(smootherstep, 0.25–1.1 s), and as it tips it moves from its arrival point to the pose that holds its neck's mouth
+26 cm above the node (`pourClearance`), 13 cm above the raised head's top: the glass never sinks into the head. The stream flows from 0.75 s (the neck below the horizontal) to 2.4 s (`pourFlow`: open in 0.2 s, thinning to
+a quarter over the last 0.6 s); the liquid drains over the same time as `(1 − t)²`, fastest while the flask is
+fullest. The elixir reaches the head 0.3 s after it leaves the neck (`fall`): the splash follows the same flow,
+delayed (`splashFlow`). At 2.7 s the last of it has landed (`soothe`): a shimmer bursts around the head and the
+flask fades by 3.2 s (`pourDuration`). Then the elixir is `.poured` and the dragon is called.
+
+The stream, the splash and the shimmer live in the orchard's root, upright (`ElixirRig.pourEffects`), not under the
+tipped flask: their gravity points down whichever way the flask is turned. The stream leaves the neck's mouth
+along the neck (read every frame), 520 particles/s at full flow, living just long enough (0.32 s) to reach the
+head's top; the splash sends droplets out from there, falling back (300/s at full flow); the shimmer is a burst of
+260 sparkles rising slowly around the head.
 
 **Flight.** A quadratic Bézier `B(t) = (1 − t)² P₀ + 2(1 − t)t P₁ + t² P₂`, with `P₀` where it was brewed, `P₂` the
 dragon's head (read every frame: it moves) and `P₁` the midpoint lifted by `0.25 + 0.1 · |P₂ − P₀|`. `t` is the
@@ -148,8 +167,9 @@ flight time over `duration = max(|P₂ − P₀| / 1.1 m/s, 0.9 s)`, eased in an
 
 ## The snap
 
-ARKit hand tracking (`HandTracker`) gives each hand's wrist, middle knuckle, the thumb and index tips, and the
-middle finger's last joint (DIP) and tip. Joints flagged "not tracked" are kept with ARKit's estimate: in a fast
+ARKit hand tracking (`HandTracker`) gives each hand's wrist, the four knuckles, the thumb, index, ring and little
+tips, and the middle finger's last joint (DIP) and tip (the snap reads the thumb, index and middle finger; the
+cupped hand that turns the fruit reads the others too). Joints flagged "not tracked" are kept with ARKit's estimate: in a fast
 movement the fingertips lose tracking for a frame, exactly when the snap happens.
 
 A snap lasts a few hundredths of a second (one to three readings), so `SnapDetector` does not follow the finger:
@@ -178,11 +198,14 @@ Sources/Macrowavers/
 ├── Model/Orchard/                       Pure logic (Foundation + simd), unit-tested
 │   ├── AppleShape.swift                   Spiral-cut apple maths and the design apple's profile, shared with the shader
 │   ├── WormSwarm.swift                    Worm behaviour: crawl, burrow, speed up, hide when closed
-│   ├── Elixir.swift                       Ingredients in orbit, brew timeline, fusing → brewed → flying → delivered,
+│   ├── Elixir.swift                       Ingredients in orbit, brew and pour timelines, fusing → … → delivered → poured,
 │   │                                      the flask's curves (cork, dives, liquid, colours, slosh, pour)
 │   ├── ElixirOrbit.swift                  The ellipse to the player's right, lazy follow, the dive into the neck, ElixirFlight
+│   ├── CupTurn.swift                      A cupped hand next to the close fruit turns it
+│   ├── LiquidVolume.swift                 The flask's liquid at any level: the glass's profile (32 heights), its mesh
 │   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
 │   └── OrchardViewModel.swift             @Observable: fruit focus, openings, worms, one ingredient per fruit, elixir
+│                                          (not observed: views read `elixirState` and `orbitingCount`)
 └── Views/Orchard/
     ├── FruitPanelView.swift               Panel under the focused fruit (RealityView attachment, not a window)
     ├── ElixirPanelView.swift              Label under the orbit: ingredients in orbit, how to brew
@@ -191,8 +214,10 @@ Sources/Macrowavers/
     └── RealityKit/
         ├── OrchardScene.swift               Components, OrchardSystem, FocusSystem, builder, per-fruit drawing
         ├── OrbScene.swift                   The ingredients: gem template (shine, glow, glints), colours, trail, where each one is every frame
-        ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, stream, glow); orbit,
+        ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, glow); orbit,
         │                                    snap, flight and pour in the system
+        ├── ElixirParticles.swift            The flash, the bubbles, the pour's stream, splash and shimmer
+        ├── LiquidLevels.swift               One liquid mesh per level step (48), built once when the flask loads
         ├── HandTracker.swift                ARKit hand tracking → HandSample
         ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, worms
         ├── AppleSpiral.metal                `deformApple` kernel (one thread per vertex)
@@ -210,7 +235,7 @@ share them.
 
 ```
 OrbState:     sealed ──open──▶ revealed ──1.8 s or tap──▶ orbiting(slot) ──fused──▶ spent
-ElixirState:  gathering ──3rd ingredient──▶ ready ──snap──▶ fusing ──3.6 s──▶ brewed ──1.2 s, dragon on the island──▶ flying ──arrived──▶ delivered
+ElixirState:  gathering ──3rd ingredient──▶ ready ──snap──▶ fusing ──3.6 s──▶ brewed ──1.2 s, dragon on the island──▶ flying ──arrived──▶ delivered ──3.2 s (pour)──▶ poured
 ```
 
 The view model owns both (`orbs`, `elixir`); the RealityKit layer only draws them and keeps what is purely visual:
@@ -227,13 +252,16 @@ elixir's flight (`OrchardComponent.flight`).
 3. **Openings.** It eases each fruit's drawing towards its opening (`ease(towards:)`; a fruit sent back closes
    gently). `AppleRig.apply(opening:)` re-runs the Metal kernel only when the value changes.
 4. **Chop.** With hand tracking, it feeds `ChopDetector` with the hands near the focused pineapple.
+   **Cup.** Once the close fruit has arrived, it feeds `CupTurn` with both hands and turns the fruit's holder by
+   the cupped palm's turn since the last reading (scene space).
 5. **Orbit.** `ElixirOrbit.follow` with the head's pose (faster spin while brewing); the label's anchor follows it.
 6. **Snap.** With the orbit complete, it feeds `SnapDetector` with both hands; a snap calls `orchard.brewElixir()`.
 7. **Orbs.** It moves each orb: sealed, rising above its fruit, flying into its slot, orbiting, diving into the flask.
 8. **Elixir.** `ElixirRig.apply` draws the flask from `Elixir`'s curves (size, wobble, cork, liquid level, colour,
    glow and slosh, glass glow, bubbles, stream, light), splashes for each landing, flashes it, flies it. On arrival
-   it calls `orchard.elixirDelivered()`; `OrchardInteractions` sees `.delivered` and calls `untangle.callDragon()`
-   while the flask pours over the dragon's head.
+   it calls `orchard.elixirDelivered()`, and the flask pours over the dragon's head (`OrchardSystem.pour`, the
+   stream and splash in `ElixirParticles.swift`). When the pour is over the elixir is `.poured`;
+   `OrchardInteractions` sees it and calls `untangle.callDragon()`.
 
 ## Design decisions (and why)
 
@@ -248,10 +276,17 @@ elixir's flight (`OrchardComponent.flight`).
 - **Two view models, connected by the view.** `OrchardViewModel` knows nothing about the dragon. The immersive
   view tells it whether the dragon is still on the island (`isDragonOnIsland`). The elixir only flies then, and the
   orbiting ingredients only take the pinch then (and never while a fruit is close): during the untangling they
-  would steal the grabs on the knot. The view calls `callDragon()` when the elixir arrives.
-- **The chop and the snap use ARKit hand tracking, the rest are SwiftUI gestures.** SwiftUI has no "fast hand
-  coming down" or "snap". The detectors are pure structs fed with `HandSample`s, so they are unit-tested.
+  would steal the grabs on the knot. The view calls `callDragon()` once the elixir is poured: called on arrival,
+  the dragon flew off at once and the flask chased it while pouring.
+- **The chop, the snap and the cupped hand use ARKit hand tracking, the rest are SwiftUI gestures.** SwiftUI has no
+  "fast hand coming down", "snap" or "cupped hand". The detectors are pure structs fed with `HandSample`s, so they
+  are unit-tested.
   - **Two poses, not a trajectory.** See [The snap](#the-snap): robust at the tracking's rate.
+  - **A cup is never a pinch.** `CupTurn` ignores a hand whose thumb touches its index, so pulling the stem,
+    peeling the banana or pulling a fruit apart never turns it. The turn is the palm's frame built from the
+    joints (wrist → middle knuckle, little → index knuckle), followed with a little smoothing; it lives on the
+    fruit's holder, so `FocusComponent` takes it back to the home pose for free. The stem is pulled along the
+    apple's own up axis, so a turned apple still opens.
   - **Taps always work too:** a tap opens the pineapple, a tap on an orbiting ingredient brews the elixir. Without
     hand tracking (simulator, permission denied) they are the only way, and the label shows **Brew the Elixir**.
 - **The orbit is body-locked with lazy follow, not head-locked.** See [The orbit](#the-orbit).
@@ -273,9 +308,31 @@ elixir's flight (`OrchardComponent.flight`).
     behind them (a see-through square crossing the flask). A sort group draws the glow first, then the gem;
   - **glints:** a particle emitter around the gem (7 per second, 4 mm, quick fade in and out, additive), in its
     colour;
-  - **no hover effect:** visionOS highlights every mesh under the looked-at entity, so the glow's square quad lit
-    up too, a box around the gem when it was looked at or pinched. The glow and the gestures are feedback enough.
+  - **no hover highlight on the glow:** visionOS highlights every mesh under the looked-at entity, so the glow's
+    square quad lit up too, a box around the gem. The orb has no hover effect of its own (the glow and the gestures
+    are feedback enough), and it never sits in a fruit's hierarchy: it lives in the orchard's root from the start and
+    is placed from its fruit's anchor (`setPosition(_:relativeTo:)`) while sealed or rising; under the fruit, the
+    fruit's own hover highlight drew the box until the gem left for the orbit.
   Without the asset a sphere stands in for the gem, with the same glow.
+- **Nothing heavy in a frame.** The elixir's rise and pour used to stutter. What was fixed, and what to keep that way:
+  - **The liquid's meshes.** `LiquidVolume` samples the glass's profile at 32 heights (the designers' liquid has
+    ~500 distinct ring heights; one ring at each made every level ~24k vertices and ~48k triangles, ~25 ms to build)
+    and builds each level with 32 segments (~1.1k vertices, 2k triangles). `LiquidLevels.prepare()` builds the 48
+    steps once, asynchronously, when the flask loads (~20 ms in all); rising and draining only swap them.
+  - **Materials in steps.** The liquid's and the glass's colour and glow change in steps (1/24 per channel, 1/12 of
+    glow), each material made once, cached and swapped only when the step changes; the brewed elixir's throb goes
+    to its light, not the material (it re-created the material every frame).
+  - **Components set only on a change, in steps.** Bubbles in steps of 3 a second, the stream and the splash in steps
+    of a tenth of their rate (`ElixirRig.emit`), the light in steps of 60 and removed while dark (a point light costs
+    every surface near it), input targets through `Entity.setInputTargetEnabled` (the component's setter runs even
+    with the same value), the halo's scale only when it changes; the orb's spinning gem, glow, glints and trail are
+    found once (`OrbParts`), not by name every frame.
+  - **Observation.** `OrchardViewModel.elixir` changes every frame (its clocks) and is `@ObservationIgnored`: views
+    read `elixirState` and `orbitingCount`, assigned only when they change. Observed, it redrew every view reading it
+    (and rebuilt the orchard's gestures) every frame.
+  - **Music streamed.** The music is read from its file as it plays (`GameAudio.load(streams:)`); preloaded, its
+    minutes of decoded audio took ~150 MB. The short sounds stay preloaded, to start without delay.
+  - The app is run in Debug (`-Onone`) from Xcode: measure frame rate with Instruments on a Release build.
 - **The pineapple opens with an eased animation, not physics.** The prototype launched the halves as dynamic bodies.
   There is no floor in front of the player, and the fruit must close again when it goes back to the tree.
 - **Metal with a safety net.** If Metal or the apple kernel is missing, the apple is deformed on the CPU with the
@@ -304,11 +361,12 @@ elixir's flight (`OrchardComponent.flight`).
 | `OrchardViewModel` | `peeledStrip`, `wedgesOpening`, `burstOpening` | when a banana counts as peeled, when the orange's wedges count as open, when the pomegranate bursts |
 | `OrangeRig` | `halfShift`, `halfTurn`, `wedgeOut`, `wedgeTilt` | how far the halves move and turn, how far the wedges fall open |
 | `OrchardViewModel` | `orbRiseDuration`, `orbOrbitDelay` | how long an ingredient rises, how long it floats before joining the orbit |
-| `Elixir` | `ingredientCount`, `brewedHold`, `popDuration`, `appearDuration`, `pourDuration` | ingredients needed, how long the elixir waits before flying, the flask's pop, appearance and pour |
+| `Elixir` | `ingredientCount`, `brewedHold`, `popDuration`, `appearDuration` | ingredients needed, how long the elixir waits before flying, the flask's pop and appearance |
+| `Elixir.Pour` | `corkPop`, `tipStart`, `tipEnd`, `streamStart`, `streamEnd`, `fall`, `streamOpen`, `streamTail`, `fadeEnd` | the pour's rhythm (`pourDuration` = `fadeEnd`; the dragon comes after it) |
 | `Elixir.Timeline` | `corkPop`, `firstDive`, `diveSpacing`, `diveDuration`, `rise`, `recorkStart`, `recorkEnd`, `swirlEnd` | the brew's rhythm (`fusingDuration` = `swirlEnd`) |
 | `Elixir` | `ingredientColors`, `elixirColor`, `dampedWave` | ingredient and elixir colours, how the liquid sloshes and the flask wobbles |
 | `ElixirOrbit` | `diveArc`, `diveClearance`, `diveLift`, `diveDepth` | the dive's shape |
-| `ElixirRig` | `flaskScale`, `pourAngle`, `corkRise`, `corkSide`, `pourHeight` | the flask's size in the orbit, how it pours, how far the cork flies |
+| `ElixirRig` | `flaskScale`, `pourAngle`, `corkRise`, `corkSide`, `arrivalHeight`, `pourClearance`, `headTop`, `streamRate`, `splashRate` | the flask's size in the orbit, how it pours and how high above the head, how far the cork flies, how thick the stream and the splash are |
 | `ElixirOrbit.Settings` | `bearing`, `distance`, `drop`, `lateralRadius`, `depthRadius`, `tilt`, `period` | where the orbit is (side, distance, height), its size, tilt and speed |
 | `ElixirOrbit.Settings` | `followResponsiveness`, `turnDeadZone`, `turnSettled`, `turnResponsiveness` | how the orbit follows the player |
 | `ElixirOrbit.Settings` | `fusionSpin`, `hintDrop` | how the ingredients whirl, where the label floats |
@@ -316,6 +374,7 @@ elixir's flight (`OrchardComponent.flight`).
 | `Elixir` | `joinDuration` | how long an ingredient takes from its fruit to the orbit (`OrbComponent` uses it) |
 | `OrbComponent` | `heldScaleRange` | how small and how big two hands can make an ingredient |
 | `ChopDetector.Settings` | `speed`, `cooldown` | how fast the hand must come down |
+| `CupTurn.Settings` | `bend`, `keepMargin`, `pinchClearance`, `reach`, `keepReach`, `grace`, `smoothing` | how curled the fingers must be, how close to the fruit, how forgiving once holding, how smooth the turn is |
 | `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
 | `WormSwarm.Settings` | `count`, `crawlSpeed`, `speedUpPerCatch`, `burrowInterval`, `burrowDuration` | worm difficulty |
 | `OrchardSceneBuilder` | `…SizeOnTree`, `…SizeFocused` | fruit sizes on the tree and in front of the player (the apple's is its width) |
@@ -422,19 +481,26 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   - an ingredient rising, joining the orbit by itself or when tapped, also from a fruit sent back early
   - empty fruit, a complete orbit taking no more
   - the elixir brewing, flying, waiting when the dragon is gone, sending the close fruit back
+- **`Tests/MacrowaversTests/CupTurnTests.swift`:** a cupped hand turning about any axis turns the fruit by as
+  much; a flat hand, a fist, a pinch or a far hand do not; a wobbly or briefly lost cup keeps holding, a longer
+  one lets go; no jump after a tracking gap or on a repeated reading; one hand at a time; the palm frame and the
+  bends follow the joints.
 - **`Tests/MacrowaversTests/HandGestureTests.swift`:** chop speed, zone and cooldown; the snap (fast, slow, late,
   fingers that do not curl, a pinch, repeated readings, cooldown, one hand at a time); the elixir's slots and
   timing; the flask appearing and wobbling when an ingredient arrives, the cork popping before the first dive and
   going back on after the last, the dives one at a time in order, the liquid rising by thirds and turning blue,
-  the slosh dying down, no jumps between states, the pour and the fade; the orbit's place to the right and its
+  the slosh dying down, no jumps between states, the pour (cork, tip, stream, its fall onto the head, the drain
+  fastest at first, the trickle, the soothing) and the fade, and `.poured` only after it; the orbit's place to the right and its
   shape (always seen whole, to the side, clear of the fruit), period, lazy follow and the dive into the neck; the
   flight's arc and arrival.
 
 ## Known limits
 
-- **The snap and the chop need a headset.** The simulator has no hand tracking: use the taps.
+- **The snap, the chop and the cupped-hand turn need a headset.** The simulator has no hand tracking: use the taps.
 - **Snap thresholds come from hand proportions, not from recordings:** tune `SnapDetector.Settings` on device
-  with `SnapDetector.closestContact` and `lastAttempt`.
+  with `SnapDetector.closestContact` and `lastAttempt`. The same goes for `CupTurn.Settings` (finger bends).
+- **A turned pineapple is chopped as if upright.** `PineappleRig.chopTarget` ignores the fruit's turn; its zone
+  is generous, so a chop still lands, but on a fruit turned on its side the zone is off.
 - **Head, not body.** The orbit turns with the head's yaw past 30° (visionOS gives no torso pose): a long look to
   the side turns it too.
 - **Hand height, not the apple.** Pulling the stem uses the hand's height: if the player moves their head a lot while

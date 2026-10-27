@@ -21,6 +21,11 @@ struct FruitPanelView: View {
             Text(hint)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if orchard.isHandTrackingAvailable {
+                Text("Cup a hand next to it and turn your hand to turn the fruit.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
             if orchard.focusedFruit?.kind == .apple && orchard.focusedOrb == .sealed {
                 Text("Worms caught: \(orchard.caughtWorms)/\(orchard.wormCount)")
                     .font(.subheadline.monospacedDigit())
@@ -42,7 +47,7 @@ struct FruitPanelView: View {
                     }
                 }
             }
-            .disabled(orchard.elixir.state == .flying)
+            .disabled(orchard.elixirState == .flying)
         }
         .multilineTextAlignment(.center)
         .frame(width: 360)
@@ -64,7 +69,7 @@ struct FruitPanelView: View {
     private var hint: String {
         switch orchard.focusedOrb {
         case .revealed:
-            return orchard.elixir.state == .gathering
+            return orchard.elixirState == .gathering
                 ? "An ingredient for the elixir! It's joining the others around you."
                 : "Three ingredients already orbit you: brew the elixir first."
         case .orbiting, .spent:

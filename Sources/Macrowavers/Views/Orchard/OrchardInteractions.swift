@@ -47,9 +47,14 @@ struct OrchardInteractions: ViewModifier {
             .onChange(of: untangle.phase.isOnIsland, initial: true) { _, isOnIsland in
                 orchard.isDragonOnIsland = isOnIsland
             }
-            // The elixir reached the dragon: soothed, it comes to the player.
-            .onChange(of: orchard.elixir.state) { _, state in
-                if state == .delivered { untangle.callDragon() }
+            // The elixir flies to the dragon: it stops on its path and lifts its head to receive it. Once the elixir
+            // is poured over it, soothed, it comes to the player (not before: the flask would chase it).
+            .onChange(of: orchard.elixirState) { _, state in
+                switch state {
+                case .flying: untangle.receiveElixir()
+                case .poured: untangle.callDragon()
+                default: break
+                }
             }
     }
 
@@ -63,12 +68,14 @@ struct OrchardInteractions: ViewModifier {
             }
     }
 
-    /// Pull the apple's stem up: the slices open.
+    /// Pull the apple's stem up (away from the apple): the slices open.
     private var pullStemGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .targetedToEntity(where: .has(AppleStemComponent.self))
             .onChanged { value in
-                let height = value.convert(value.location3D, from: .local, to: .scene).y
+                // Along the apple's own up axis: the player may have turned it (cupped hand).
+                let up = simd_normalize(value.entity.convert(direction: SIMD3(0, 1, 0), to: nil))
+                let height = simd_dot(value.convert(value.location3D, from: .local, to: .scene), up)
                 let start = stemDragStart ?? StemDrag(height: height, opening: orchard.appleOpening)
                 stemDragStart = start
                 // Fully open = the stem raised by `maxLift` at the apple's size in front of the player.

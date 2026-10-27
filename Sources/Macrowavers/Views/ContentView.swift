@@ -4,6 +4,7 @@ import SwiftUI
 /// Start opens the immersive space, where the story goes on (`StoryStep.searching`); this window closes, so it
 /// can never overlap the island, the dragon or the fruit: from then on the controls are panels inside the space
 /// (`IslandControlsView`). The window comes back when the space closes (Restart Game or Digital Crown).
+/// Under Start, a small menu picks the app icon (`AppIconMenu`).
 struct ContentView: View {
     static let windowID = "IslandWindow"
 
@@ -15,12 +16,16 @@ struct ContentView: View {
     var body: some View {
         Group {
             if viewModel.immersiveSpaceState == .closed {
-                Button("Start") {
-                    Task { await start() }
+                VStack(spacing: 16) {
+                    Button("Start") {
+                        Task { await start() }
+                    }
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+                    .accessibilityHint("Opens the floating island and begins the story")
+                    AppIconMenu()
+                        .controlSize(.small)
                 }
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .accessibilityHint("Opens the floating island and begins the story")
             } else {
                 ProgressView()
             }

@@ -20,8 +20,16 @@ final class ElixirRig {
     /// How far the cork flies out of the neck (m, flask space) and to the side.
     static let corkRise: Float = 0.1
     static let corkSide: Float = 0.04
-    /// Height of the flask above the dragon's head while it pours (m).
-    static let pourHeight: Float = 0.12
+    /// Heights above the dragon's head node (`deliveryTarget`), in metres. The dragon receives the elixir with its
+    /// snout up (`DragonPhase.receivingElixir`), and the drawn head then rises up to ~9 cm above the node: its top is
+    /// ~13 cm above it (`headTop`, where the elixir lands). The flask arrives upright with its centre at
+    /// `arrivalHeight`, its bottom clear of the head, and tips over around its neck's mouth, held at `pourClearance`.
+    static let arrivalHeight: Float = 0.32
+    static let pourClearance: Float = 0.26
+    static let headTop: Float = 0.13
+    /// Particles per second of the stream and of the splash at full flow.
+    static let streamRate: Float = 520
+    static let splashRate: Float = 300
 
     /// Placed, sized and turned by `OrchardSystem.updateElixir`.
     let elixir: Entity
@@ -38,20 +46,36 @@ final class ElixirRig {
     private let burst: Entity
     /// Bubbles rising in the liquid; a burst when an ingredient lands.
     private let bubbles: Entity
-    /// The elixir streaming out of the neck over the dragon's head.
+    /// What the pour leaves in the scene, upright in the orchard's root (not under the tipped flask, so the elixir
+    /// falls straight down): the stream from the neck, the splash on the dragon's head and the shimmer once soothed.
+    let pourEffects = Entity()
     private let stream: Entity
+    private let splash: Entity
+    private let shimmer: Entity
     /// The liquid's glow, lighting what is around the flask.
     private let glow: Entity
-    /// Values already applied to the materials and the light (they change only now and then).
-    private var appliedLiquid: SIMD4<Float>?
-    private var appliedGlass: SIMD4<Float>?
+    /// The liquid's and the glass's materials, by their colour and glow in steps (`materialKey`): each is made once
+    /// and only swapped when the step changes. Made anew whenever the colour moved a little, they were rebuilt
+    /// almost every frame while the liquid mixed and the elixir throbbed.
+    private var liquidMaterials: [SIMD4<Int32>: PhysicallyBasedMaterial] = [:]
+    private var glassMaterials: [SIMD4<Int32>: PhysicallyBasedMaterial] = [:]
+    private var appliedLiquid: SIMD4<Int32>?
+    private var appliedGlass: SIMD4<Int32>?
+    /// Light intensity already applied, in steps of `lightStep` (0 = no light component).
+    private var appliedLight: Int?
+    private var appliedLightColor: SIMD4<Int32>?
 
-    /// The liquid: scaled along its own vertical axis from its bottom (its origin) to raise its level.
+    /// The liquid: built for its level (`LiquidLevels`), filling the inside of the glass up to it, and sloshing around
+    /// the centre of the flask's round body, so it never leaves the glass.
     private struct LiquidPart {
         let entity: Entity
         let model: ModelEntity
         let rest: Transform
-        /// Its local axis pointing up in the flask, and a horizontal one to slosh around.
+        let levels: LiquidLevels?
+        /// The centre of the round body, in the liquid's space: the liquid tilts around it.
+        let pivot: SIMD3<Float>
+        /// Its local axis pointing up in the flask (without `levels`, the liquid is scaled along it), and a
+        /// horizontal one to slosh around.
         let upAxis: Int
         let slosh: SIMD3<Float>
     }
@@ -83,13 +107,12 @@ final class ElixirRig {
         burst = Self.makeBurst()
         bubbles = Self.makeBubbles()
         stream = Self.makeStream()
+        splash = Self.makeSplash()
+        shimmer = Self.makeShimmer()
         glow = Entity()
-        glow.components.set(PointLightComponent(color: .white, intensity: 0, attenuationRadius: 0.6))
         for effect in [burst, bubbles, glow] { flask.addChild(effect) }
-        flask.addChild(stream)
-        stream.position = neckTop.position(relativeTo: flask)
-        let axis = simd_normalize(neckTop.position(relativeTo: flask) - neckBase.position(relativeTo: flask))
-        stream.components[ParticleEmitterComponent.self]?.emissionDirection = axis
+        pourEffects.name = "ElixirPour"
+        for effect in [stream, splash, shimmer] { pourEffects.addChild(effect) }
 
         if let glass {
             glass.components.set(ModelSortGroupComponent(group: Self.sortGroup, order: 1))
@@ -105,7 +128,9 @@ final class ElixirRig {
         do {
             let model = try await Entity(named: flaskAssetName, in: .main)
             flask.addChild(model)
-            return ElixirRig(flask: flask, model: model)
+            let rig = ElixirRig(flask: flask, model: model)
+            await rig.liquid?.levels?.prepare()
+            return rig
         } catch {
             print("⚠️ \(flaskAssetName).usdz not found: a glowing orb stands in for the flask (\(error))")
             flask.addChild(makeStandIn())
@@ -124,28 +149,81 @@ final class ElixirRig {
     }
 
     /// An ingredient lands in the liquid: a burst of bubbles.
-    func splash() {
+    func splashIntoFlask() {
         Self.burst(bubbles)
     }
 
-    /// Draws the flask's inside for the elixir's state: liquid level, colour, glow and slosh, the cork, the glass
-    /// lighting up as an ingredient arrives, bubbles, the stream and the light. `pulse` makes the brewed elixir
-    /// throb.
-    func apply(_ state: Elixir, pulse: Float) {
-        let fill = state.fillLevel
-        let glowLevel = state.liquidGlow * pulse
-        flask.orientation = simd_quatf(angle: state.wobble, axis: SIMD3(1, 0, 0)) * pourRotation(state.pourTilt)
+    /// The elixir streaming from the neck's mouth and landing on the dragon's head (both in `pourEffects`' space, the
+    /// orchard's root), as strong as the pour's flow.
+    func pour(_ state: Elixir, mouth: SIMD3<Float>, direction: SIMD3<Float>, head: SIMD3<Float>) {
+        stream.position = mouth
+        splash.position = head + SIMD3(0, Self.headTop, 0)
+        shimmer.position = head
+        Self.emit(stream, rate: Self.streamRate * state.pourFlow, direction: direction)
+        Self.emit(splash, rate: Self.splashRate * state.splashFlow, direction: nil)
+    }
 
-        if let liquid {
-            liquid.entity.isEnabled = fill > 0.002
+    /// No stream, no splash (the shimmer, a burst, lives on by itself).
+    func stopPouring() {
+        Self.emit(stream, rate: 0, direction: nil)
+        Self.emit(splash, rate: 0, direction: nil)
+    }
+
+    /// The last of the elixir has landed: the dragon is soothed, a shimmer rises around its head.
+    func soothe() {
+        Self.burst(shimmer)
+    }
+
+    /// The liquid at its level, tilted by the slosh around the centre of the round body: it stays inside the glass.
+    private static func fill(_ liquid: LiquidPart, to fill: Float, slosh: Float) {
+        liquid.entity.isEnabled = fill > 0.002
+        let tilt = simd_quatf(angle: slosh, axis: liquid.slosh)
+        liquid.entity.orientation = liquid.rest.rotation * tilt
+        if let levels = liquid.levels {
+            levels.show(fill)
+            liquid.entity.position = liquid.rest.translation
+                + liquid.rest.rotation.act(liquid.rest.scale * (liquid.pivot - tilt.act(liquid.pivot)))
+        } else {
+            // No mesh to take the glass's shape from: the old squash.
             var scale = SIMD3<Float>(repeating: 1)
             scale[liquid.upAxis] = max(fill, 0.002)
             liquid.entity.scale = liquid.rest.scale * scale
-            liquid.entity.orientation = liquid.rest.rotation * simd_quatf(angle: state.slosh, axis: liquid.slosh)
-            let color = state.liquidColor
-            let key = SIMD4(color, glowLevel)
-            if appliedLiquid.map({ simd_distance($0, key) > 0.004 }) ?? true {
-                liquid.model.model?.materials = [Self.liquidMaterial(color: color, glow: glowLevel)]
+        }
+    }
+
+    /// Steps of colour (per channel) and of glow the materials change by: fine enough not to be seen.
+    private static let colorSteps: Float = 24
+    private static let glowSteps: Float = 12
+    /// Steps of the light's intensity.
+    private static let lightStep: Float = 60
+
+    private static func materialKey(_ color: SIMD3<Float>, _ glow: Float) -> SIMD4<Int32> {
+        let channels = SIMD3<Int32>(simd_clamp(color, .zero, .one) * colorSteps, rounding: .toNearestOrAwayFromZero)
+        return SIMD4(channels, Int32((glow * glowSteps).rounded()))
+    }
+
+    private static func values(of key: SIMD4<Int32>) -> (color: SIMD3<Float>, glow: Float) {
+        (SIMD3<Float>(Float(key.x), Float(key.y), Float(key.z)) / colorSteps, Float(key.w) / glowSteps)
+    }
+
+    /// Draws the flask's inside for the elixir's state: liquid level, colour, glow and slosh, the cork, the glass
+    /// lighting up as an ingredient arrives, bubbles and the light. `pulse` makes the brewed elixir throb (through
+    /// its light: the materials stay as they are).
+    func apply(_ state: Elixir, pulse: Float) {
+        let fill = state.fillLevel
+        let glowLevel = state.liquidGlow
+        flask.orientation = simd_quatf(angle: state.wobble, axis: SIMD3(1, 0, 0)) * pourRotation(state.pourTilt)
+
+        if let liquid {
+            Self.fill(liquid, to: fill, slosh: state.slosh)
+            let key = Self.materialKey(state.liquidColor, glowLevel)
+            if key != appliedLiquid {
+                let material = liquidMaterials[key] ?? {
+                    let values = Self.values(of: key)
+                    return Self.liquidMaterial(color: values.color, glow: values.glow)
+                }()
+                liquidMaterials[key] = material
+                liquid.model.model?.materials = [material]
                 appliedLiquid = key
             }
         }
@@ -159,32 +237,37 @@ final class ElixirRig {
 
         if let glass {
             let arrival = Elixir.ingredientColor(slot: max(state.orbitingCount - 1, 0))
-            let key = SIMD4(arrival, state.arrivalGlow)
-            if appliedGlass.map({ simd_distance($0, key) > 0.01 }) ?? true {
-                glass.model?.materials = [Self.glassMaterial(glow: arrival, strength: state.arrivalGlow)]
+            let key = Self.materialKey(arrival, state.arrivalGlow)
+            if key != appliedGlass {
+                let material = glassMaterials[key] ?? {
+                    let values = Self.values(of: key)
+                    return Self.glassMaterial(glow: values.color, strength: values.glow)
+                }()
+                glassMaterials[key] = material
+                glass.model?.materials = [material]
                 appliedGlass = key
             }
         }
 
-        if var emitter = bubbles.components[ParticleEmitterComponent.self] {
-            let rate: Float = fill > 0.05 && !state.isPouring ? 6 + 24 * fill * state.liquidGlow : 0
-            if emitter.mainEmitter.birthRate != rate {
-                emitter.mainEmitter.birthRate = rate
-                bubbles.components.set(emitter)
-            }
+        // Bubbles in steps of 3 a second: set every frame, the emitter was rebuilt every frame the liquid changed.
+        let bubbleRate: Float = fill > 0.05 && !state.isPouring ? 6 + 24 * fill * glowLevel : 0
+        Self.emit(bubbles, rate: (bubbleRate / 3).rounded() * 3, direction: nil)
+        applyLight(intensity: 1800 * glowLevel * fill * pulse, color: state.liquidColor)
+    }
+
+    /// The liquid's light, in steps, and none at all while it is dark (a point light costs every surface near it).
+    private func applyLight(intensity: Float, color: SIMD3<Float>) {
+        let step = Int((intensity / Self.lightStep).rounded())
+        let colorKey = Self.materialKey(color, 0)
+        guard step != appliedLight || (step > 0 && colorKey != appliedLightColor) else { return }
+        if step == 0 {
+            glow.components.remove(PointLightComponent.self)
+        } else {
+            glow.components.set(PointLightComponent(color: OrchardSceneBuilder.color(Self.values(of: colorKey).color),
+                                                    intensity: Float(step) * Self.lightStep, attenuationRadius: 0.6))
         }
-        if var emitter = stream.components[ParticleEmitterComponent.self], emitter.isEmitting != state.isPouring {
-            emitter.isEmitting = state.isPouring
-            stream.components.set(emitter)
-        }
-        if var light = glow.components[PointLightComponent.self] {
-            let intensity = 1800 * glowLevel * fill
-            if abs(light.intensity - intensity) > 20 {
-                light.intensity = intensity
-                light.color = OrchardSceneBuilder.color(state.liquidColor)
-                glow.components.set(light)
-            }
-        }
+        appliedLight = step
+        appliedLightColor = colorKey
     }
 
     // MARK: - Pieces
@@ -222,7 +305,10 @@ final class ElixirRig {
         let magnitudes = [abs(up.x), abs(up.y), abs(up.z)]
         let upAxis = magnitudes.firstIndex(of: magnitudes.max() ?? 0) ?? 1
         let across = simd_normalize(entity.convert(direction: SIMD3(1, 0, 0), from: flask))
-        return LiquidPart(entity: entity, model: model, rest: entity.transform, upAxis: upAxis, slosh: across)
+        let levels = LiquidLevels(model: model, up: model.convert(direction: SIMD3(0, 1, 0), from: flask))
+        let pivot = levels.map { entity.convert(position: $0.volume.widestPoint, from: model) } ?? .zero
+        return LiquidPart(entity: entity, model: model, rest: entity.transform, levels: levels, pivot: pivot,
+                          upAxis: upAxis, slosh: across)
     }
 
     private static func corkPart(_ entity: Entity?, neckTop: Entity?, neckBase: Entity?) -> CorkPart? {
@@ -286,69 +372,6 @@ final class ElixirRig {
         orb.addChild(ModelEntity(mesh: .generateSphere(radius: 0.05), materials: [core]))
         return orb
     }
-
-    private static func burst(_ entity: Entity) {
-        guard var emitter = entity.components[ParticleEmitterComponent.self] else { return }
-        emitter.burst()
-        entity.components.set(emitter)
-    }
-
-    private static func makeBurst() -> Entity {
-        let entity = Entity()
-        var burst = ParticleEmitterComponent()
-        burst.emitterShape = .sphere
-        burst.emitterShapeSize = SIMD3(repeating: 0.06)
-        burst.birthDirection = .normal
-        burst.speed = 0.35
-        burst.speedVariation = 0.15
-        burst.isEmitting = false
-        burst.burstCount = 160
-        burst.mainEmitter.lifeSpan = 0.9
-        burst.mainEmitter.size = 0.004
-        burst.mainEmitter.color = .evolving(start: .single(UIColor(red: 0.85, green: 0.95, blue: 1, alpha: 1)),
-                                            end: .single(OrchardSceneBuilder.color(Elixir.elixirColor)))
-        entity.components.set(burst)
-        return entity
-    }
-
-    /// Bubbles rising from the bottom of the round body (flask space: its origin is the body's centre).
-    private static func makeBubbles() -> Entity {
-        let entity = Entity()
-        entity.position = SIMD3(0, -0.05, 0)
-        var bubbles = ParticleEmitterComponent()
-        bubbles.emitterShape = .sphere
-        bubbles.emitterShapeSize = SIMD3(0.05, 0.02, 0.05)
-        bubbles.birthDirection = .local
-        bubbles.emissionDirection = SIMD3(0, 1, 0)
-        bubbles.speed = 0.04
-        bubbles.speedVariation = 0.015
-        bubbles.burstCount = 40
-        bubbles.mainEmitter.birthRate = 0
-        bubbles.mainEmitter.lifeSpan = 1.1
-        bubbles.mainEmitter.size = 0.004
-        bubbles.mainEmitter.color = .constant(.single(UIColor(white: 1, alpha: 0.7)))
-        entity.components.set(bubbles)
-        return entity
-    }
-
-    /// Sparkling elixir pouring out of the neck (its direction is set along the neck) and falling.
-    private static func makeStream() -> Entity {
-        let entity = Entity()
-        var stream = ParticleEmitterComponent()
-        stream.emitterShape = .point
-        stream.birthDirection = .local
-        stream.speed = 0.25
-        stream.speedVariation = 0.08
-        stream.isEmitting = false
-        stream.mainEmitter.birthRate = 220
-        stream.mainEmitter.lifeSpan = 0.8
-        stream.mainEmitter.size = 0.005
-        stream.mainEmitter.acceleration = SIMD3(0, -1.2, 0)
-        stream.mainEmitter.color = .evolving(start: .single(OrchardSceneBuilder.color(Elixir.elixirColor)),
-                                             end: .single(UIColor(red: 0.85, green: 0.95, blue: 1, alpha: 1)))
-        entity.components.set(stream)
-        return entity
-    }
 }
 
 // MARK: - System
@@ -397,7 +420,11 @@ extension OrchardSystem {
         let rig = orchard.elixir
         let state = orchard.viewModel.elixir
         let target = orchard.deliveryTarget.position(relativeTo: root)
-        drawEvents(&orchard, target: target)
+        // Where the flask flies: above the head, upright, its bottom clear of it.
+        let arrival = target + SIMD3(0, ElixirRig.arrivalHeight, 0)
+        drawEvents(&orchard, arrival: arrival)
+        attach(rig.pourEffects, to: root, preservingWorldTransform: false)
+        if state.state != .delivered { rig.stopPouring() }
 
         let size = state.displayScale
         guard size > 0.001, !state.isFinished else {
@@ -419,34 +446,61 @@ extension OrchardSystem {
             if flight.isArrived {
                 orchard.viewModel.elixirDelivered()
             } else {
-                rig.elixir.position = flight.position(towards: target)
+                rig.elixir.position = flight.position(towards: arrival)
             }
-        case .delivered:
-            // Above the dragon's head (it moves: the flask follows it while it pours).
-            rig.elixir.position = target + SIMD3(0, ElixirRig.pourHeight, 0)
+        case .delivered, .poured:
+            break
         }
-        // Turning slowly on itself, so the player sees it from every side.
-        rig.elixir.orientation = simd_quatf(angle: 0.4 * orchard.time, axis: SIMD3(0, 1, 0))
+        // Turning slowly on itself, so the player sees it from every side; pouring, it turns side-on to them.
+        let spin = simd_quatf(angle: 0.4 * orchard.time, axis: SIMD3(0, 1, 0))
+        rig.elixir.orientation = state.state == .delivered
+            ? simd_slerp(spin, simd_quatf(angle: orchard.pourYaw, axis: SIMD3(0, 1, 0)),
+                         Elixir.smootherstep(state.stateTime / Elixir.Pour.tipStart))
+            : spin
         rig.elixir.setScale(SIMD3(repeating: ElixirRig.flaskScale * size), relativeTo: nil)
         rig.apply(state, pulse: pulse)
+        if state.state == .delivered { pour(rig, state: state, head: target, arrival: arrival, root: root) }
     }
 
-    /// The moments that happen once: the flash of the brewed elixir, the start of its flight, a splash for each
-    /// ingredient landing in the flask.
+    /// The flask over the dragon's head (it moves: the flask follows it). Upright it waits at `arrival`; as it tips
+    /// over it turns around its neck's mouth, held `pourClearance` above the head, so the glass never sinks into it
+    /// and the elixir falls straight onto it.
     @MainActor
-    private static func drawEvents(_ orchard: inout OrchardComponent, target: SIMD3<Float>) {
+    private static func pour(_ rig: ElixirRig, state: Elixir, head: SIMD3<Float>, arrival: SIMD3<Float>,
+                             root: Entity) {
+        let mouthInFlask = rig.neck(relativeTo: rig.elixir).top
+        let mouthOffset = rig.elixir.orientation.act(mouthInFlask * rig.elixir.scale.x)
+        let anchored = head + SIMD3(0, ElixirRig.pourClearance, 0) - mouthOffset
+        rig.elixir.position = simd_mix(arrival, anchored, SIMD3(repeating: state.pourTilt))
+        let neck = rig.neck(relativeTo: root)
+        let direction = simd_length(neck.top - neck.base) > 1e-5 ? simd_normalize(neck.top - neck.base) : SIMD3(0, -1, 0)
+        rig.pour(state, mouth: neck.top, direction: direction, head: head)
+    }
+
+    /// The moments that happen once: the flash of the brewed elixir, the start of its flight, the side the flask
+    /// turns to as it arrives, a splash for each ingredient landing in the flask, the shimmer of the soothed dragon.
+    @MainActor
+    private static func drawEvents(_ orchard: inout OrchardComponent, arrival: SIMD3<Float>) {
         let rig = orchard.elixir
         let state = orchard.viewModel.elixir
         if state.state != orchard.drawnElixirState {
             switch state.state {
             case .brewed: rig.flash()
-            case .flying: orchard.flight = ElixirFlight(from: rig.elixir.position, to: target)
-            case .gathering, .ready, .fusing, .delivered: orchard.flight = nil
+            case .flying: orchard.flight = ElixirFlight(from: rig.elixir.position, to: arrival)
+            case .delivered:
+                orchard.flight = nil
+                // The flask's tipping axis (its local z, across the neck) towards the player: they see it pour in
+                // profile.
+                let toViewer = orchard.viewer.viewerPose().position - arrival
+                orchard.pourYaw = atan2(toViewer.x, toViewer.z)
+            case .gathering, .ready, .fusing, .poured: orchard.flight = nil
             }
             orchard.drawnElixirState = state.state
         }
         let landed = state.landedCount
-        if landed > orchard.drawnLandings { rig.splash() }
+        if landed > orchard.drawnLandings { rig.splashIntoFlask() }
         orchard.drawnLandings = landed
+        if state.hasSoothed && !orchard.drawnSoothed { rig.soothe() }
+        orchard.drawnSoothed = state.hasSoothed
     }
 }

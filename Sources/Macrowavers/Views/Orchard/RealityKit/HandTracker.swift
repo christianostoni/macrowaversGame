@@ -83,7 +83,10 @@ final class HandTracker {
         }
         return HandSample(chirality: chirality, timestamp: timestamp, knuckle: position(.middleFingerKnuckle),
                           wrist: position(.wrist), thumbTip: position(.thumbTip), indexTip: position(.indexFingerTip),
-                          middleDistal: position(.middleFingerIntermediateTip), middleTip: position(.middleFingerTip))
+                          middleDistal: position(.middleFingerIntermediateTip), middleTip: position(.middleFingerTip),
+                          indexKnuckle: position(.indexFingerKnuckle), ringKnuckle: position(.ringFingerKnuckle),
+                          littleKnuckle: position(.littleFingerKnuckle), ringTip: position(.ringFingerTip),
+                          littleTip: position(.littleFingerTip))
     }
     #endif
 }
