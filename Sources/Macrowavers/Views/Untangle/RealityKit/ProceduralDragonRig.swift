@@ -40,7 +40,7 @@ final class ProceduralDragonRig: DragonRig {
         jaw = parts.jaw
         eyes = parts.eyes
         entity.addChild(head)
-        effects.attach(nostrils: parts.nostrils, mouth: parts.mouth, voice: head)
+        effects.attach(nostrils: [parts.nostrils], mouth: parts.mouth, voice: head)
 
         for index in 1..<config.nodeCount {
             // The body narrows towards the tail.

@@ -198,13 +198,13 @@ struct DragonBehaviorTests {
 }
 
 struct DragonFlightTests {
-    @Test func flightRespectsThePlayersPersonalSpace() {
+    @Test func theApproachRespectsThePlayersPersonalSpace() {
         let config = TangleConfig()
         let start = TangleShape.trefoil.positions(config: config).map { $0 + SIMD3<Float>(0, 0.75, -0.6) }
         let viewer = SIMD3<Float>(0, 1.15, 0)
-        let flight = DragonFlight(start: start, segmentLength: config.segmentLength)
+        let flight = DragonFlight(start: start, segmentLength: config.segmentLength, plan: [.approach], viewer: viewer)
         var closest = Float.infinity
-        for _ in 0..<(60 * 40) {
+        for _ in 0..<(60 * 20) {
             flight.update(deltaTime: 1.0 / 60.0, viewer: viewer)
             #expect(flight.positions.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite })
             closest = min(closest, simd_distance(flight.positions[0], viewer))
@@ -212,6 +212,8 @@ struct DragonFlightTests {
 
         #expect(closest > flight.settings.personalSpace * 0.9)
         #expect(flight.positions.count == config.nodeCount)
+        // Left without a next manoeuvre, it keeps waiting in front of the player.
+        #expect(flight.maneuver == .approach && !flight.isFinished)
     }
 
     @Test func captiveDragonCoilsAroundTheTreeWithoutCrossingItself() {
@@ -256,57 +258,6 @@ struct DragonFlightTests {
         #expect(flight.isFinished)
         #expect(simd_distance(flight.positions[0], knot[0]) < 0.001)
         #expect(zip(flight.positions, knot).allSatisfy { simd_distance($0, $1) < 0.03 })
-    }
-
-    @Test func farewellEndsWithTheDragonGone() {
-        let config = TangleConfig()
-        let start = TangleShape.trefoil.positions(config: config).map { $0 + SIMD3<Float>(0, 0.75, -0.6) }
-        let flight = DragonFlight(start: start, segmentLength: config.segmentLength,
-                                  plan: [.takeoff, .cruise, .hover, .depart])
-        var elapsed: Float = 0
-        while !flight.isFinished && elapsed < 60 {
-            flight.update(deltaTime: 1.0 / 60.0, viewer: SIMD3(0, 1.15, 0))
-            elapsed += 1.0 / 60.0
-        }
-
-        #expect(flight.isFinished)
-        #expect(flight.maneuver == .depart)
-    }
-
-    @Test(arguments: [SIMD3<Float>(0, 0, -1), simd_normalize(SIMD3<Float>(0.6, -0.3, -1))])
-    func freeDragonStaysInFrontOfThePlayerAndHoversWhereTheyLook(forward: SIMD3<Float>) {
-        let config = TangleConfig()
-        let viewer = SIMD3<Float>(0, 1.15, 0)
-        let settings = DragonFlight.Settings.farewell
-        let flat = simd_normalize(SIMD3(forward.x, 0, forward.z))
-        let start = TangleShape.trefoil.positions(config: config).map { $0 + SIMD3<Float>(0, 0.75, -0.6) }
-        let flight = DragonFlight(start: start, segmentLength: config.segmentLength, settings: settings,
-                                  plan: [.takeoff, .cruise, .hover, .depart], viewer: viewer, viewerForward: forward)
-        var departStart: SIMD3<Float>?
-        var hoverEnd: SIMD3<Float>?
-        var elapsed: Float = 0
-        while !flight.isFinished && elapsed < 60 {
-            flight.update(deltaTime: 1.0 / 60.0, viewer: viewer, viewerForward: forward)
-            elapsed += 1.0 / 60.0
-            let head = flight.positions[0]
-            let offset = SIMD3(head.x - viewer.x, 0, head.z - viewer.z)
-            if flight.maneuver == .hover { hoverEnd = head }
-            if flight.maneuver == .depart && departStart == nil { departStart = head }
-            guard flight.maneuver == .cruise || flight.maneuver == .hover else { continue }
-            // Within the flight volume and never behind or beside the player.
-            #expect(simd_length(offset) < settings.orbitRadius.upperBound + settings.boundsMargin + 0.05)
-            #expect(head.y < settings.altitude.upperBound + settings.boundsMargin + 0.05)
-            #expect(simd_distance(head, viewer) > settings.personalSpace * 0.95)
-            #expect(simd_dot(simd_normalize(offset), flat) > cos(settings.frontArc! + 0.35))
-        }
-
-        #expect(flight.isFinished)
-        // It thanked the player straight in front of their eyes, at a comfortable distance.
-        let spot = viewer + flat * settings.hoverDistance
-        #expect(hoverEnd.map { simd_distance($0, spot) < 0.25 } == true)
-        // It faded out within a couple of metres: before the room's walls or ceiling.
-        #expect(departStart.map { simd_distance(flight.positions[0], $0) < settings.departFade.upperBound + 0.2 } == true)
-        #expect(flight.positions.allSatisfy { $0.y < 2.6 })
     }
 }
 
@@ -547,7 +498,7 @@ struct UntangleViewModelTests {
         viewModel.rotateIsland(by: IslandPlacement.yawStep)
         viewModel.restartScene()
         #expect(viewModel.phase == .captive)
-        #expect(!viewModel.isSolved && !viewModel.isFlying)
+        #expect(!viewModel.isSolved)
         #expect(viewModel.islandPlacement.yaw == IslandPlacement.yawStep)
 
         viewModel.resetGame()

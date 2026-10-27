@@ -15,7 +15,7 @@ enum MusicTrack: String, CaseIterable {
     static func playing(story: StoryStep, dragon: DragonPhase) -> MusicTrack? {
         switch (story, dragon) {
         case (.start, _): nil
-        case (.gratitude, _), (.safety, _), (.ride, _), (.secondChapter, _), (.feast, _), (_, .free), (_, .gone):
+        case (.gratitude, _), (.safety, _), (.ride, _), (.secondChapter, _), (.feast, _), (.finale, _), (.ended, _), (_, .free):
             .farewell
         case (_, .approaching), (_, .landing), (_, .untangling): .puzzle
         default: .intro

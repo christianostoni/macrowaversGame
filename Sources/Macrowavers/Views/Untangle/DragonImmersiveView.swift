@@ -14,7 +14,7 @@ struct DragonImmersiveView: View {
 
     /// Side panel: 0.9 m from the player, 50° to the left, a little below a seated player's eyes.
     /// Outside everything that moves: the island (±20°), the dragon's approach (~1 m straight ahead), the knot
-    /// and the fruit in front of the player, the farewell circles (≥ 1.1 m).
+    /// and the fruit in front of the player.
     private static let panelDistance: Float = 0.9
     private static let panelAngle: Float = 50 * .pi / 180
     private static let panelHeight: Float = 1.0
@@ -316,7 +316,7 @@ final class HiddenWorld {
     let story = StoryViewModel()
     story.begin()
     return DragonImmersiveView()
-        .environment(UntangleViewModel(farewellWaitsForPlayer: true))
+        .environment(UntangleViewModel())
         .environment(OrchardViewModel())
         .environment(story)
 }

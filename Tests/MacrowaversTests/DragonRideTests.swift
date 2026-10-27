@@ -23,7 +23,7 @@ struct DragonRideTests {
     private let rest = SIMD3<Float>(0, -0.3, -0.35)
 
     @Test func theStoryEndsOnTheDragonsBackInFullImmersion() {
-        #expect(StoryStep.allCases.filter(\.isFullyImmersed) == [.ride, .secondChapter, .feast])
+        #expect(StoryStep.allCases.filter(\.isFullyImmersed) == [.ride, .secondChapter, .feast, .finale, .ended])
         #expect(StoryStep.ride.page == nil && StoryStep.ride.revealsWorld)
         let focus = SceneFocus(isFruitFocused: false, isElixirFlying: false, phase: .free, isDragonSpeaking: false,
                                isRiding: true)

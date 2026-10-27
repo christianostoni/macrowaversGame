@@ -16,10 +16,9 @@ enum DragonPhase: Equatable {
     case landing
     /// The mini-game: the player untangles it.
     case untangling
-    /// Untangled: celebrates, thanks the player and flies away into the sky.
+    /// Untangled: celebrates in the play area and thanks the player; when they are ready the ride takes over
+    /// (`DragonRideView`).
     case free
-    /// Flown away: the story is over.
-    case gone
 
     enum Interaction {
         /// The body does not respond (the dragon is flying).
@@ -42,7 +41,7 @@ enum DragonPhase: Equatable {
         switch self {
         case .captive, .alerted: .tap
         case .untangling: .grab
-        case .receivingElixir, .approaching, .landing, .free, .gone: .none
+        case .receivingElixir, .approaching, .landing, .free: .none
         }
     }
 }

@@ -22,7 +22,7 @@ final class UntangleViewModel {
     /// Current chapter of the story.
     private(set) var phase = DragonPhase.captive
     private(set) var crossingCount = 0
-    var isSolved: Bool { phase == .free || phase == .gone }
+    var isSolved: Bool { phase == .free }
     private(set) var mood = DragonMood.calm
     /// 0...1: the dragon is about to thrash.
     private(set) var restlessness: Float = 0
@@ -31,8 +31,6 @@ final class UntangleViewModel {
     private(set) var placement = PlayAreaPlacement.seated
     /// Move in progress during a fit of anger (nil = none).
     private(set) var action: DragonAction?
-    /// Untangled, the dragon has taken off.
-    private(set) var isFlying = false
     /// Placement and rotation of the island (the player spins it).
     private(set) var islandPlacement = IslandPlacement.standard
     /// Which hand holds which node (from the manipulation events; shown in the debug info).
@@ -59,16 +57,6 @@ final class UntangleViewModel {
     /// The flying dragon (around the tree, towards the player, while settling, free), in scene space.
     /// `nil` while it lies in the play area: then the simulation is drawn.
     @ObservationIgnored private var flight: DragonFlight?
-    @ObservationIgnored private var freeTime: Float = 0
-    /// Seconds of celebration in the play area before taking off.
-    @ObservationIgnored private let takeoffDelay: Float = 1.5
-    /// With the story on, the free dragon waits in the play area (it speaks to the player) until
-    /// `beginFarewell()`; without it, it takes off after `takeoffDelay`.
-    @ObservationIgnored private let farewellWaitsForPlayer: Bool
-    @ObservationIgnored private var isFarewellCleared = false
-    /// After the win: takes off, sweeps once in front of the player, hovers in front of their eyes to thank them
-    /// with a roar and flies away (`DragonFlight.Settings.farewell` keeps it all in front of them).
-    @ObservationIgnored private let farewell: [DragonFlight.Maneuver] = [.takeoff, .cruise, .hover, .depart]
     /// Just settled, the body blends smoothly from the flight's shape to the simulated one.
     @ObservationIgnored private var settleFrom: [SIMD3<Float>]?
     @ObservationIgnored private var settleTime: Float = 0
@@ -77,8 +65,6 @@ final class UntangleViewModel {
     @ObservationIgnored private var worldFromLocal = matrix_identity_float4x4
     /// Last known position of the player's eyes (scene space).
     @ObservationIgnored private var viewer = SIMD3<Float>(0, 1.15, 0)
-    /// Where the player is looking (scene space).
-    @ObservationIgnored private var viewerForward = SIMD3<Float>(0, 0, -1)
     /// Strain filtered over time: the dragon's reaction to a pull builds up and fades, it never flickers.
     @ObservationIgnored private var smoothedStrain: Float = 0
     /// How fast `strain` follows the body's tension (1/s).
@@ -94,10 +80,8 @@ final class UntangleViewModel {
 
     init(shape: TangleShape = .trefoil,
          config: TangleConfig = TangleConfig(),
-         difficulty: DifficultySettings = DifficultySettings(),
-         farewellWaitsForPlayer: Bool = false) {
+         difficulty: DifficultySettings = DifficultySettings()) {
         self.shape = shape
-        self.farewellWaitsForPlayer = farewellWaitsForPlayer
         simulation = TangleSimulation(config: config, positions: shape.positions(config: config))
         behavior = DragonBehavior(settings: difficulty)
     }
@@ -117,14 +101,8 @@ final class UntangleViewModel {
         let localFromFlight = worldFromLocal.inverse * worldFromFlight
         return flight.positions.map { Self.transform($0, by: localFromFlight) }
     }
-    /// 0...1: fades into the sky as it leaves (and stays invisible until it has a place to be).
-    var dragonOpacity: Float {
-        if phase == .gone { return 0 }
-        guard let flight else { return phase.isOnIsland ? 0 : 1 }
-        // Fades while moving away, within a couple of metres: before reaching the real room's walls or ceiling.
-        let amount = flight.departFade
-        return 1 - amount * amount * (3 - 2 * amount)
-    }
+    /// 0 or 1: invisible until it has a place to be (on the island, before the island is known).
+    var dragonOpacity: Float { flight == nil && phase.isOnIsland ? 0 : 1 }
     var flightManeuver: DragonFlight.Maneuver? { flight?.maneuver }
     var flightProgress: Float { flight?.maneuverProgress ?? 0 }
     /// Velocity of the flying head, in the dragon's space.
@@ -172,12 +150,6 @@ final class UntangleViewModel {
         refreshMood()
     }
 
-    /// The player is ready to go: the free dragon takes off for its farewell (see `farewellWaitsForPlayer`).
-    func beginFarewell() {
-        guard phase == .free else { return }
-        isFarewellCleared = true
-    }
-
     /// Restarts the tangle (same initial knot), staying in the mini-game.
     func restartPuzzle() {
         guard phase == .untangling else { return }
@@ -192,9 +164,6 @@ final class UntangleViewModel {
         phase = .captive
         flight = nil
         worldFromFlight = matrix_identity_float4x4
-        isFlying = false
-        freeTime = 0
-        isFarewellCleared = false
         crossingPoints = []
         if crossingCount != 0 { crossingCount = 0 }
         refreshMood()
@@ -269,23 +238,22 @@ final class UntangleViewModel {
     /// Called every frame by the `DragonBodySystem`.
     /// - Parameters:
     ///   - viewer: the player's eyes in scene space (the flying dragon circles them).
-    ///   - viewerForward: where the player is looking, in scene space (the free dragon stays in front of them).
     ///   - worldFromLocal: transform from the dragon's space to the scene's.
     ///   - orbit: path around the tree and where the tree is in the scene (nil = no island).
-    func update(deltaTime: Float, viewer: SIMD3<Float>, viewerForward: SIMD3<Float> = SIMD3(0, 0, -1),
-                worldFromLocal: float4x4, orbit: AnchoredOrbit?) {
+    func update(deltaTime: Float, viewer: SIMD3<Float>, worldFromLocal: float4x4, orbit: AnchoredOrbit?) {
         time += deltaTime
         self.worldFromLocal = worldFromLocal
         self.viewer = viewer
-        self.viewerForward = viewerForward
 
         switch phase {
         case .captive, .alerted, .receivingElixir, .approaching, .landing:
             updateJourney(deltaTime: deltaTime, orbit: orbit)
         case .untangling:
             updatePuzzle(deltaTime: deltaTime)
-        case .free, .gone:
-            updateFreedom(deltaTime: deltaTime)
+        case .free:
+            // Free: it stays in the play area, celebrating while it speaks to the player (the ride takes over
+            // from there).
+            simulation.step(deltaTime: deltaTime)
         }
     }
 
@@ -304,10 +272,7 @@ final class UntangleViewModel {
             worldFromFlight = orbit.worldFromAnchor
             flight.orbit = anchorPath(orbit)
         }
-        let flightFromWorld = worldFromFlight.inverse
-        let forward = flightFromWorld * SIMD4(viewerForward, 0)
-        flight.update(deltaTime: deltaTime, viewer: Self.transform(viewer, by: flightFromWorld),
-                      viewerForward: SIMD3(forward.x, forward.y, forward.z))
+        flight.update(deltaTime: deltaTime, viewer: Self.transform(viewer, by: worldFromFlight.inverse))
 
         if phase == .alerted {
             alertedTime += deltaTime
@@ -351,7 +316,6 @@ final class UntangleViewModel {
             untangledTime += deltaTime
             if untangledTime >= solveDelay {
                 phase = .free
-                freeTime = 0
                 crossingPoints = []
             }
         } else {
@@ -365,23 +329,6 @@ final class UntangleViewModel {
         var path = orbit.path
         path.speed = path.speed / orbit.scale * (phase == .alerted ? alertedOrbitSpeed : 1)
         return path
-    }
-
-    /// After the win: a short celebration in the play area, then take-off, farewell and departure into the sky.
-    private func updateFreedom(deltaTime: Float) {
-        freeTime += deltaTime
-        if let flight {
-            flight.update(deltaTime: deltaTime, viewer: viewer, viewerForward: viewerForward)
-            if flight.isFinished && phase != .gone { phase = .gone }
-            return
-        }
-        simulation.step(deltaTime: deltaTime)
-        if freeTime >= takeoffDelay && (!farewellWaitsForPlayer || isFarewellCleared) {
-            let start = simulation.interpolatedPositions.map { Self.transform($0, by: worldFromLocal) }
-            flight = DragonFlight(start: start, segmentLength: config.segmentLength, settings: .farewell,
-                                  plan: farewell, viewer: viewer, viewerForward: viewerForward)
-            isFlying = true
-        }
     }
 
     private static func transform(_ point: SIMD3<Float>, by matrix: float4x4) -> SIMD3<Float> {

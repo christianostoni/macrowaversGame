@@ -52,7 +52,7 @@ struct DragonBodySystem: System {
         for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
             guard let body = entity.components[DragonBodyComponent.self] else { continue }
             let viewModel = body.viewModel
-            let (viewerInScene, viewerForward) = body.viewer.viewerPose()
+            let viewerInScene = body.viewer.viewerPose().position
 
             // The grabbed colliders are moved by the ManipulationComponent (the hand): they are the nodes' targets.
             let grabbed = viewModel.userGrabbedNodes
@@ -60,7 +60,7 @@ struct DragonBodySystem: System {
                 viewModel.drag(node: index, to: body.colliders[index].position)
             }
 
-            viewModel.update(deltaTime: deltaTime, viewer: viewerInScene, viewerForward: viewerForward,
+            viewModel.update(deltaTime: deltaTime, viewer: viewerInScene,
                              worldFromLocal: entity.transformMatrix(relativeTo: nil),
                              orbit: entity.components[OrbitComponent.self]?.anchoredOrbit())
 

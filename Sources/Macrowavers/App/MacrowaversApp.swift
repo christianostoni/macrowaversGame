@@ -13,8 +13,7 @@ import SwiftUI
 struct MacrowaversApp: App {
     @State private var appModel = AppModel()
     /// "Untangle the Dragon" feature (AR126-100): one view model shared by the windows and the immersive space.
-    /// With the story on, the freed dragon waits for the player's answer before its farewell.
-    @State private var untangleViewModel = UntangleViewModel(farewellWaitsForPlayer: true)
+    @State private var untangleViewModel = UntangleViewModel()
     /// The tree's fruit, the ingredients they hide and the elixir that soothes the dragon.
     @State private var orchardViewModel = OrchardViewModel()
     /// The storytelling screens around the game (Start, the narrator, the dragon's words).

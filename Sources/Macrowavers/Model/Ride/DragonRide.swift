@@ -70,6 +70,10 @@ struct DragonRide {
         static let responsiveness: Float = 1.6
         /// The dragon leans into its turns (rad at full turn), drawn on the dragon only: the player's view never rolls.
         static let maxBank: Float = 0.3
+        /// A weak dragon (sick, exhausted: `DragonFeast.weakness`) loses this share of its speed and sways its body
+        /// by this much (rad; the body only: the player's view never sways).
+        static let weakSlowdown: Float = 0.45
+        static let weakSway: Float = 0.22
         /// Where the hands rest on the horns before the player has held them (ride space, m).
         static let defaultRest = SIMD3<Float>(0, -0.35, -0.35)
         /// The dark arrival: a glow comes out of the dark (s), then the dragon appears under the player.
@@ -111,8 +115,9 @@ struct DragonRide {
     // MARK: - Frame update
 
     /// Advances the flight. `left`/`right`: the hands in ride space (nil when not tracked); `isHandTrackingAvailable`
-    /// false flies the autopilot instead.
-    mutating func update(deltaTime: Float, left: SIMD3<Float>?, right: SIMD3<Float>?, isHandTrackingAvailable: Bool) {
+    /// false flies the autopilot instead; `weakness` 0...1 slows the dragon down and makes it sway.
+    mutating func update(deltaTime: Float, left: SIMD3<Float>?, right: SIMD3<Float>?, isHandTrackingAvailable: Bool,
+                         weakness: Float = 0) {
         time += deltaTime
         let steering = steering(left: left, right: right, isHandTrackingAvailable: isHandTrackingAvailable)
         let amount = 1 - exp(-deltaTime * Settings.responsiveness)
@@ -121,8 +126,10 @@ struct DragonRide {
         turnRate += (-steering.turn * Settings.maxTurnRate - turnRate) * amount
         yaw += turnRate * deltaTime
         pitch += (steering.climb * Settings.maxPitch - pitch) * amount
-        bank += (steering.turn * Settings.maxBank - bank) * amount
-        let targetSpeed = Settings.cruiseSpeed + steering.boost * (Settings.boostSpeed - Settings.cruiseSpeed)
+        let sway = Settings.weakSway * weakness * sin(time * 3)
+        bank += (steering.turn * Settings.maxBank + sway - bank) * amount
+        let targetSpeed = (Settings.cruiseSpeed + steering.boost * (Settings.boostSpeed - Settings.cruiseSpeed))
+            * (1 - Settings.weakSlowdown * weakness)
         speed += (targetSpeed - speed) * amount
         position += forward * speed * deltaTime
     }

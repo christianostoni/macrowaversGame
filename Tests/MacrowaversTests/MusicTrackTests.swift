@@ -24,7 +24,6 @@ struct MusicTrackTests {
         for step in [StoryStep.gratitude, .safety, .ride] {
             #expect(MusicTrack.playing(story: step, dragon: .free) == .farewell)
         }
-        #expect(MusicTrack.playing(story: .ride, dragon: .gone) == .farewell)
         #expect(!MusicTrack.farewell.loops)
     }
 }

@@ -5,8 +5,9 @@ import UIKit
 
 /// The ride on the dragon's back (`DragonRide`), drawn around the player: the dragon under them, a glow that brings
 /// it out of the dark into the sky (an airbrushed dome, white clouds shaped like the tree's canopy, specks of air
-/// rushing past), the rush of air. Then chapter II (`DragonFeast`): fruit float among the clouds and the dragon eats
-/// the ones it likes, spitting out the bananas.
+/// rushing past), the rush of air. Then chapter II (`DragonFeast`, drawn by `DragonFeastScene.swift`): waves of fruit
+/// float among the clouds; the dragon eats the ones it likes, spits out the bananas, falls sick on the poisoned ones,
+/// and breathes fire when the player snaps their fingers.
 /// The player never moves: `root` stays at their eyes and the sky moves around it.
 struct DragonRideComponent: Component {
     var ride = DragonRide()
@@ -29,10 +30,19 @@ struct DragonRideComponent: Component {
     let beacon: Entity
     /// The dragon's mouth (in the dragon's holder): where the fruit go and its sounds come from.
     let mouth: Entity
-    /// One model per fruit kind, cloned for the fruit in the sky.
+    /// One model per fruit kind, cloned for the fruit in the sky, and its poisoned look (dark, in a sickly haze).
     let fruitModels: [FruitKind: Entity]
-    /// The fruit drawn in the sky, by `DragonFeast.Plant.id`, with the kind each one shows.
-    var fruit: [Int: (entity: Entity, kind: FruitKind)] = [:]
+    let poisonedModels: [FruitKind: Entity]
+    /// The fruit drawn in the sky, by `DragonFeast.Plant.id`, with the look each one shows.
+    var fruit: [Int: DrawnFruit] = [:]
+    /// The long breath of fire, in ride space at the dragon's mouth, and the puffs of embers where a fruit burns
+    /// (in sky space, used in turn).
+    let fireBreath: Entity
+    let embers: [Entity]
+    var nextEmber = 0
+    /// The snap that breathes fire, and the steering kept still while a hand makes it.
+    var snap = SnapDetector(settings: .whileSteering)
+    var steeringHold = SteeringHold()
     let sounds: [DragonRideSystem.Sound: AudioFileResource]
     let wind: AudioFileResource?
     var windController: AudioPlaybackController?
@@ -75,6 +85,11 @@ struct DragonRideSystem: System {
         case pineappleChop = "PineappleChop"
         case pomegranateBurst = "PomegranateBurst"
         case growl = "DragonGrowl"
+        /// The breath of fire, a poisoned fruit, the dragon exhausted, a wave cleared.
+        case roar = "DragonRoar"
+        case squish = "WormSquish"
+        case rumble = "DragonRumble"
+        case chime = "ElixirBrewed"
 
         static func eating(_ fruit: FruitKind) -> Sound {
             switch fruit {
@@ -107,18 +122,20 @@ struct DragonRideSystem: System {
                 Self.start(&state, root: root)
             }
 
-            let hands = state.hands.samples
-            let left = hands[.left].map { root.convert(position: $0.knuckle, from: nil) }
-            let right = hands[.right].map { root.convert(position: $0.knuckle, from: nil) }
+            let snapped = Self.readSnap(&state)
+            let (left, right) = Self.steeringHands(&state, root: root, snapped: snapped)
             state.ride.holdHorns(left: left, right: right)
             state.ride.update(deltaTime: deltaTime, left: left, right: right,
-                              isHandTrackingAvailable: state.hands.isTracking)
+                              isHandTrackingAvailable: state.hands.isTracking, weakness: state.feast?.weakness ?? 0)
+            // A snap, or the tally's fire button (without hand tracking).
+            if state.story.takeFireRequest() || !snapped.isEmpty { Self.breatheFire(&state) }
 
             Self.moveSky(&state)
             let mouth = Self.drawDragon(state, deltaTime: deltaTime)
             Self.drawArrival(state)
             Self.followStory(&state)
             Self.feed(&state, mouth: mouth, deltaTime: deltaTime)
+            Self.drawFire(state, root: root)
             if let controller = state.windController {
                 controller.gain = Self.windGain(state.ride)
             }
@@ -186,7 +203,8 @@ struct DragonRideSystem: System {
                                 restlessness: 0, strain: 0, time: ride.time, lookTarget: nil, viewer: .zero,
                                 flight: FlightFrame(maneuver: .cruise, progress: 0,
                                                     velocity: SIMD3(0, 0, -ride.speed / scale),
-                                                    bite: feast?.appetite ?? 0, disgust: feast?.disgust ?? 0))
+                                                    bite: feast?.appetite ?? 0, disgust: feast?.disgust ?? 0,
+                                                    sickness: feast?.sickness ?? 0, fire: feast?.fire ?? 0))
         state.rig.update(frame, deltaTime: deltaTime)
         let snoutDirection = body.count > 1 ? simd_normalize(body[0] - body[1]) : SIMD3(0, 0, -1)
         let mouth = body[0] + snoutDirection * snout
@@ -223,58 +241,6 @@ struct DragonRideSystem: System {
         if state.story.step == .feast, state.feast == nil {
             state.feast = DragonFeast(ride: state.ride, using: &state.random)
         }
-    }
-
-    /// The fruit in the sky: floating, swallowed, or spat out.
-    @MainActor
-    private static func feed(_ state: inout DragonRideComponent, mouth: SIMD3<Float>, deltaTime: Float) {
-        guard var feast = state.feast else { return }
-        let events = feast.update(deltaTime: deltaTime, mouth: state.ride.skyFromRide(mouth), ride: state.ride,
-                                  using: &state.random)
-        state.feast = feast
-        for event in events {
-            switch event {
-            case .ate(let fruit):
-                state.story.dragonAte(fruit)
-                play(.eating(fruit), from: state.mouth, sounds: state.sounds)
-            case .refused(let fruit):
-                state.story.dragonAte(fruit)
-                play(.growl, from: state.mouth, sounds: state.sounds)
-            }
-        }
-        draw(feast, in: &state)
-    }
-
-    @MainActor
-    private static func draw(_ feast: DragonFeast, in state: inout DragonRideComponent) {
-        for plant in feast.plants {
-            var drawn = state.fruit[plant.id]
-            if drawn?.kind != plant.kind {
-                drawn?.entity.removeFromParent()
-                guard let model = state.fruitModels[plant.kind]?.clone(recursive: true) else { continue }
-                state.sky.addChild(model)
-                drawn = (model, plant.kind)
-                state.fruit[plant.id] = drawn
-            }
-            guard let entity = drawn?.entity else { continue }
-            entity.position = plant.position
-            entity.orientation = simd_quatf(angle: plant.spin, axis: simd_normalize(SIMD3(0.3, 1, 0.2)))
-            switch plant.state {
-            case .floating:
-                entity.scale = SIMD3(repeating: fruitSize)
-                entity.components.remove(OpacityComponent.self)
-            case .eaten(let progress):
-                entity.scale = SIMD3(repeating: fruitSize * (1 - progress))
-            case .spat(let progress, _):
-                entity.components.set(OpacityComponent(opacity: 1 - smoothstep(0.5, 1, progress)))
-            }
-        }
-    }
-
-    @MainActor
-    private static func play(_ sound: Sound, from entity: Entity, sounds: [Sound: AudioFileResource]) {
-        guard let resource = sounds[sound] else { return }
-        entity.playAudio(resource)
     }
 
     /// The rush of air (dB): grows from silence during the arrival, louder the faster the dragon flies.
@@ -366,10 +332,17 @@ enum DragonRideSceneBuilder {
         for sound in DragonRideSystem.Sound.allCases {
             sounds[sound] = await GameAudio.load(sound.rawValue)
         }
+        let fireBreath = makeFireBreath()
+        root.addChild(fireBreath)
+        let embers = (0..<4).map { _ in makeEmbers() }
+        embers.forEach { sky.addChild($0) }
+        let fruitModels = await makeFruitModels()
         root.components.set(DragonRideComponent(story: story, viewer: viewer, hands: hands, rig: rig, config: config,
                                                 dragon: dragon, sky: sky, specks: specks, clouds: clouds, dome: dome,
-                                                beacon: beacon, mouth: mouth, fruitModels: await makeFruitModels(),
-                                                sounds: sounds, wind: await GameAudio.load("RideWind", loops: true)))
+                                                beacon: beacon, mouth: mouth, fruitModels: fruitModels,
+                                                poisonedModels: poisoned(fruitModels), fireBreath: fireBreath,
+                                                embers: embers, sounds: sounds,
+                                                wind: await GameAudio.load("RideWind", loops: true)))
         return root
     }
 

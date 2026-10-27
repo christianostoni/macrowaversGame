@@ -1,8 +1,8 @@
 import Foundation
 import simd
 
-/// The flying dragon: captive around the tree, coming to the player, settling into the knot and,
-/// once free, before flying away.
+/// The flying dragon: captive around the tree, stopping for the elixir, coming to the player and settling into
+/// the knot.
 /// Works in the immersive scene's space (metres, origin at the player's feet, y up).
 ///
 /// The body uses "follow the leader": the head flies and leaves a trail, each vertebra sits on the trail
@@ -13,7 +13,7 @@ final class DragonFlight {
     private(set) var segmentLength: Float
     private(set) var positions: [SIMD3<Float>]
     private(set) var velocity: SIMD3<Float>
-    private(set) var maneuver = Maneuver.takeoff
+    private(set) var maneuver = Maneuver.orbit
     private(set) var maneuverProgress: Float = 0
     /// Finished the last manoeuvre (`Maneuver.isFinal`): the body stays still.
     private(set) var isFinished = false
@@ -25,24 +25,11 @@ final class DragonFlight {
     /// Trail of the head: from the oldest point (index 0) to the current head (last).
     private var trail: [SIMD3<Float>]
     private var elapsed: Float = 0
-    private var orbitDirection: Float = 1
-    private var orbitAngle: Float = 0
-    private var maneuverOrigin = SIMD3<Float>.zero
-    private var maneuverForward = SIMD3<Float>(0, 0, -1)
-    /// Where the player is looking (horizontal, unit length), updated every frame.
-    private var viewerForward = SIMD3<Float>(0, 0, -1)
-    /// Centre (angle around the player) and phase of the sweep of a cruise in front of them (`Settings.frontArc`).
-    private var arcCenter: Float = 0
-    private var arcPhase: Float = 0
-    /// Where it hovers: eased towards the spot in front of the player's eyes.
-    private var hoverSpot = SIMD3<Float>.zero
-    private var random = SystemRandomNumberGenerator()
-    /// Manoeuvres already decided (script): once they are done, the dragon picks by itself.
+    /// Manoeuvres still to run (script); a manoeuvre left without a next one starts over.
     private var plan: [Maneuver] = []
     /// Angle of the head on `orbit`.
     private var pathAngle: Float = 0
     private var approachSpot = SIMD3<Float>.zero
-    private var departDirection = SIMD3<Float>(0, 0, -1)
     /// Path of the head while it settles, and how much of it is done.
     private var landingPath: [SIMD3<Float>] = []
     private var landingLength: Float = 0
@@ -52,21 +39,17 @@ final class DragonFlight {
 
     /// `start`: current body positions (index 0 = head) in scene space.
     /// `plan`: manoeuvres to run in order (the first starts at once).
-    /// `viewer`, `viewerForward`: the player's eyes and where they look, when known.
-    init(start: [SIMD3<Float>], segmentLength: Float, settings: Settings = Settings(),
-         plan: [Maneuver] = [.takeoff], orbit: OrbitPath? = nil,
-         viewer: SIMD3<Float>? = nil, viewerForward: SIMD3<Float> = SIMD3(0, 0, -1)) {
+    /// `viewer`: the player's eyes, when known.
+    init(start: [SIMD3<Float>], segmentLength: Float, settings: Settings = Settings(), plan: [Maneuver],
+         orbit: OrbitPath? = nil, viewer: SIMD3<Float>? = nil) {
         self.settings = settings
         self.segmentLength = segmentLength
         self.orbit = orbit
         positions = start
-        // The initial trail is the body itself, from tail to head: on take-off the body "unrolls".
+        // The initial trail is the body itself, from tail to head: as the head moves on the body "unrolls".
         trail = start.reversed()
-        let forward = simd_normalize(start[0] - start[1])
-        velocity = SIMD3(forward.x, 0.6, forward.z) * 0.3
-        orbitDirection = Bool.random(using: &random) ? 1 : -1
-        lookAhead(viewerForward)
-        perform(plan.isEmpty ? [.takeoff] : plan, viewer: viewer ?? start[0])
+        velocity = simd_normalize(start[0] - start[1]) * 0.3
+        perform(plan, viewer: viewer ?? start[0])
     }
 
     /// Captive on the island: the body is already wrapped around the tree along the path.
@@ -105,12 +88,10 @@ final class DragonFlight {
         begin(first, viewer: viewer)
     }
 
-    /// `viewerForward`: where the player is looking (the farewell stays in front of them).
-    func update(deltaTime: Float, viewer: SIMD3<Float>, viewerForward: SIMD3<Float> = SIMD3(0, 0, -1)) {
+    func update(deltaTime: Float, viewer: SIMD3<Float>) {
         guard !isFinished else { return }
         let dt = min(deltaTime, 1.0 / 30.0)
         guard dt > 0 else { return }
-        lookAhead(viewerForward)
         elapsed += dt
         maneuverProgress = maneuver == .land ? landingProgress : min(elapsed / maneuver.duration, 1)
         if maneuverProgress >= 1 {
@@ -118,7 +99,7 @@ final class DragonFlight {
                 isFinished = true
                 return
             }
-            begin(plan.isEmpty ? nextManeuver() : plan.removeFirst(), viewer: viewer)
+            begin(plan.isEmpty ? maneuver : plan.removeFirst(), viewer: viewer)
         }
 
         let head: SIMD3<Float>
@@ -130,73 +111,17 @@ final class DragonFlight {
         case .land:
             head = advanceOnLandingPath(dt: dt)
             velocity = (head - positions[0]) / dt
-        default:
-            head = flyFreely(viewer: viewer, dt: dt)
+        case .approach:
+            steer(toward: approachTarget, viewer: viewer, dt: dt)
+            head = positions[0] + velocity * dt
+        case .cruise:
+            // Drawn on the ride only: never flown here.
+            head = positions[0]
         }
 
         if simd_distance(head, trail.last!) > segmentLength * 0.1 { trail.append(head) }
         positions = bodyAlongTrail(head: head)
         trimTrail()
-        // Departing, it is over once it has faded out (a couple of metres away, before any wall or ceiling).
-        if maneuver == .depart && plan.isEmpty && departFade >= 1 { isFinished = true }
-    }
-
-    /// Steered flight (every manoeuvre but the paths): towards the manoeuvre's target, inside the room.
-    private func flyFreely(viewer: SIMD3<Float>, dt: Float) -> SIMD3<Float> {
-        if maneuver == .hover {
-            // Follows the player's gaze slowly: it settles in front of them without chasing every head turn.
-            hoverSpot += (hoverTarget(viewer: viewer) - hoverSpot) * (1 - exp(-dt * 1.5))
-        }
-        steer(toward: target(viewer: viewer), viewer: viewer, dt: dt)
-        var head = positions[0] + velocity * dt
-        guard maneuver.staysInRoom else { return head }
-        // Eased back inside the flight volume: it can never wander out of the room.
-        let inside = confined(head, viewer: viewer)
-        if inside != head {
-            head += (inside - head) * (1 - exp(-dt * 6))
-            velocity = (head - positions[0]) / dt
-        }
-        return head
-    }
-
-    /// While departing: 0 = fully visible, 1 = faded out (`Settings.departFade`, by distance travelled).
-    var departFade: Float {
-        guard maneuver == .depart else { return 0 }
-        let range = settings.departFade
-        let travelled = simd_distance(positions[0], maneuverOrigin)
-        return max(0, min(1, (travelled - range.lowerBound) / (range.upperBound - range.lowerBound)))
-    }
-
-    private func lookAhead(_ forward: SIMD3<Float>) {
-        let flat = SIMD3(forward.x, 0, forward.z)
-        if simd_length(flat) > 1e-3 { viewerForward = simd_normalize(flat) }
-    }
-
-    /// Spot in front of the player's eyes, at their height, where it hovers.
-    private func hoverTarget(viewer: SIMD3<Float>) -> SIMD3<Float> {
-        viewer + viewerForward * settings.hoverDistance
-    }
-
-    /// Closest point inside the flight volume: between the personal space and `orbitRadius` (plus the margin)
-    /// around the player, within `altitude` (plus the margin).
-    private func confined(_ point: SIMD3<Float>, viewer: SIMD3<Float>) -> SIMD3<Float> {
-        var result = point
-        let margin = settings.boundsMargin
-        result.y = min(max(result.y, settings.altitude.lowerBound - margin), settings.altitude.upperBound + margin)
-        var horizontal = SIMD3(result.x - viewer.x, 0, result.z - viewer.z)
-        let distance = simd_length(horizontal)
-        let farthest = settings.orbitRadius.upperBound + margin
-        if distance > farthest {
-            horizontal *= farthest / distance
-            result.x = viewer.x + horizontal.x
-            result.z = viewer.z + horizontal.z
-        }
-        let fromViewer = result - viewer
-        let viewerDistance = simd_length(fromViewer)
-        if viewerDistance < settings.personalSpace, viewerDistance > 1e-4 {
-            result = viewer + fromViewer / viewerDistance * settings.personalSpace
-        }
-        return result
     }
 
     // MARK: - Manoeuvres
@@ -205,17 +130,9 @@ final class DragonFlight {
         maneuver = next
         elapsed = 0
         maneuverProgress = 0
-        maneuverOrigin = positions[0]
-        var forward = velocity
-        forward.y = 0
-        maneuverForward = simd_length(forward) > 1e-4 ? simd_normalize(forward) : SIMD3(0, 0, -1)
         let offset = positions[0] - viewer
-        orbitAngle = atan2(offset.z, offset.x)
-        if next == .cruise && Float.random(in: 0...1, using: &random) < 0.3 { orbitDirection *= -1 }
 
         switch next {
-        case .takeoff, .cruise, .hover:
-            beginInRoom(next, viewer: viewer)
         case .orbit:
             if let orbit { pathAngle = orbit.angle(closestTo: positions[0]) }
         case .approach:
@@ -226,118 +143,23 @@ final class DragonFlight {
             approachSpot.y = viewer.y - 0.05
         case .land:
             beginLanding()
-        case .depart:
-            // Away from the player, beyond where it is.
-            departDirection = simd_length(SIMD3(offset.x, 0, offset.z)) > 1e-4
-                ? simd_normalize(SIMD3(offset.x, 0, offset.z)) : SIMD3(0, 0, -1)
-        default:
+        case .hold, .cruise:
             break
         }
     }
 
-    /// Take-off, cruise and hover start relative to the player: away from them, in front of them.
-    private func beginInRoom(_ next: Maneuver, viewer: SIMD3<Float>) {
-        let away = SIMD3(positions[0].x - viewer.x, 0, positions[0].z - viewer.z)
-        switch next {
-        case .takeoff:
-            // Climbs away from the player, never towards them.
-            if simd_length(away) > 0.05 { maneuverForward = simd_normalize(away) }
-        case .cruise:
-            // In front of the player: the sweep starts where the dragon is, in the direction it is turning.
-            arcCenter = atan2(viewerForward.z, viewerForward.x)
-            if let arc = settings.frontArc, arc > 0 {
-                let relative = atan2(sin(orbitAngle - arcCenter), cos(orbitAngle - arcCenter))
-                let start = asin(max(-1, min(1, relative / arc)))
-                arcPhase = orbitDirection > 0 ? start : .pi - start
-            }
-        default:
-            hoverSpot = hoverTarget(viewer: viewer)
-        }
+    /// Arriving in front of the player, it sways gently.
+    private var approachTarget: SIMD3<Float> {
+        approachSpot + SIMD3(0.06 * sin(elapsed * 1.7), 0.04 * sin(elapsed * 2.3), 0)
     }
 
-    /// "A life of its own": picks the next manoeuvre at random, weighted, never two dives or roars in a row.
-    private func nextManeuver() -> Maneuver {
-        let options: [(Maneuver, Float)] = switch maneuver {
-        case .takeoff: [(.cruise, 1)]
-        case .cruise: [(.swoop, 0.35), (.hover, 0.3), (.loop, 0.2), (.cruise, 0.15)]
-        case .swoop, .hover, .loop, .approach, .land, .depart: [(.cruise, 1)]
-        case .orbit: [(.orbit, 1)]
-        case .hold: [(.hold, 1)]
-        }
-        var roll = Float.random(in: 0..<options.reduce(0) { $0 + $1.1 }, using: &random)
-        for (option, weight) in options {
-            roll -= weight
-            if roll < 0 { return option }
-        }
-        return .cruise
-    }
-
-    /// Point the head flies to, depending on the manoeuvre.
-    private func target(viewer: SIMD3<Float>) -> SIMD3<Float> {
-        let progress = maneuverProgress
-        let midRadius = (settings.orbitRadius.lowerBound + settings.orbitRadius.upperBound) / 2
-        let midAltitude = (settings.altitude.lowerBound + settings.altitude.upperBound) / 2
-
-        switch maneuver {
-        case .takeoff:
-            // Climbs almost vertically, then moves away a little.
-            return maneuverOrigin + SIMD3(0, 0.9, 0) + maneuverForward * (0.6 * progress)
-        case .cruise:
-            // Circle around the player (or a sweep in front of them), with breathing radius and altitude.
-            let breathing = min(0.3, (settings.orbitRadius.upperBound - settings.orbitRadius.lowerBound) / 2)
-            let rising = min(0.45, (settings.altitude.upperBound - settings.altitude.lowerBound) / 2)
-            let radius = midRadius + breathing * sin(elapsed * 0.7)
-            let height = midAltitude + rising * sin(elapsed * 0.9)
-            if let arc = settings.frontArc, arc > 0 {
-                // Side to side in front of the player, never behind them: at most `speed` along the arc.
-                let rate = settings.speed / (midRadius * arc)
-                let angle = arcCenter + arc * sin(arcPhase + elapsed * rate)
-                return SIMD3(viewer.x + radius * cos(angle), height, viewer.z + radius * sin(angle))
-            }
-            orbitAngle += orbitDirection * 0.012
-            return SIMD3(viewer.x + radius * cos(orbitAngle + orbitDirection * 0.6), height,
-                         viewer.z + radius * sin(orbitAngle + orbitDirection * 0.6))
-        case .swoop:
-            // First dives beside the player, then climbs on the other side.
-            let toViewer = SIMD3(viewer.x - maneuverOrigin.x, 0, viewer.z - maneuverOrigin.z)
-            let across = simd_length(toViewer) > 1e-4 ? simd_normalize(toViewer) : maneuverForward
-            let side = SIMD3(-across.z, 0, across.x) * orbitDirection
-            let low = SIMD3(viewer.x, settings.altitude.lowerBound, viewer.z) + side * (settings.personalSpace + 0.5)
-            let far = low + across * 1.4 + SIMD3(0, 0.8, 0)
-            return progress < 0.5 ? low : far
-        case .hover:
-            // Straight in front of the player's eyes, at their height, swaying gently from side to side.
-            let side = SIMD3(-viewerForward.z, 0, viewerForward.x)
-            return hoverSpot + side * (0.1 * sin(elapsed * 2)) + SIMD3(0, 0.06 * sin(elapsed * 3), 0)
-        case .loop:
-            // Vertical circle in the plane (forward, up).
-            let angle = progress * 2 * .pi
-            let radius: Float = 0.45
-            let center = maneuverOrigin + maneuverForward * 0.6 + SIMD3(0, radius, 0)
-            return center + maneuverForward * (radius * sin(angle) + 0.5) - SIMD3(0, radius * cos(angle), 0)
-        case .approach:
-            // Arrives and hovers, swaying gently.
-            return approachSpot + SIMD3(0.06 * sin(elapsed * 1.7), 0.04 * sin(elapsed * 2.3), 0)
-        case .depart:
-            // A target running ahead and gently up: away from the player, fading before the ceiling.
-            return positions[0] + (departDirection + SIMD3(0, 0.35, 0)) * 2
-        case .orbit, .hold, .land:
-            // They follow a path, they do not steer.
-            return positions[0]
-        }
-    }
-
+    /// Steers the head towards `target`, slowing down almost to a stop as it gets there, and keeps it out of the
+    /// player's personal space.
     private func steer(toward target: SIMD3<Float>, viewer: SIMD3<Float>, dt: Float) {
         let head = positions[0]
         var desired = target - head
         let distance = simd_length(desired)
-        let speed: Float = switch maneuver {
-        // Hovering, it slows down almost to a stop.
-        case .hover, .approach: min(settings.speed, distance * 1.5) + 0.08
-        // Leaving, it speeds up.
-        case .depart: settings.speed * (1 + 2.5 * maneuverProgress)
-        default: settings.speed
-        }
+        let speed = min(settings.speed, distance * 1.5) + 0.08
         desired = distance > 1e-4 ? desired / distance * speed : .zero
 
         // Personal space: pushed away from the player's head.
@@ -345,16 +167,6 @@ final class DragonFlight {
         let viewerDistance = simd_length(fromViewer)
         if viewerDistance < settings.personalSpace + 0.2, viewerDistance > 1e-4 {
             desired += fromViewer / viewerDistance * settings.speed * 2
-        }
-        if maneuver.staysInRoom {
-            // Stays between the floor and the ceiling.
-            if head.y < settings.altitude.lowerBound - 0.1 { desired.y += settings.speed }
-            if head.y > settings.altitude.upperBound + 0.2 { desired.y -= settings.speed }
-            // Does not go too far (walls of the room).
-            let horizontal = SIMD3(fromViewer.x, 0, fromViewer.z)
-            if simd_length(horizontal) > settings.orbitRadius.upperBound + 0.4 {
-                desired -= simd_normalize(horizontal) * settings.speed
-            }
         }
 
         velocity += (desired - velocity) * min(1, dt * settings.steering)

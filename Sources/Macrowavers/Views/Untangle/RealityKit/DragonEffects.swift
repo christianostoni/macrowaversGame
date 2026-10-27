@@ -14,7 +14,8 @@ import AppKit
 final class DragonEffects {
     nonisolated static let soundNames = ["DragonGrowl", "DragonRoar", "DragonRumble", "DragonWhoosh"]
 
-    private let smoke = Entity()
+    /// One puff of smoke per nostril.
+    private var smokes: [Entity] = []
     private let fire = Entity()
     private weak var voiceSource: Entity?
     private var sounds: [String: AudioFileResource] = [:]
@@ -25,22 +26,26 @@ final class DragonEffects {
     private var fireLevel = -1
 
     init() {
-        smoke.name = "NostrilSmoke"
-        smoke.components.set(Self.smokeEmitter())
         fire.name = "FireBreath"
         fire.components.set(Self.fireEmitter())
     }
 
-    /// `nostrils` and `mouth` are where smoke and fire come out (children of the head). `voice` is the head
-    /// itself, snout towards +Z: the sounds come from it and the smoke and fire leave along its snout.
-    func attach(nostrils: Entity, mouth: Entity, voice: Entity) {
-        nostrils.addChild(smoke)
-        mouth.addChild(fire)
-        // The asset's markers inherit the export's Z-up → Y-up rotation: their own +Z points out of the top of
-        // the head. The emitters face the snout instead, whatever the axes of the markers.
+    /// `nostrils` (one or two) and `mouth` are where smoke and fire come out (children of the head). `voice` is the
+    /// head itself, snout towards +Z: the sounds come from it and the smoke and fire leave along its snout (a mouth
+    /// that turns, as the stone dragon's does with its jaw, turns the fire with it).
+    func attach(nostrils: [Entity], mouth: Entity, voice: Entity) {
         let snout = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
-        smoke.setOrientation(snout, relativeTo: voice)
-        fire.setOrientation(snout, relativeTo: voice)
+        smokes = nostrils.map { nostril in
+            let smoke = Entity()
+            smoke.name = "NostrilSmoke"
+            smoke.components.set(Self.smokeEmitter())
+            nostril.addChild(smoke)
+            // Markers may carry the export's Z-up → Y-up rotation: the emitters face the snout whatever their axes.
+            smoke.setOrientation(snout, relativeTo: voice)
+            return smoke
+        }
+        mouth.addChild(fire)
+        fire.setOrientation(snout, relativeTo: mouth)
         voiceSource = voice
         voice.components.set(SpatialAudioComponent(gain: -6))
         // In the background: read here, the files held up the frame that builds the dragon.
@@ -52,7 +57,9 @@ final class DragonEffects {
         let newSmoke = Int((pose.smoke * 10).rounded())
         if newSmoke != smokeLevel {
             smokeLevel = newSmoke
-            smoke.components[ParticleEmitterComponent.self]?.mainEmitter.birthRate = Float(newSmoke) * 8
+            for smoke in smokes {
+                smoke.components[ParticleEmitterComponent.self]?.mainEmitter.birthRate = Float(newSmoke) * 8
+            }
         }
         let newFire = Int((pose.fire * 10).rounded())
         if newFire != fireLevel {
@@ -90,11 +97,7 @@ final class DragonEffects {
     }
 
     private static func sound(for maneuver: DragonFlight.Maneuver?) -> String? {
-        switch maneuver {
-        case .takeoff, .swoop, .approach: "DragonWhoosh"
-        case .hover, .depart: "DragonRoar"
-        default: nil
-        }
+        maneuver == .approach ? "DragonWhoosh" : nil
     }
 
     private func play(_ name: String) {

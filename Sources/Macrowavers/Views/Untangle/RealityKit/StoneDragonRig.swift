@@ -6,7 +6,8 @@ import simd
 /// chain of separate stones. Used automatically when the asset is in the bundle.
 ///
 /// - `Head`: origin at the face's centre, snout towards +Z, +Y up. `JawHinge` turns around its +X to open the mouth
-///   (the lower jaw hangs from it); `mouth` and `nostrils` mark where fire and smoke come out.
+///   (the lower jaw hangs from it). Fire and smoke come out where `DragonSnout` measures the mouth and the nostrils
+///   on the head's meshes (the asset's `mouth` and `nostrils` markers, off the snout's centre, are the fallback).
 /// - `Stone_00` (behind the head) … `Stone_NN` (the tail): each with its origin at its centre, +Z along the body
 ///   towards the tail, +Y up. Their rest distances from the head place them along the simulated body
 ///   (`StoneDragonLayout`).
@@ -51,6 +52,9 @@ final class StoneDragonRig: DragonRig {
     private let jawHinge: Entity?
     private let jawRest: simd_quatf
     private let effects = DragonEffects()
+    /// The snout measured on the head's meshes, and the mouth it moves with the jaw (fire leaves from it).
+    private let snout: DragonSnout?
+    let mouth: Entity?
     /// Colliders the holders are attached to (for hover and grabs); empty = holders are children of `entity`.
     private var colliders: [Entity] = []
     /// Each stone's last "up": kept when the body points straight up or down, where world up says nothing.
@@ -107,15 +111,40 @@ final class StoneDragonRig: DragonRig {
         ups = Array(repeating: SIMD3(0, 1, 0), count: stones.count)
         self.jawHinge = jawHinge
         jawRest = jawHinge?.orientation ?? simd_quatf(angle: 0, axis: SIMD3(1, 0, 0))
+        // The snout before anything else uses `self`: every stored property must be set first.
+        let snout = Self.measureSnout(head: head, jawHinge: jawHinge)
+        self.snout = snout
+        let nostrils = snout.map { $0.nostrils.map { Self.marker(in: head, at: $0) } }
+            ?? [head.findEntity(named: "nostrils") ?? Self.marker(in: head, at: SIMD3(0, 0.01, 0.15))]
+        let mouth = snout.map { Self.marker(in: head, at: $0.mouth(jawAngle: 0)) }
+            ?? head.findEntity(named: "mouth") ?? Self.marker(in: head, at: SIMD3(0, -0.03, 0.14))
+        self.mouth = mouth
 
         entity.name = "StoneDragon"
         holders.forEach { entity.addChild($0) }
         headAnchor.name = "StoneDragonHead"
         headAnchor.addChild(head)
         entity.addChild(headAnchor)
-        let nostrils = head.findEntity(named: "nostrils") ?? Self.marker(in: head, at: SIMD3(0, 0.01, 0.15))
-        let mouth = head.findEntity(named: "mouth") ?? Self.marker(in: head, at: SIMD3(0, -0.03, 0.14))
         effects.attach(nostrils: nostrils, mouth: mouth, voice: headAnchor)
+    }
+
+    /// The snout from the face's and the jaw's vertices (head space, mouth closed). nil without them.
+    private static func measureSnout(head: Entity, jawHinge: Entity?) -> DragonSnout? {
+        guard let face = head.findEntity(named: "Face"), let jawHinge else { return nil }
+        return DragonSnout(face: points(of: face, in: head), jaw: points(of: jawHinge, in: head),
+                           hinge: jawHinge.position(relativeTo: head))
+    }
+
+    /// Every vertex of the meshes under `entity`, in `space`.
+    private static func points(of entity: Entity, in space: Entity) -> [SIMD3<Float>] {
+        var result: [SIMD3<Float>] = []
+        if let model = entity.components[ModelComponent.self] {
+            for part in model.mesh.contents.models.flatMap(\.parts) {
+                result += part.positions.elements.map { space.convert(position: $0, from: entity) }
+            }
+        }
+        for child in entity.children { result += points(of: child, in: space) }
+        return result
     }
 
     /// Each stone hangs from the collider of its node, the head from node 0's: looking at one lights up exactly it.
@@ -136,7 +165,13 @@ final class StoneDragonRig: DragonRig {
         // When attached to the collider, the position is relative to it (which may already be in the hand).
         headAnchor.position = colliders.isEmpty ? visual[0] : visual[0] - colliders[0].position
         headAnchor.orientation = pose.headOrientation
-        jawHinge?.orientation = jawRest * simd_quatf(angle: pose.jawOpen * Asset.jawAngle, axis: SIMD3(1, 0, 0))
+        let jawAngle = pose.jawOpen * Asset.jawAngle
+        jawHinge?.orientation = jawRest * simd_quatf(angle: jawAngle, axis: SIMD3(1, 0, 0))
+        // The fire leaves from the middle of the opening, however wide.
+        if let snout, let mouth {
+            mouth.position = snout.mouth(jawAngle: jawAngle)
+            mouth.orientation = snout.fireTilt(jawAngle: jawAngle)
+        }
         effects.update(pose: pose, frame: frame)
 
         let curve = DragonCurve.smoothed(visual)

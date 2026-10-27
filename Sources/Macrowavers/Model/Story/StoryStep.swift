@@ -2,7 +2,7 @@ import Foundation
 
 /// The storytelling screens around the game, in order: the start, the narrator's words before the island
 /// appears, the game itself, the dragon's words once it is free, then the ride on its back: chapter II, where the
-/// player feeds the dragon in the sky.
+/// player feeds the dragon in the sky, wave after wave, until it is full and the story ends.
 enum StoryStep: Equatable, CaseIterable {
     /// Screen 1: a lone "Start" button in the room (the launch window).
     case start
@@ -21,8 +21,13 @@ enum StoryStep: Equatable, CaseIterable {
     case ride
     /// Over the clouds: chapter II's title and its goal.
     case secondChapter
-    /// Fruit float in the sky: the player steers the dragon into the ones it likes (not the bananas).
+    /// Fruit float in the sky, wave after wave: the player steers the dragon into the ones it likes (not the
+    /// bananas, not the poisoned ones: fire burns those away) (`DragonFeast`).
     case feast
+    /// The dragon is full: the story's last page.
+    case finale
+    /// The player closed the story: the ride's space closes and the launch window comes back.
+    case ended
 
     /// Where a page is shown.
     enum Anchor: Equatable {
@@ -51,7 +56,7 @@ enum StoryStep: Equatable, CaseIterable {
     /// The text of the screens shown inside the immersive space (`start` is the launch window's button).
     var page: Page? {
         switch self {
-        case .start, .adventure, .ride, .feast:
+        case .start, .adventure, .ride, .feast, .ended:
             nil
         case .searching:
             Page(title: "What are you searching for?", lines: ["I can see you are eager to find…"],
@@ -68,6 +73,10 @@ enum StoryStep: Equatable, CaseIterable {
         case .secondChapter:
             Page(title: "Chapter II", lines: ["Feed the dragon the right plants.", "It doesn't like bananas!"],
                  anchor: .viewer, advance: .tap)
+        case .finale:
+            Page(title: "Home at last", lines: ["The dragon is full, and the curse is gone.",
+                                                "Thank you for flying with it."],
+                 anchor: .viewer, advance: .answer("The End"))
         }
     }
 
@@ -78,7 +87,7 @@ enum StoryStep: Equatable, CaseIterable {
     var revealsWorld: Bool {
         switch self {
         case .start, .searching, .chapter: false
-        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast: true
+        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast, .finale, .ended: true
         }
     }
 
@@ -88,7 +97,7 @@ enum StoryStep: Equatable, CaseIterable {
     /// The room is gone: the player is in the sky (full immersion), on the dragon's back.
     var isFullyImmersed: Bool {
         switch self {
-        case .ride, .secondChapter, .feast: true
+        case .ride, .secondChapter, .feast, .finale, .ended: true
         case .start, .searching, .chapter, .adventure, .gratitude, .safety: false
         }
     }

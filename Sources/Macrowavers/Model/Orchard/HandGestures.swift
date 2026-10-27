@@ -158,6 +158,10 @@ struct SnapDetector {
         var minimumSpeed: Float = 0.5
         /// After a snap the same hand cannot snap again for this long (s).
         var cooldown: TimeInterval = 0.6
+        /// When set, the wrist may move at most this far between the loaded and the released pose (m): a snap
+        /// moves the fingers, not the hand. On the ride the hands steer by moving: a quick turn of the horns that
+        /// happens to open a curled hand is not a snap.
+        var maxWristTravel: Float?
     }
 
     /// What the last released pose measured against its loaded pose (for tuning on the headset).
@@ -172,6 +176,7 @@ struct SnapDetector {
         var time: TimeInterval
         var gap: Float
         var reach: Float
+        var wrist: SIMD3<Float>
     }
 
     private struct HandState {
@@ -196,6 +201,11 @@ struct SnapDetector {
     /// A hand holds the loaded pose right now: the hologram hand (`SnapHint`) brightens.
     var isLoaded: Bool { hands.values.contains { $0.isLoadedNow } }
 
+    /// That hand holds the loaded pose right now (the ride stops reading it for steering).
+    func isLoaded(_ chirality: HandSample.Chirality) -> Bool {
+        hands[chirality]?.isLoadedNow ?? false
+    }
+
     /// Feeds one hand reading; returns true when this reading completes a snap.
     mutating func process(_ sample: HandSample) -> Bool {
         var state = hands[sample.chirality] ?? HandState()
@@ -209,7 +219,8 @@ struct SnapDetector {
 
         let isPinching = simd_distance(sample.thumbTip, sample.indexTip) < settings.pinchClearance
         if sample.thumbToMiddlePad < settings.contactDistance && !isPinching {
-            state.loaded = Loaded(time: sample.timestamp, gap: sample.snapGap, reach: sample.middleReach)
+            state.loaded = Loaded(time: sample.timestamp, gap: sample.snapGap, reach: sample.middleReach,
+                                 wrist: sample.wrist)
             state.isLoadedNow = true
             return false
         }
@@ -223,8 +234,9 @@ struct SnapDetector {
         let separation = sample.snapGap - loaded.gap
         let curl = loaded.reach - sample.middleReach
         let speed = separation / Float(max(elapsed, 1e-3))
+        let isStill = settings.maxWristTravel.map { simd_distance(sample.wrist, loaded.wrist) <= $0 } ?? true
         let isSnap = separation >= settings.separation && curl >= settings.curl && speed >= settings.minimumSpeed
-            && sample.timestamp >= state.cooldownUntil
+            && sample.timestamp >= state.cooldownUntil && isStill
         lastAttempt = Attempt(separation: separation, curl: curl, speed: speed, isSnap: isSnap)
         guard isSnap else { return false }
         state.loaded = nil
