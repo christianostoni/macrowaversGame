@@ -23,7 +23,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 1. Install Xcode's Metal Toolchain once: `xcodebuild -downloadComponent MetalToolchain`. It's needed to compile
    `AppleSpiral.metal`.
 2. Run the app and choose **Start**. Tap through the narrator's pages ("What are you searching for?", "Chapter I"):
-   the island fades in. Look at a fruit on the tree and pinch (fruit can be picked while the dragon is still on
+   the island fades in. Look at a fruit on the tree and pinch (fruit can be picked only while the dragon is still on
    the island).
 3. Open the fruit:
 
@@ -55,10 +55,10 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | In orbit | The ingredients go round a small ellipse (26 × 28 cm) 60 cm away, 30° to the player's right and a little below their eyes, facing them, its far side tilted up so they see it whole: always between ~18° and ~42° to the right, never in the middle of the view where the fruit comes close; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). A small label under the orbit counts them |
 | Hold an ingredient | Pinch an ingredient in orbit and move it (before the brew): it follows the hand and turns with the wrist, while the others keep going round. With two hands (in the simulator: hold Option) move them apart or together to make it bigger or smaller (0.5×–3×), turn them around it to turn it about any axis. Let go (the last hand), it flies back to its slot in the same arc it came in from its fruit (1.4 s), turns upright again and takes back its own size. A pinch that does not move stays a tap. Looking at it or taking it draws no highlight |
 | Orbit complete | The label says "Press your thumb on your middle finger and snap to brew the elixir.", and "Now snap!" while the thumb is pressed |
-| The flask | With the first ingredient found, an empty, corked glass flask appears in the middle of the orbit (0.6 s) and turns slowly there; the ingredients go round it. Each time one reaches the orbit the flask wobbles and its glass glows in that ingredient's colour |
+| The flask | As the first ingredient leaves its fruit for the orbit, an empty, corked glass flask appears in the middle of the orbit (0.6 s) and turns slowly there; the ingredients go round it. Each time one reaches the orbit the flask wobbles and its glass glows in that ingredient's colour |
 | Snap (3.6 s) | The cork pops out and tumbles above the neck (0.4 s). The ingredients dive in **one at a time** (0.75 s each): each leaves its place in an arc up above the neck, drops down into the flask, shrinking, and lands with a burst of bubbles; the liquid rises by a third, sloshes and takes its colour (red, then mixed with gold, then with green). The cork goes back on (2.7–3.2 s) and the liquid swirls into the elixir's glowing blue (3.2–3.6 s) |
 | Brewed (1.2 s) | The flask swells a little with a flash of sparks and floats there, throbbing; bubbles rise, and its glow lights the player's hands |
-| The elixir flies | The flask flies in an arc rising above the straight line, to just above the dragon's head (upright, its bottom clear of it) even as it moves. The scene comes back from focus mode. If the dragon has already left the island, the flask keeps floating in front of the player |
+| The elixir flies | The flask flies in an arc rising above the straight line, to just above the dragon's head (upright, its bottom clear of it) even as it moves. The scene comes back from focus mode. If the dragon has already left the island, the flask keeps floating in the middle of the orbit, at the player's side |
 | Poured (3.2 s) | The dragon has stopped and lifted its snout. Above its head the flask stops turning and turns side-on to the player, the cork pops, and it tips over slowly around its neck's mouth, held above the head. A thick, glowing blue stream falls straight onto the head, droplets bounce off it, and the flask drains (fastest at first) while the stream thins to a trickle. When the last of it has landed, a shimmer rises around the dragon's head and the flask fades. **Only then** does the dragon, soothed, come to the player |
 | Empty fruit | A fruit whose ingredient already orbits: once opened, the panel says "No ingredient left in this one" and **Back to the Tree** becomes the prominent button. The fruit never leaves by itself |
 | A 4th ingredient | With 3 already in orbit the orb stays above its fruit: "Three ingredients already orbit you: brew the elixir first." |
@@ -73,7 +73,7 @@ Every fruit holds one ingredient, so no choice is wrong: any 3 of the 7 fruits m
 **Where it is.** Not around the player (they would only ever see part of it, and a wide ellipse runs through
 their body and arms) but around a centre `O` close to them, small enough to be seen whole, and **to the side**:
 the middle of the view belongs to the fruit the player picks (it comes 0.5 m from the eyes in the direction of
-the fruit, within ~±10°, plus its own size and its panel): an orbit in front ran through them. It lives in the
+the fruit, within ~±17°, plus its own size and its panel): an orbit in front ran through them. It lives in the
 frame of the player's body: `forward` and `right` come from a yaw `ψ` (`forward = (−sin ψ, 0, −cos ψ)`,
 `right = (cos ψ, 0, −sin ψ)`), never from the head's pitch, so looking down at it does not move it. `towards`
 and `across` turn them by the bearing `α`, so the ellipse faces the eyes instead of being seen at an angle.
@@ -94,9 +94,9 @@ P       = O + across · a sin φ + depth · b cos φ
 | `distance` | 0.60 m | within the comfortable focus range (0.5–1 m), beyond the hands snapping in front of the chest |
 | `drop` | 0.18 m | centre ~17° below the line of sight: the comfortable band for looking down without bending the neck |
 | `a` | 0.13 m | ±12° around `α`: the whole orbit between ~18° and ~42° to the right, inside the field of view with no head turn; the flask (~15 cm wide, in the middle) still fits between the two sides |
-| `b` | 0.14 m | half-depth in the tilted plane: the near side stays ~0.49 m from the eyes, ~0.3 m in front of the chest |
+| `b` | 0.14 m | half-depth in the tilted plane: the near side stays ~0.49 m in front of the eyes (on the floor plane), ~0.3 m in front of the chest |
 | `β` | 35° | seen from ~17° above, a flat orbit would look like a line; tilted it reads as an open ellipse (≈ 2 : 1) |
-| `period` | 9 s | ~0.13 m/s along the ellipse: calm, alive |
+| `period` | 9 s | ~0.09 m/s along the ellipse: calm, alive |
 
 Over a whole turn every ingredient stays 0.55–0.72 m from the eyes, 17.6°–42.4° to the right and 8°–28° below
 the eyes; the flask is at 30° to the right, 17° below (test `thePlayerSeesAllOfItToTheSideClearOfTheFruitAndTheirBody`:
@@ -129,12 +129,14 @@ The dive (`ElixirOrbit.divePosition`), with `P` the ingredient's place on the or
 `A = neck_top + n · 0.08` above the open neck:
 
 ```
-first 60 %:  B(t) = (1 − t)² P + 2 (1 − t) t C + t² A,   C = (P + A) / 2 + up · 0.06,   t = smootherstep
+first 60 %:  B(t) = (1 − t)² P + 2 (1 − t) t C + t² A,   C = P raised to max(P.y, A.y) + 0.06,   t = smootherstep
 last 40 %:   from A down to neck_base − n · 0.03, accelerating (d²)
 ingredient scale = 1 − smoothstep(0.55, 1, dive)
 ```
 
-so each ingredient leaves the orbit with no jump and always ends inside the flask. The liquid's colour is the
+so each ingredient leaves the orbit with no jump and always ends inside the flask. With C straight above the start the
+ingredient rises first and comes over the flask onto the neck: with C between P and A, one starting below the neck
+climbed alongside it and brushed through the glass. The liquid's colour is the
 ingredients' colours weighted by their share of the liquid, mixed into the blue as it swirls. Brewed, the flask
 swells by 8 % and back (`sin`, 0.45 s) with a burst of 160 sparks. The ingredients still waiting whirl up to 2.5×
 faster (`fusionSpin` 1.5).
@@ -224,6 +226,7 @@ Sources/Macrowavers/
         ├── PomegranateRig.swift             The design team's pomegranate: halves, seed burst
         ├── BananaRig.swift                  Banana.usdz, peel strips on hinges
         ├── OrangeRig.swift                  Procedural orange: two halves, then 8 wedges
+        ├── OrchardSounds.swift              Spatial sound effects on state changes (peel, worms, burst, chop, brew)
         └── PineappleRig.swift               Pineapple.usdz, halves and crown opening
 ```
 
@@ -262,6 +265,8 @@ elixir's flight (`OrchardComponent.flight`).
    it calls `orchard.elixirDelivered()`, and the flask pours over the dragon's head (`OrchardSystem.pour`, the
    stream and splash in `ElixirParticles.swift`). When the pour is over the elixir is `.poured`;
    `OrchardInteractions` sees it and calls `untangle.callDragon()`.
+9. **Sounds.** `OrchardSounds.update` compares the view model with the last frame and plays each effect from the
+   thing that makes it (the focused fruit, the orb's fruit, the flask); the worms' crawl loops while they are out.
 
 ## Design decisions (and why)
 
@@ -378,6 +383,10 @@ elixir's flight (`OrchardComponent.flight`).
 | `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
 | `WormSwarm.Settings` | `count`, `crawlSpeed`, `speedUpPerCatch`, `burrowInterval`, `burrowDuration` | worm difficulty |
 | `OrchardSceneBuilder` | `…SizeOnTree`, `…SizeFocused` | fruit sizes on the tree and in front of the player (the apple's is its width) |
+| `OrchardSceneBuilder` | `gemSpinSpeed`, `glowSize` | how fast the gem turns, how wide its glow is |
+| `OrchardSystem` (OrbScene) | `diveGlowFade`, `diveSparksStop` | when a diving ingredient's glow and sparks go (before the neck) |
+| `LiquidVolume`, `LiquidLevels` | `profileSamples`, `steps` | how finely the liquid follows the glass and its level |
+| `OrchardSounds` | `Sound.gain`, `peelTear`, `orangeSplit` | each sound's level, when a peel strip tears, when the orange splits |
 | `AppleShape` | `turns`, `gapPerTurn` | how many slices the apple opens into, how far apart |
 
 ## Assets
@@ -400,7 +409,6 @@ spiral (see the design decisions). If the asset changes, measure its profile aga
     -P Assets/Blender/apple/measure_apple_profile.py -- Sources/Macrowavers/Resources/Apple.usdz
 ```
 
-The orange is generated in code (`OrangeRig`), no asset.
 
 ### The pomegranate's pipeline
 
@@ -443,8 +451,8 @@ The source (`GEMF.usdc` from the design team, Z-up) is a faceted crystal: a stre
 ~1.9 × 1.8 × 3.3 units, a pale 20 % opaque material, a camera, two area lights and a dome light pointing to an
 .exr that is not shipped. The script keeps only the crystal (`Gem`), drops the object's framing rotation so its
 long axis is vertical (it spins around it in the game), centres it, scales it to 6 cm tall, keeps its faces flat
-and keeps the design team's `CRYSTAL` material, double-sided (the app tints it per ingredient in code, keeping its
-transparency). It exports a Y-up USDZ.
+and keeps the design team's `CRYSTAL` material, double-sided. The app replaces it in code with an opaque, tinted
+material (`gemMaterial`, see the design decisions). It exports a Y-up USDZ.
 
 ### The flask's pipeline
 
@@ -464,8 +472,9 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   control cage, so the round flask would look faceted. One level is applied (6.2k and 2.8k faces).
 - **Cork decimated** (5.9k → 1.4k faces) for a 6 cm cork.
 - **Dropped:** the camera, the dome light (it points to a 4K .exr not shipped) and a stray bubble 69 cm away.
-- **Origins** for the animations: the liquid's at its bottom (scaling it along its vertical axis raises its
-  level), the cork's at its centre (it tumbles on itself); the flask's at the centre of its round body.
+- **Origins** for the animations: the liquid's at its bottom (`LiquidVolume` measures the glass from it; without a
+  readable mesh the code falls back to scaling it along its vertical axis), the cork's at its centre (it tumbles on
+  itself); the flask's at the centre of its round body.
 - **Neck markers** `neck_top` and `neck_base` (the cork's ends, along the tilted neck): the ingredients dive along
   that axis and the pour tips the flask across it.
 - In the game the flask is scaled to 0.7 (`ElixirRig.flaskScale`, ~15 cm wide) so it fits in the orbit (28 cm deep)
@@ -476,6 +485,7 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
 
 - **`Tests/MacrowaversTests/OrchardTests.swift`:**
   - apple maths and Swift/Metal layouts, and the worms
+  - the tree's fruit (3 apples, a pomegranate, a banana, an orange, a pineapple)
   - every fruit kind opening its own way and freeing its ingredient
   - leaving a fruit early
   - an ingredient rising, joining the orbit by itself or when tapped, also from a fruit sent back early
@@ -490,9 +500,15 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   timing; the flask appearing and wobbling when an ingredient arrives, the cork popping before the first dive and
   going back on after the last, the dives one at a time in order, the liquid rising by thirds and turning blue,
   the slosh dying down, no jumps between states, the pour (cork, tip, stream, its fall onto the head, the drain
-  fastest at first, the trickle, the soothing) and the fade, and `.poured` only after it; the orbit's place to the right and its
-  shape (always seen whole, to the side, clear of the fruit), period, lazy follow and the dive into the neck; the
-  flight's arc and arrival.
+  fastest at first, the trickle, the soothing) and the fade, and `.poured` only after it; the orbit's place to the
+  right and its shape (always seen whole, to the side, clear of the fruit), period, lazy follow and the dive into the
+  neck; the flight's arc and arrival.
+- **`Tests/MacrowaversTests/LiquidVolumeTests.swift`:** the liquid at every level stays inside a round glass (Y-up and
+  Z-up), matches the full liquid when full, every face turns outwards.
+- **`Tests/MacrowaversTests/FlaskLiquidTests.swift`:** with the real `ElixirFlask.usdz`, the liquid takes the glass's
+  shape (full: the designers' liquid; a third full: narrower than the full width).
+- **`Tests/MacrowaversTests/ElixirDiveTests.swift`:** with the real flask at the orbit's centre, a diving gem stays out
+  of the glass until it drops, its glow never reaches the neck, its sparks stop above it.
 
 ## Known limits
 
@@ -503,15 +519,15 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   is generous, so a chop still lands, but on a fruit turned on its side the zone is off.
 - **Head, not body.** The orbit turns with the head's yaw past 30° (visionOS gives no torso pose): a long look to
   the side turns it too.
-- **Hand height, not the apple.** Pulling the stem uses the hand's height: if the player moves their head a lot while
-  pulling, the opening follows the hand.
+- **Hand travel, not the stem.** Pulling the stem reads how far the hand moved along the apple's up axis since the
+  pinch started (scene space): if the player walks or the apple turns while pulling, the opening follows the hand.
 - **The orbit ignores the room.** 0.55–0.72 m from the eyes, to the right, it can sink into a table the player sits
   at or into a wall on their right.
 - **Right side only.** The orbit is always on the right (`bearing`); a left-handed setting would flip its sign.
 - **The flight ignores the canopy.** The elixir's arc rises above the straight line but may still cross the tree.
-- **Transparent glass in mixed reality.** Glass, liquid and the gems' glows are all transparent: the fixed
-  order keeps liquid and glass right, but an ingredient diving through the neck may sort oddly for a frame.
+- **Transparent glass in mixed reality.** Glass and liquid are transparent; their fixed order keeps them right. A
+  diving gem is opaque and its glow and sparks are gone before the neck, but an orbiting gem's glow (no depth)
+  passing behind the flask is still sorted by RealityKit alone.
 - **Eyeballed values.** The flask's glow light (1800 at full), the glass and liquid opacity, bubble rates and the
   stream need checking on device.
-- **The liquid level scales the liquid's shape** (from its bottom): low levels look like a flattened pool, not a
-  true fill of the round body.
+- **The orange borrows the pomegranate's sound** (split and wedges, `OrchardSounds`), and the pour has no sound yet.

@@ -12,7 +12,7 @@ long, with an idle animation on every stone and a jaw animation. What the script
 - Reads the rest pose (first frame) and drops the animation and the skeleton (the stones' transform caches, the
   face's armature): the game moves every stone along the simulated body and opens the jaw itself.
 - Orders the stones from the head to the tail (each is the closest to the previous one) and names them
-  `Stone_00` (behind the head) ... `Stone_19` (the tail), each with its origin at its centre, its local +Z along the
+  `Stone_00` (behind the head) ... `Stone_18` (the tail), each with its origin at its centre, its local +Z along the
   body towards the tail and its +Y up: the game turns them along the simulated curve.
 - Scales everything so the chain, from the head's centre to the tail stone's centre, is `SIM_LENGTH` long (the
   simulated body's length); the game still scales the stones' thickness to the simulated body.

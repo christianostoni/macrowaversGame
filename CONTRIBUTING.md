@@ -45,7 +45,7 @@ under 72 characters. The `commit-msg` hook checks commits (enable the hooks once
 `git config core.hooksPath .githooks`) and CI checks PR titles.
 
 Types: `feat` (something the player can notice), `fix`, `perf`, `refactor` (no behaviour change), `test`, `docs`,
-`style`, `build`, `ci`, `chore`. Scopes: `untangle`, `dragon`, `orchard`, `story`, `sky`, `ui`, `assets`.
+`style`, `build`, `ci`, `chore`, `revert`. Scopes: `untangle`, `dragon`, `orchard`, `story`, `audio`, `ui`, `assets`.
 Example: `fix(dragon): breathe fire out of the mouth`.
 
 ## 4. Before you open the PR

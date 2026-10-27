@@ -32,7 +32,7 @@ and the narrator's cut-off line ends with an ellipsis. All the text lives in `St
 - **Dimming**: every step with a page darkens the passthrough with `.preferredSurroundingsEffect(.dark)` (the
   system's own dimming of the room, applied to the immersive space). While the dragon speaks, focus mode also
   fades the island, tree and fruit to 25% (`SceneFocus.dragon`), so only the dragon and its words stand out.
-- **Reveal**: the island, the dragon, the orchard and the side panels are built when the space opens but added
+- **Reveal**: the island, the dragon, the orchard and the island panel are built when the space opens but added
   to the scene only when the story reaches `adventure` (`HiddenWorld` in `DragonImmersiveView`); island and
   dragon start at opacity 0 and focus mode fades them in. Until then nothing can be tapped by mistake and the
   dragon does not fly.
@@ -54,10 +54,21 @@ Sources/Macrowavers/
 ├── Views/ContentView.swift              Screen 1: the Start button (launch window, plain style)
 ├── Views/AppIconMenu.swift              Screen 1: the app icon picker under Start
 ├── Model/AppIconChoice.swift            The app icons (asset catalog names, titles)
+├── Model/Story/MusicTrack.swift         Which track plays at each step (intro, puzzle, farewell)
+├── Views/GameMusic.swift                Plays it: channel audio, crossfades, ducks while the dragon roars
 ├── Views/Story/StoryPanelView.swift     The page (attachment): title, lines, tap / answer
 └── Views/Story/StoryPanelPlacement.swift StoryPanelComponent/System: in front of the player or above the dragon
 Tests/MacrowaversTests/StoryTests.swift
 ```
+
+## The music
+
+`MusicTrack.playing(story:dragon:)` picks the track: silence on Start; `MusicIntro` (a setar, looped) under the
+narrator's pages and the fruit; `MusicPuzzle` (looped) from the soothed dragon's flight to the player until it is
+untangled; `MusicFarewell` (once) from the moment it is free through its words and its flight. `GameMusic` plays it
+as non-spatial channel audio (−14 dB), crossfades over 2 s when the track changes, and ducks to −26 dB while the
+dragon rears up. The tracks are streamed from their files (`GameAudio.load(streams:)`); the sound effects are
+preloaded (`DragonEffects`, `OrchardSounds`).
 
 ## Tuning
 
@@ -76,6 +87,9 @@ Tests/MacrowaversTests/StoryTests.swift
   hidden until after the chapter's title, no placeholder text left;
 - `FarewellCueTests`: the free dragon waiting for the answer (and taking off on its own without the story).
 
+`MusicTrackTests.swift`: silence before Start, the intro under the pages and the fruit, the puzzle from the flight
+to the knot, the farewell once the dragon is free (played once).
+
 `AppIconTests.swift`: the stone dragon is the primary icon, every choice is found again from the system's icon
 name, and every alternate icon is declared in the app's Info.plist.
 
@@ -86,7 +100,7 @@ design team's 3D stone dragon on a dark fill, the default: `AppIcon`), **Red Dra
 **Black Dragon** (the first icon, `AppIconBlackDragon`), both coiled around an orange. The system changes the icon
 with `UIApplication.setAlternateIconName` and tells the player; the menu shows only where
 `supportsAlternateIcons` is true. The alternates are listed in the build setting
-`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` (project, Debug and Release), so the asset catalog compiles them
+`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` (the `Macrowavers` target, Debug and Release), so the asset catalog compiles them
 into the app and its Info.plist (`CFBundleAlternateIcons`).
 
 Each icon is an Icon Composer document in `Assets/Icon/` (`<name>.icon`), rendered into the three layers of
