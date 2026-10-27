@@ -160,7 +160,9 @@ final class AppleRig {
                 continue
             }
             caughtShown.remove(index)
-            worm.isEnabled = state.visibility > 0.01
+            let isVisible = state.visibility > 0.01
+            if worm.isEnabled != isVisible { worm.isEnabled = isVisible }
+            guard isVisible else { continue }
             worm.position = swarm.position(of: index, opening: opening) - SIMD3(0, 0.012 * (1 - state.visibility), 0)
             worm.orientation = simd_quatf(angle: swarm.heading(of: index), axis: SIMD3(0, 1, 0))
             worm.scale = SIMD3(repeating: max(state.visibility, 0.01))

@@ -6,10 +6,12 @@ import UIKit
 /// smooth see-through skin (`HandSurface`), to the left of the flask, facing the player, snapping its fingers in a
 /// loop, with a puff of sparks at each snap.
 ///
-/// The loop is fixed, so its skin is built once, in the background (`prepareIfNeeded()`), when the first ingredient
-/// joins the orbit: one mesh per frame at `framesPerSecond` (a frame that holds the previous pose reuses its mesh),
-/// swapped into one model as the loop plays. Built while the immersive space loaded, it competed with the island's
-/// and the dragon's assets for the processor (a Debug build takes ~25 s of processor time for the ~50 meshes).
+/// The loop is fixed, so its skin is built once, in the background (`prepareIfNeeded()`), from the orchard's first
+/// frame: one mesh per frame at `framesPerSecond` (a frame that holds the previous pose reuses its mesh), swapped
+/// into one model as the loop plays. The ~50 meshes take ~25 s of processor time in a Debug build: built while the
+/// immersive space loaded, they slowed it down; built on every core at once while the player opened a fruit, they
+/// starved the frames (the worms' apple stuttered). So they are built one at a time, on a single background thread,
+/// each handed to RealityKit as soon as it is ready.
 /// The model has a sort group with a depth pre-pass: only the hand's outer surface is drawn, so the fingers in front
 /// of the palm do not show it through them. The fade, the flicker and the flash of the snap go through one
 /// `OpacityComponent` on the root.
@@ -71,8 +73,8 @@ final class SnapHintRig {
         Task { await prepare() }
     }
 
-    /// Builds the loop's meshes (~7k vertices each), in parallel, off the main thread and at low priority; the hand
-    /// shows once they are ready.
+    /// Builds the loop's meshes (~7k vertices each) one after the other, off the main thread at background
+    /// priority (one core, never all of them); the hand shows once they are all ready.
     private func prepare() async {
         let count = Int((SnapHint.period * Self.framesPerSecond).rounded(.up))
         var poses: [SnapHint.Pose] = []
@@ -82,19 +84,9 @@ final class SnapHintRig {
             if pose != poses.last { poses.append(pose) }
             frames.append(poses.count - 1)
         }
-        let distinct = poses
-        let skins = await Task.detached(priority: .utility) {
-            await withTaskGroup(of: (Int, HandSurface.Mesh).self) { group in
-                for (index, pose) in distinct.enumerated() {
-                    group.addTask(priority: .utility) { (index, HandSurface(pose: pose).mesh()) }
-                }
-                var skins = [HandSurface.Mesh](repeating: HandSurface.Mesh(), count: distinct.count)
-                for await (index, skin) in group { skins[index] = skin }
-                return skins
-            }
-        }.value
         var meshes: [MeshResource] = []
-        for skin in skins {
+        for pose in poses {
+            let skin = await Task.detached(priority: .background) { HandSurface(pose: pose).mesh() }.value
             guard let mesh = try? await MeshResource(from: [Self.descriptor(skin)]) else {
                 print("⚠️ The hologram hand's mesh could not be built: no hand")
                 return
@@ -175,11 +167,12 @@ final class SnapHintRig {
 
 extension OrchardSystem {
     /// The hologram hand: shown with every ingredient in orbit (until the snap), while no fruit is in front of the
-    /// player, to the left of the flask. Brighter while the player's own hand holds the loaded pose.
+    /// player, to the left of the flask. Brighter while the player's own hand holds the loaded pose. Its meshes
+    /// start building on the orchard's first frame (the world is loaded by then), slowly, in the background.
     @MainActor
     static func updateSnapHint(_ orchard: inout OrchardComponent, deltaTime: Float) {
         let viewModel = orchard.viewModel
-        if viewModel.orbitingCount > 0 { orchard.snapRig.prepareIfNeeded() }
+        orchard.snapRig.prepareIfNeeded()
         let isShown = viewModel.elixir.state == .ready && viewModel.focusedFruitID == nil
         orchard.snapHint.update(deltaTime: deltaTime, isShown: isShown)
         let middle = orchard.orbit.center - orchard.orbit.across * SnapHintRig.side - SIMD3(0, SnapHintRig.drop, 0)

@@ -16,7 +16,7 @@ it flies into the medallion's heart, where the story ends.
 | – | `adventure` | – | No story text: the island, its fruit, the dragon and its puzzle | The dragon is freed |
 | 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the curse. / You don't need to be afraid. | Tap the text |
 | 5 | `safety` | Above the dragon | **Thank you** / I will take you to safety. Are you ready? | **I'm Ready** button: the room goes dark, the ride's space takes over |
-| – | `ride` | Full immersion | No page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
+| – | `ride` | Full immersion | A spinner ("Loading…", placed once 1.2 m in front of the eyes) while the ride's world loads; then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
 | 6 | `secondChapter` | In front of the eyes, above the dragon's head | **Chapter II** / Feed the dragon the right plants. / It doesn't like bananas! | Tap the text |
 | – | `feast` | Above the dragon's head | No page: four waves of fruit in the sky and a tally (hearts, fire, wave, fruit eaten); see [Chapter II: the feast](#chapter-ii-the-feast) | The last wave eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s |
 | – | `finale` | Full immersion | No page: the dragon roars, turns to the medallion on its own and flies into its heart through a rush of light (`ShamsehFinale.swift`); the light fills the view | 6 s at most turning, 7 s of flight, 1.2 s of light |

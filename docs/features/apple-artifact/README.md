@@ -204,8 +204,10 @@ extracted with naive surface nets (2.8 mm grid, ~7k vertices, normals from the f
 sampled in 4×4×4 blocks: a block whose centre is far from the skin takes that value everywhere (only the cells the
 skin crosses need exact values), and a finger whose bounding sphere is far from a point is skipped: ~10 ms per mesh
 in release, ~0.5 s in Debug. The loop is fixed, so its skin is built once (one mesh per frame at 30 fps, held poses
-reusing theirs: ~50 meshes), in parallel at low priority, when the first ingredient joins the orbit: built while the
-immersive space loaded, it competed with the island's and the dragon's assets. The frames are swapped into one
+reusing theirs: ~50 meshes), one at a time on a single background thread from the orchard's first frame, each
+handed to RealityKit as soon as it is ready: built while the immersive space loaded, it competed with the island's and
+the dragon's assets; built on every core at once when the first ingredient joined the orbit, it starved the frames
+while the player opened the next fruit (the worms' apple stuttered). The frames are swapped into one
 model as it plays. The model has a `ModelSortGroup` with a depth pre-pass, so only its outer surface is drawn (the fingers in
 front of the palm do not show it through them); the fade, flicker and flash are one `OpacityComponent` on its root.
 It is 0.8 of an adult hand, facing the player, turned 50° so the palm faces left and leaning back towards their

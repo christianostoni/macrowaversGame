@@ -12,6 +12,9 @@ struct DragonRideView: View {
     static let spaceID = "DragonRideSpace"
     private static let tallyID = "FeastTally"
     private static let hintID = "HornsHint"
+    private static let loadingID = "RideLoading"
+    /// The spinner's distance in front of the eyes (m).
+    private static let loadingDistance: Float = 1.2
 
     @Environment(UntangleViewModel.self) private var untangle
     @Environment(OrchardViewModel.self) private var orchard
@@ -24,14 +27,25 @@ struct DragonRideView: View {
     @State private var hands = HandTracker()
     /// Whether the hands hold the horns, for the hint.
     @State private var status = RideStatus()
+    /// The ride's world is built (the dragon, the sky, the fruit): the spinner goes.
+    @State private var isLoaded = false
 
     var body: some View {
         RealityView { content, attachments in
+            // A spinner in the dark while the ride's assets load, placed once in front of the eyes.
+            if let loading = attachments.entity(for: Self.loadingID) {
+                let anchor = AnchorEntity(.head, trackingMode: .once)
+                loading.position = SIMD3(0, 0, -Self.loadingDistance)
+                anchor.addChild(loading)
+                content.add(anchor)
+            }
             guard let ride = await DragonRideSceneBuilder.makeRide(story: story, status: status, viewer: viewer,
                                                                     hands: hands) else {
+                isLoaded = true
                 return
             }
             content.add(ride)
+            isLoaded = true
             // Chapter II's title, the fruit tally and how to hold the horns ride along, in front of the eyes.
             for (id, spot) in [(StoryPanelView.attachmentID, DragonRideSceneBuilder.panelSpot),
                                (Self.tallyID, DragonRideSceneBuilder.tallySpot),
@@ -49,6 +63,9 @@ struct DragonRideView: View {
             }
             Attachment(id: Self.hintID) {
                 HornsHintView(status: status)
+            }
+            Attachment(id: Self.loadingID) {
+                RideLoadingView(isLoaded: isLoaded)
             }
         }
         .task { await viewer.start() }
@@ -71,6 +88,31 @@ struct DragonRideView: View {
             untangle.immersiveSpaceState = .closed
             openWindow(id: ContentView.windowID)
         }
+    }
+}
+
+/// The spinner shown while the ride's world loads. Hidden in SwiftUI once it is built (its attachment entity is
+/// never disabled).
+private struct RideLoadingView: View {
+    let isLoaded: Bool
+
+    var body: some View {
+        ZStack {
+            if !isLoaded {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Loading…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(24)
+                .glassBackgroundEffect()
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: isLoaded)
     }
 }
 
