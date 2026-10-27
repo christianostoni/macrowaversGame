@@ -6,7 +6,7 @@ import SwiftUI
 /// around the tree and fruit on its branches. Every fruit hides an ingredient that joins an orbit around the
 /// player: three of them and a snap of the fingers brew the elixir that soothes the dragon: it flies to
 /// the player and settles tangled in front of them; untangled, it thanks them and offers to take them along.
-/// The story (`StoryViewModel`) frames it: the narrator's pages in a darkened room before the island fades in,
+/// The story (`StoryViewModel`) frames it: its scroll and the chapter's title in a darkened room before the island fades in,
 /// the dragon's words above it once it is free. When the player is ready the room darkens, the island fades and
 /// this space hands over to the ride's (`DragonRideView`, full immersion).
 struct DragonImmersiveView: View {
@@ -39,10 +39,18 @@ struct DragonImmersiveView: View {
     @State private var world = HiddenWorld()
     /// The story's music, in the player's ears.
     @State private var music = GameMusic()
+    /// The story's scroll, opened and read before the island appears.
+    @State private var storyScroll = StoryScroll()
 
     var body: some View {
         RealityView { content, attachments in
             content.add(music.entity)
+            // The story's scroll, in front of the player until they have read it, and the words under it.
+            let scrollHint = attachments.entity(for: ScrollHintView.attachmentID)
+            if let scrollHint { content.add(scrollHint) }
+            if let scroll = await ScrollSceneBuilder.makeScroll(scroll: storyScroll, viewer: viewer, hint: scrollHint) {
+                content.add(scroll)
+            }
             // The island first: the dragon is born already circling its tree, the fruit hangs from it.
             let island = await IslandSceneBuilder.makeIsland(placement: viewModel.islandPlacement)
             let playArea = await DragonSceneBuilder.makePlayArea(viewModel: viewModel, viewer: viewer,
@@ -112,6 +120,9 @@ struct DragonImmersiveView: View {
                 StoryPanelView()
                     .environment(story)
             }
+            Attachment(id: ScrollHintView.attachmentID) {
+                ScrollHintView(scroll: storyScroll)
+            }
             Attachment(id: FruitPanelView.attachmentID) {
                 FruitPanelView()
                     .environment(orchard)
@@ -131,6 +142,8 @@ struct DragonImmersiveView: View {
         .orchardInteractions()
         .simultaneousGesture(spinIslandGesture)
         .simultaneousGesture(rotateIslandGesture)
+        .simultaneousGesture(scrollDragGesture)
+        .simultaneousGesture(scrollTapGesture)
         // The narrator's pages and the dragon's words darken the room (passthrough) around them.
         // So does the way to the ride.
         .preferredSurroundingsEffect(story.step.dimsSurroundings || story.step.isFullyImmersed ? .dark : nil)
@@ -138,6 +151,17 @@ struct DragonImmersiveView: View {
         .onChange(of: story.step.isFullyImmersed) { _, isFullyImmersed in
             guard isFullyImmersed else { return }
             Task { await handOverToRide() }
+        }
+        // The story reaches its scroll: it appears; read (or skipped), the story goes on to the chapter's title.
+        .onChange(of: story.step, initial: true) { _, step in
+            if step == .scroll {
+                if storyScroll.phase == .hidden { storyScroll.present() }
+            } else if storyScroll.phase != .done {
+                storyScroll.reset()
+            }
+        }
+        .onChange(of: storyScroll.isDone) { _, isDone in
+            if isDone, story.step == .scroll { story.advance() }
         }
         .onChange(of: viewModel.isSolved) { _, isSolved in
             // Free, the dragon speaks; back around the tree (Restart Scene), its words are still to come.
@@ -191,6 +215,29 @@ struct DragonImmersiveView: View {
             viewModel.immersiveSpaceState = .closed
             openWindow(id: ContentView.windowID)
         }
+    }
+
+    // MARK: - Story scroll
+
+    /// Pull the closed scroll down to open it, then drag its paper up and down to read.
+    private var scrollDragGesture: some Gesture {
+        DragGesture()
+            .targetedToEntity(where: .has(ScrollHandleComponent.self))
+            .onChanged { value in
+                storyScroll.drag(height: value.convert(value.location3D, from: .local, to: .scene).y)
+            }
+            .onEnded { _ in
+                storyScroll.endDrag()
+            }
+    }
+
+    /// Pinch the closed scroll: it opens by itself (also the way to open it in the simulator).
+    private var scrollTapGesture: some Gesture {
+        SpatialTapGesture()
+            .targetedToEntity(where: .has(ScrollHandleComponent.self))
+            .onEnded { _ in
+                storyScroll.tap()
+            }
     }
 
     // MARK: - Dragon

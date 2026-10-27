@@ -7,7 +7,7 @@ struct MusicTrackTests {
     }
 
     @Test func introUnderThePagesAndTheFruit() {
-        for step in [StoryStep.searching, .chapter, .adventure] {
+        for step in [StoryStep.scroll, .chapter, .adventure] {
             #expect(MusicTrack.playing(story: step, dragon: .captive) == .intro)
             #expect(MusicTrack.playing(story: step, dragon: .alerted) == .intro)
         }
