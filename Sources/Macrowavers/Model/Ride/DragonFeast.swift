@@ -79,9 +79,11 @@ struct DragonFeast {
         static let waves: [Wave] = [
             Wave(goal: 3, bananaShare: 0, poisonShare: 0, pullRadius: 3.2),
             Wave(goal: 4, bananaShare: 0.3, poisonShare: 0, pullRadius: 2.6),
-            Wave(goal: 5, bananaShare: 0.15, poisonShare: 0.3, pullRadius: 2.1),
-            Wave(goal: 6, bananaShare: 0.15, poisonShare: 0.45, pullRadius: 1.6)
+            Wave(goal: 4, bananaShare: 0.15, poisonShare: 0.3, pullRadius: 2.1),
+            Wave(goal: 5, bananaShare: 0.15, poisonShare: 0.45, pullRadius: 1.6)
         ]
+        /// Fruit to eat over the whole feast: a petal each in the medallion (`Shamseh`), 16 like a classic shamseh.
+        static var totalGoal: Int { waves.map(\.goal).reduce(0, +) }
         /// The dragon's hearts: each poisoned fruit costs one.
         static let hearts = 3
         /// Where new fruit appear in front of the player (ride space, m): ahead, to the sides, above and below
@@ -110,8 +112,6 @@ struct DragonFeast {
         /// The pause between two waves, and the dragon's rest when exhausted (s).
         static let breakDuration: Float = 3.5
         static let restDuration: Float = 4
-        /// How long "The dragon is full!" shows before the story's last page (s).
-        static let finaleDelay: Float = 3
         /// The fire: how long a breath lasts, how long until the next one, how far it reaches (m) and how wide
         /// (half-angle around the flight's direction, radians; a fruit counts with its own size).
         static let fireDuration: Float = 0.9
@@ -157,8 +157,6 @@ struct DragonFeast {
         let fall = min((Settings.fireDuration - fireTime) / 0.25, 1)
         return min(rise, fall)
     }
-    /// The dragon has been full for a moment: the story's last page can come.
-    var isOver: Bool { phase == .finished && phaseTime >= Settings.finaleDelay }
     /// 0...1: how weak the dragon is (sick, or exhausted): it flies slower.
     var weakness: Float { phase == .exhausted ? 1 : 0.6 * sickness }
 

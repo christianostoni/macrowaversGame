@@ -89,8 +89,6 @@ struct DragonFeastTests {
         }
         #expect(events.last == .finished || events.contains(.finished))
         #expect(feast.phase == .finished && !feast.isFireReady)
-        // "The dragon is full!" shows a moment before the story's last page.
-        #expect(feast.isOver)
         #expect(events.filter { if case .waveCleared = $0 { true } else { false } }.count
                 == DragonFeast.Settings.waves.count - 1)
     }
@@ -211,8 +209,20 @@ struct DragonFeastTests {
         let secondTake = story.takeFireRequest()
         #expect(firstTake && !secondTake)
 
-        story.feastFinished()
+        // Not full yet: no finale.
+        story.feastCelebrated()
+        story.rideEnded()
+        #expect(story.step == .feast)
+        // Full, its medallion complete: the dragon flies into it on its own (no page), then the last page shows in
+        // the light at its heart.
+        progress.phase = .finished
+        story.showFeast(progress)
+        story.feastCelebrated()
+        #expect(story.step == .finale && story.step.isFullyImmersed && story.step.page == nil)
+        story.advance()
         #expect(story.step == .finale)
+        story.rideEnded()
+        #expect(story.step == .epilogue)
         #expect(story.step.page?.advance == .answer("The End"))
         story.advance()
         #expect(story.step == .ended && story.step.isFullyImmersed)

@@ -4,12 +4,14 @@ import SwiftUI
 
 /// The story's last part, in its own full immersive space (the game's space hands over to it): the player rides on
 /// the dragon's back out of the dark into the sky, steering it with both hands (`DragonRideSystem`), the air rushing
-/// past; then chapter II, feeding the dragon wave after wave of fruit floating among the clouds (not the bananas, not
-/// the poisoned ones: a snap of the fingers breathes fire on them), until it is full and the story ends.
-/// "The End" (or the Digital Crown) closes it: the story starts over from the launch window.
+/// past; then chapter II, feeding the dragon wave after wave of fruit floating in the sky (not the bananas, not the
+/// poisoned ones: a snap of the fingers breathes fire on them), until it is full and flies into the star medallion
+/// they lit up, where the story ends. "The End" (or the Digital Crown) closes it: the story starts over from the
+/// launch window.
 struct DragonRideView: View {
     static let spaceID = "DragonRideSpace"
     private static let tallyID = "FeastTally"
+    private static let hintID = "HornsHint"
 
     @Environment(UntangleViewModel.self) private var untangle
     @Environment(OrchardViewModel.self) private var orchard
@@ -20,16 +22,20 @@ struct DragonRideView: View {
     @State private var viewer = ViewerTracker()
     /// The hands on the dragon's horns.
     @State private var hands = HandTracker()
+    /// Whether the hands hold the horns, for the hint.
+    @State private var status = RideStatus()
 
     var body: some View {
         RealityView { content, attachments in
-            guard let ride = await DragonRideSceneBuilder.makeRide(story: story, viewer: viewer, hands: hands) else {
+            guard let ride = await DragonRideSceneBuilder.makeRide(story: story, status: status, viewer: viewer,
+                                                                    hands: hands) else {
                 return
             }
             content.add(ride)
-            // Chapter II's title and the fruit tally ride along, in front of the eyes above the dragon's head.
+            // Chapter II's title, the fruit tally and how to hold the horns ride along, in front of the eyes.
             for (id, spot) in [(StoryPanelView.attachmentID, DragonRideSceneBuilder.panelSpot),
-                               (Self.tallyID, DragonRideSceneBuilder.tallySpot)] {
+                               (Self.tallyID, DragonRideSceneBuilder.tallySpot),
+                               (Self.hintID, DragonRideSceneBuilder.hintSpot)] {
                 guard let attachment = attachments.entity(for: id) else { continue }
                 attachment.position = spot
                 ride.addChild(attachment)
@@ -40,6 +46,9 @@ struct DragonRideView: View {
             }
             Attachment(id: Self.tallyID) {
                 FeastTallyView()
+            }
+            Attachment(id: Self.hintID) {
+                HornsHintView(status: status)
             }
         }
         .task { await viewer.start() }
@@ -61,6 +70,62 @@ struct DragonRideView: View {
             story.reset()
             untangle.immersiveSpaceState = .closed
             openWindow(id: ContentView.windowID)
+        }
+    }
+}
+
+/// How to steer, over the dragon's head while the hands don't hold its horns: pinch with both hands, then the arms
+/// lead the dragon. Hidden in SwiftUI while they hold them (and for a moment after they let go: a hand let go to
+/// snap the fire comes back), under a page, in the finale and without hand tracking (autopilot).
+private struct HornsHintView: View {
+    /// How long the hands stay off the horns before the hint comes back (s).
+    private static let letGoDelay: Duration = .seconds(1.5)
+
+    let status: RideStatus
+    @Environment(StoryViewModel.self) private var story
+    /// The hands have been off the horns for a while.
+    @State private var isLetGo = true
+
+    private var isShown: Bool {
+        status.isFlying && status.canSteer && isLetGo && story.step.page == nil
+            && (story.step == .ride || story.step == .feast)
+    }
+
+    var body: some View {
+        ZStack {
+            if isShown {
+                VStack(spacing: 10) {
+                    HStack(spacing: 16) {
+                        Image(systemName: "hand.pinch.fill")
+                            .scaleEffect(x: -1)
+                        Image(systemName: "hand.pinch.fill")
+                    }
+                    .font(.largeTitle)
+                    Text("Pinch with both hands to hold the horns")
+                        .font(.title3.bold())
+                    Text("Raise or lower your arms to climb or dive.\nMove them to a side to turn.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(.center)
+                .padding(24)
+                .glassBackgroundEffect()
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .animation(.easeInOut(duration: 0.5), value: isShown)
+        .task(id: status.isHolding) {
+            guard !status.isHolding else {
+                isLetGo = false
+                return
+            }
+            // The very first time, at once; after a hold, only once the hands have stayed off for a while.
+            if !isLetGo {
+                try? await Task.sleep(for: Self.letGoDelay)
+                guard !Task.isCancelled else { return }
+            }
+            isLetGo = true
         }
     }
 }
@@ -157,9 +222,9 @@ private struct FeastTallyView: View {
     /// What each wave brings.
     private static func hint(wave: Int) -> String {
         switch wave {
-        case 0: "Fly into the fruit to feed the dragon. Push both hands forward to fly faster."
+        case 0: "Fly into the fruit to feed the dragon. Push the horns forward to fly faster."
         case 1: "Bananas! The dragon spits them out: don't waste your time."
-        case 2: "Poisoned fruit! Avoid them, or snap your fingers to breathe fire."
+        case 2: "Poisoned fruit! Avoid them, or let go of a horn and snap your fingers to breathe fire."
         default: "The last stretch: less help aiming. Keep the poison away!"
         }
     }

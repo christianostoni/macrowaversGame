@@ -14,10 +14,10 @@ placeholder is used when it is not in the bundle.
 
 1. Open `Macrowavers.xcodeproj` and run on the visionOS simulator or on a Vision Pro. Run `git lfs pull`
    first if the `.usdz` files under `Sources/Macrowavers/Resources/` are only LFS pointers.
-2. Press **Start** (the launch window): an `ImmersiveSpace` in `.mixed` style opens, the room darkens and the
-   narrator speaks (two pages, tap to go on; see [Storytelling](../storytelling/README.md)). Then the floating
-   island (real size, ~2.5 m wide) fades in ~2.8 m in front of you, its grass at table height (0.6 m), with the
-   dragon circling its tree. The launch window closes; the island panel is on your left.
+2. Press **Start** (the launch window): an `ImmersiveSpace` in `.mixed` style opens and the launch window closes;
+   the room darkens and the narrator speaks (two pages, tap to go on; see [Storytelling](../storytelling/README.md)).
+   Then the floating island (real size, ~2.5 m wide) fades in ~2.8 m in front of you, its grass at table height
+   (0.6 m), with the dragon circling its tree; the island panel is on your left.
 3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island panel): the
    dragon turns with it. The side of the island facing you follows your hand, wherever you look on the rock.
 4. Look at the dragon and pinch (tap): it gets angry for ~3 s. It won't come near you until it is soothed.
@@ -68,26 +68,28 @@ Sources/Macrowavers/
 │   ├── HandGrabs.swift                 Which hand holds which node, from the manipulation events
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
+│   ├── StoneDragonLayout.swift         Where each stone sits on the body, which node holds it
 │   └── UntangleViewModel.swift         @Observable @MainActor view model shared by the island panel and the space
 └── Views/Untangle/
-    ├── DragonImmersiveView.swift       RealityView, island, island panel, island spin, grab events, tap on the dragon
+    ├── DragonImmersiveView.swift       RealityView, HiddenWorld reveal, island panel, story panel, music, island spin, grab events, dragon tap
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers
         ├── DragonJourney.swift           Story ECS: OrbitComponent, DetanglingStateComponent, DragonTapTargetComponent
         ├── IslandScene.swift             Floating island (asset), tree anchor, floor occluder, FloatingComponent/System,
         │                                 TurntableComponent/System, FocusDimmingComponent/System (applies `SceneFocus`)
         ├── DragonRig.swift               DragonRig protocol, DragonFrame, DragonPose, DragonLifeAnimator
-        ├── DragonEffects.swift           Smoke, fire, optional spatial audio, placeholder wings
+        ├── DragonEffects.swift           Smoke, fire, the dragon's spatial sounds (via GameAudio), placeholder wings
         ├── ViewerTracker.swift           Player head position and gaze (ARKit world tracking, no permission needed)
         ├── DragonCurve.swift             The stone dragon's curve: spline, point at a distance, neck
         ├── StoneDragonRig.swift          Rig for the design team's stone dragon, used when it is in the bundle
         └── ProceduralDragonRig.swift     Placeholder dragon built from primitives
-Sources/Macrowavers/Model/Untangle/StoneDragonLayout.swift        Where each stone sits on the body, which node holds it
 Sources/Macrowavers/Resources/StoneDragon.usdz                    The design team's stone dragon (Git LFS)
 Sources/Macrowavers/Resources/FloatingIsland.usdz                 Floating island with the tree (Git LFS)
+Sources/Macrowavers/Resources/DragonGrowl/Roar/Rumble/Whoosh.m4a  The dragon's sounds (Git LFS)
+Sources/Macrowavers/Views/GameAudio.swift                         Loads a sound by name (m4a/wav/mp3/caf)
 Assets/Blender/floating-island/       The island's source and make_island_asset.py (not in the app)
 Assets/Blender/stone-dragon/          The stone dragon's source and make_stone_dragon_asset.py (not in the app)
-Tests/MacrowaversTests/UntangleTests.swift, SceneFocusTests.swift, StoneDragonTests.swift
+Tests/MacrowaversTests/UntangleTests.swift, TangleInterpolationTests.swift, SceneFocusTests.swift, StoneDragonTests.swift
 ```
 
 MVVM: the Model does not import SwiftUI or RealityKit; the view model does not import RealityKit;
@@ -143,14 +145,15 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   observe the view model, so the system compares the chapter with the one already applied and reconfigures
   only on change: *tap* (no `ManipulationComponent`, larger 9 cm colliders tagged `DragonTapTargetComponent`,
   which is what the `SpatialTapGesture` targets, so it never steals the pinch from grabbing), *grab*
-  (`ManipulationComponent`, head excluded), *none* while flying.
+  (`ManipulationComponent` on the rig's `grabTargets`: the head and one node per stone, the nodes in between get no
+  shape; every node, head included, with the placeholder), *none* while it receives the elixir or flies.
 - **No visible platform.** The knot lies on an invisible plane (`y = 0` of the play area): a floor appearing
   in the room when the dragon arrives looked out of place. The play area cannot be dragged by hand, and since the
   dragon panel was removed it is not rotated or tilted from a panel either: it stays at `PlayAreaPlacement.seated`
   (`UntangleViewModel.setTilt` remains for code and tests).
 - **Orbit = a two-turn torus curve around the trunk (`OrbitPath`).** After one turn radius and height swap, so
   the 2.35 m body (more than one turn) wraps the tree without crossing itself (headless: closest gap 14 cm,
-  6 cm needed). The head advances at a fixed speed per second (frame-rate independent) and the body follows its
+  8 cm needed). The head advances at a fixed speed per second (frame-rate independent) and the body follows its
   trail, in the tree anchor's space (see `AnchoredOrbit` above).
 - **Landing traces the knot.** After the approach a Bézier takes the head to the knot's tail tip, then the head
   runs along the knot from tail to head; with "follow the leader" the body ends exactly in the puzzle's shape
@@ -213,16 +216,17 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   are not a clean begin/end pair per hand: a hand holds one node at a time (a missed release used to leave a
   node frozen in the simulation), a node passes between hands without being dropped, and the end of a released
   grab arriving after a quick re-grab of the same node no longer drops the new grab (the old code released on
-  every `WillEnd`). The head is grabbable with its own sphere (half the gap to the first stone: it used to have
-  no collider at all, so its 9 cm tap sphere would not sit over the neck and swallow pinches), the grab spheres are 1.2× the body radius instead of 1.5× (neighbouring
+  every `WillEnd`). The head is grabbable with its own sphere (0.95 × half the gap to the first stone: it used to
+  have no grab collider, and its 9 cm tap sphere caught the pinches meant for the neck); the stones' spheres are
+  0.95 × half the gap to their closest neighbour, the placeholder's 1.2× the body radius instead of 1.5× (neighbouring
   spheres overlap less, so two hands close together pick two nodes instead of sharing one), and colliders have
   no shape while the dragon flies. One hand pulling the body taut does not lock the other: tension is measured
   per grab and only holds back the move that stretches the taut side, so the other node keeps following its hand
   and the pulling one gives way (test).
 - **Colliders are separate from the visuals.** One invisible collider per node handles input; the visuals are
   a swappable `DragonRig`. When the asset arrives only the rig changes, not the game.
-- **Hover highlights the part you look at.** visionOS highlights the children of the looked-at entity, so the
-  placeholder rig parents each body segment to its collider.
+- **Hover highlights the part you look at.** visionOS highlights the children of the looked-at entity, so each rig
+  parents its visuals to the colliders: each stone (and the head) to its node's, each placeholder segment to its own.
 - **"Alive" animations are visual only** (`DragonLifeAnimator`): breathing, neck, gaze, jaw, wings, smoke,
   fire. They never touch the simulation, so the puzzle stays fair.
 - **Fits always add a crossing.** Tail lash and coil aim at a reachable body segment and land just past it;
@@ -288,7 +292,7 @@ island):
   above the grass.
 - No faces to turn: the source's meshes are double-sided (the earlier export's rock was wound inwards and looked
   hollow; this one is drawn from both sides).
-- 184 KB, 91 `ShaderGraphMaterial`s once loaded (checked with RealityKit on macOS), validated with `usdchecker`.
+- 183 KB, 91 `ShaderGraphMaterial`s once loaded (checked with RealityKit on macOS), validated with `usdchecker`.
 
 In the scene:
 
@@ -348,7 +352,7 @@ The v2 source is the design team's fix for the head, parts of which did not show
 the first export, only the materials changed (the first ones used a world-space grain re-rolled 24 times a second,
 `GrainFPS`).
 
-The asset is 192 KB (the Sketchfab dragon it replaces, `DragonBody` + `DragonHead`, was 11.6 MB). Earlier exports:
+The asset is 190 KB (the first dragon asset it replaces, `DragonBody` + `DragonHead`, was 11.6 MB). Earlier exports:
 `CartoonDragon_airbrush.usdc` had no usable material (Blender's MaterialX graph, which RealityKit does not render,
 with the grain frozen at one position: flat grey boxes); `CartoonDragon_RCP.usdz` had one material for the whole
 dragon and opened the mouth in a mesh animation of the face (the script then took the face's pieces that move in
@@ -390,8 +394,10 @@ What the rig expects:
   the fallback).
 - Materials: anything RealityKit renders (the design team's are Reality Composer Pro shader graphs). The code
   does not replace them.
-- Sounds (optional; wav/m4a/mp3/caf in the bundle): `DragonGrowl`, `DragonRoar`, `DragonRumble`,
-  `DragonWhoosh`, played as spatial audio from the head.
+- Sounds: `DragonGrowl`, `DragonRoar`, `DragonRumble`, `DragonWhoosh` (m4a in `Resources/`, Git LFS; `GameAudio` also
+  takes wav/mp3/caf, a missing one stays silent), played by `DragonEffects` as spatial audio from the head: growl
+  when it gets restless, roar on rearing up, hovering and departing, rumble on a turn, whoosh on lashes, coils,
+  take-off, swoop and approach.
 
 The stones follow a Catmull-Rom spline through the simulated nodes (`DragonCurve`), and the first stretch of
 neck (`StoneDragonRig.Asset.neckBlendLength`) leaves the back of the head in the head's direction, so the rigid
@@ -421,6 +427,7 @@ The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit
 | `IslandSceneBuilder` | `islandEmissionBoost` | how bright the island is (towards 0 = brighter, flatter; the asset's −1.2 = darkest) |
 | `OrbitPath.aroundTree` | radius, height, swings, speed (asset metres) | how the dragon wraps the tree |
 | `DragonFlight.Settings` | `approachDistance`, `landingSpeed` | where it stops in front of the player, landing duration |
+| `DragonFlight` | `holdBraking` | how fast the dragon stops on its path for the elixir (speed `e^(−k t)`) |
 | `DetanglingStateComponent` | `tapRadius`, `fadeDuration` | how easy the dragon is to tap, fades |
 
 ## Tests
@@ -428,22 +435,24 @@ The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit
 `Tests/MacrowaversTests/UntangleTests.swift` (Swift Testing) covers the Model and the view model: initial
 crossings, the knot not untying by itself, rigid turns keeping crossings, the head staying put unless held,
 following the hand when held (even in the air) and staying where it is left, settling onto the plane, two-handed
-grabs,
-one hand pulling taut not locking the other (the knot slides first, so the test pulls 1.6 m), hand tracking (one node per hand, hand-off, late end after a
-re-grab, cancelled grab), left and right hands dragging two parts independently through the view model,
-the fit starting with a turn after the delay, the dragon waiting while held, a shaky hand not shaking the body,
-a taut pull not flickering (pulled 1.5 m apart, so it ends up taut), the approach keeping its distance from the player, the orbit never crossing itself, the
-captive dragon turning rigidly with the island, the landing matching the knot, the story flow
-(captive, a tap only makes it angry for `alertDuration`, `receiveElixir()` braking to a standstill with no jump
-and staying still past the anger's time, `callDragon()` → puzzle), tilt clamping, restart and
-play again.
+grabs, one hand pulling taut not locking the other (the knot slides first, so the test pulls 1.6 m), hand tracking
+(one node per hand, re-grab, hand-off, late end after a re-grab, cancelled grab), left and right hands dragging two
+parts independently through the view model, the fit starting with a turn after the delay, the dragon waiting while
+held, a shaky hand not shaking the body, a taut pull not flickering (each hand pulled 1.5 m out, so it ends up
+taut), flight keeping its distance from the player, the orbit never crossing itself, the captive dragon turning
+rigidly with the island, the landing matching the knot, the story flow (captive, a tap only makes it angry for `alertDuration`,
+`receiveElixir()` braking to a standstill with no jump and staying still past the anger's time, `callDragon()` →
+puzzle), tilt clamping, restart and play again.
+`TangleInterpolationTests.swift` covers the body drawn between two 60 Hz ticks (it moves on every 90 Hz frame and
+turns with the body).
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
-elixir flies, when exploring, only landing and untangling focusing on the dragon) and the island's transform (at least the original size, grass at 0.6 m
-whatever the scale, positive uniform scale), the island's spin (the side facing the player follows the hand from
-any side of the island, movement towards it or up does not turn it, no jump with the player above the trunk), and
-the speaking dragon keeping only itself visible.
+elixir flies, when exploring, only landing and untangling focusing on the dragon) and the island's transform (at
+least the original size, grass at 0.6 m whatever the scale, positive uniform scale), the island's spin (the side
+facing the player follows the hand from any side of the island, movement towards it or up does not turn it, no
+jump with the player above the trunk), and the speaking dragon keeping only itself visible.
 `StoneDragonTests.swift` covers the stone dragon's layout (stones along the whole body in the asset's
-proportions, each held by its own node next to it, increasing and never the head, even when crowded).
+proportions, each held by its own node next to it, increasing and never the head, even when crowded; grab spheres
+never reaching the next stone).
 `StoryTests.swift` covers the free dragon waiting for the player's answer (and taking off on its own without the
 story).
 
@@ -461,7 +470,7 @@ story).
   silently changes them too (they should become per-second values).
 - While rearing up the neck is raised only visually; colliders stay on the play area plane for ~1 s.
 - Smoke and fire sizes are eyeballed and need tuning on device.
-- The island (2.8 m away, ~2.5 m wide, floating rocks ~3.6 m) does not know the room: reduce
+- The island (2.8 m away, ~2.5 m wide, floating rocks ~3.7 m) does not know the room: reduce
   `IslandPlacement.standard` in small spaces.
 - The floor occluder assumes a flat floor at the immersive space's origin (y = 0); on a step or a rug it may
   cut the rock slightly above or below the real floor.

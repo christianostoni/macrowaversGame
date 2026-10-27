@@ -9,6 +9,11 @@ The canopy of the island's tree (`Tree/Icosphere_*`, the meshes bound to `Airbru
 puff by puff, under one `Cloud` prim: centred on the origin, Y-up, 1 m across at its widest (the app scales each
 cloud). Its airbrush material is copied too, as `Airbrush_Cloud`, with a white colour ramp: lilac-grey where a
 facet faces the player, white towards the rims, the same grain as the canopy. Re-run it when the tree changes.
+
+The app also takes this material for everything it builds in code (`RideAirbrush`), so it gets translucent
+gradients the canopy doesn't have: its opacity runs from `FacingOpacity` (faces seen straight on) to `RimOpacity`
+(the rims), by the same grainy factor as the colours, and fades from `BottomOpacity` at `FadeBottom` up to opaque
+at `FadeTop` (object space, y), sprayed with the same grain. All opaque by default.
 """
 import os
 import sys
@@ -78,6 +83,52 @@ for index, (colour, position) in enumerate(STOPS):
     material.GetAttribute(f"inputs:Stop{index}Color").Set(Gf.Vec3f(*colour))
     material.GetAttribute(f"inputs:Stop{index}Position").Set(position)
 material.GetAttribute("inputs:EmissionBoost").Set(EMISSION_BOOST)
+
+
+def float_input(name, value):
+    attribute = UsdShade.Material(material).CreateInput(name, Sdf.ValueTypeNames.Float)
+    attribute.Set(value)
+    return attribute
+
+
+def node(name):
+    return UsdShade.Shader(stage.GetPrimAtPath(MATERIAL.AppendChild(name)))
+
+
+def shader(name, node_id, inputs):
+    """A float node of the graph: its inputs are constants, the material's inputs, or other nodes' outputs."""
+    new = UsdShade.Shader.Define(stage, MATERIAL.AppendChild(name))
+    new.CreateIdAttr(node_id)
+    for input_name, (value_type, source) in inputs.items():
+        new_input = new.CreateInput(input_name, value_type)
+        if isinstance(source, UsdShade.Input):
+            new_input.ConnectToSource(source)
+        elif isinstance(source, UsdShade.Shader):
+            new_input.ConnectToSource(source.ConnectableAPI(), "out")
+        else:
+            new_input.Set(source)
+    new.CreateOutput("out", Sdf.ValueTypeNames.Float)
+    return new
+
+
+FLOAT, FLOAT3, INT = Sdf.ValueTypeNames.Float, Sdf.ValueTypeNames.Float3, Sdf.ValueTypeNames.Int
+facing, rim = float_input("FacingOpacity", 1.0), float_input("RimOpacity", 1.0)
+bottom = float_input("BottomOpacity", 1.0)
+fade_bottom, fade_top = float_input("FadeBottom", 0.0), float_input("FadeTop", 1.0)
+by_edge = shader("OpacityByEdge", "ND_mix_float",
+                 {"bg": (FLOAT, facing), "fg": (FLOAT, rim), "mix": (FLOAT, node("Factor"))})
+height = shader("Height", "ND_extract_vector3", {"in": (FLOAT3, node("Position")), "index": (INT, 1)})
+height_t = shader("HeightT", "ND_remap_float",
+                  {"in": (FLOAT, height), "inlow": (FLOAT, fade_bottom), "inhigh": (FLOAT, fade_top),
+                   "outlow": (FLOAT, 0.0), "outhigh": (FLOAT, 1.0)})
+height_grain = shader("HeightPlusGrain", "ND_add_float", {"in1": (FLOAT, height_t), "in2": (FLOAT, node("Grain"))})
+height_clamped = shader("HeightClamped", "ND_clamp_float",
+                        {"in": (FLOAT, height_grain), "low": (FLOAT, 0.0), "high": (FLOAT, 1.0)})
+by_height = shader("OpacityByHeight", "ND_mix_float",
+                   {"bg": (FLOAT, bottom), "fg": (FLOAT, 1.0), "mix": (FLOAT, height_clamped)})
+opacity = shader("Opacity", "ND_multiply_float", {"in1": (FLOAT, by_edge), "in2": (FLOAT, by_height)})
+node("UnlitSurface").GetInput("opacity").ConnectToSource(opacity.ConnectableAPI(), "out")
+
 for prim in Usd.PrimRange(material):
     for attribute in prim.GetAttributes():
         for target in attribute.GetConnections():

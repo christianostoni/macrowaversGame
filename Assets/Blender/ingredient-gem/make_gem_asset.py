@@ -13,9 +13,9 @@ points to an .exr that is not shipped. What the script does, and why:
 - Centres it and scales it to `HEIGHT` (6 cm tall, ~3.5 cm wide: the size of the old 5 cm orb), origin at its
   centre, so it spins on itself and dives into the flask's neck tip first.
 - Flat faces: the facets catch the light one by one as it turns.
-- Keeps the design team's material (`CRYSTAL`: pale, 20 % opaque, IOR 1.7) and the double-sided faces: what makes
-  it a gem is seeing the back facets through the front ones. It has no texture. The app tints it per ingredient in
-  code, keeping those traits, and adds the glow.
+- Keeps the design team's material (`CRYSTAL`: pale, 20 % opaque, IOR 1.7) and the double-sided faces. It has no
+  texture. The app replaces the material in code with an opaque one tinted per ingredient (see-through, the gem
+  looked washed out in the room and sorted wrongly against the flask's glass), and adds the glow.
 - Exports a Y-up USDZ (rotation on the file root, so the code never overwrites the loaded entity's transform).
 """
 import os

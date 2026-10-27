@@ -33,7 +33,7 @@ final class UntangleViewModel {
     private(set) var action: DragonAction?
     /// Placement and rotation of the island (the player spins it).
     private(set) var islandPlacement = IslandPlacement.standard
-    /// Which hand holds which node (from the manipulation events; shown in the debug info).
+    /// Which hand holds which node (from the manipulation events).
     private(set) var handGrabs = HandGrabs()
 
     // MARK: - Model

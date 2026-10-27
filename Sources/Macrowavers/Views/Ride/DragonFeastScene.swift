@@ -14,7 +14,7 @@ struct DrawnFruit {
 
 /// Chapter II drawn (`DragonFeast` decides): the snap that breathes fire, read without letting it steer the dragon,
 /// the fruit (poisoned ones dark in a sickly haze), the long breath of fire from the middle of the dragon's mouth,
-/// the embers of a burnt fruit, and the sounds.
+/// the embers of a burnt fruit, the medallion's petals (`Shamseh`) and the sounds.
 extension DragonRideSystem {
     /// The hands that snapped this frame: only while the player feeds the dragon (the detector rests otherwise).
     @MainActor
@@ -32,13 +32,33 @@ extension DragonRideSystem {
         return snapped
     }
 
-    /// The hands on the horns (ride space), a hand making the snap held where it was (`SteeringHold`).
+    /// The hands on the horns (ride space): each one where it pinches (between thumb and index), only while it
+    /// pinches.
+    @MainActor
+    static func pinchedHands(_ state: inout DragonRideComponent,
+                             root: Entity) -> (left: SIMD3<Float>?, right: SIMD3<Float>?) {
+        var grips: [HandSample.Chirality: SIMD3<Float>] = [:]
+        for chirality in HandSample.Chirality.allCases {
+            var pinch = state.pinches[chirality] ?? Pinch()
+            if let sample = state.hands.samples[chirality] {
+                pinch.update(thumbTip: sample.thumbTip, indexTip: sample.indexTip)
+                if pinch.isPinching {
+                    grips[chirality] = root.convert(position: (sample.thumbTip + sample.indexTip) / 2, from: nil)
+                }
+            } else {
+                pinch.release()
+            }
+            state.pinches[chirality] = pinch
+        }
+        return (grips[.left], grips[.right])
+    }
+
+    /// The hands holding the horns (ride space, `pinchedHands`), a hand making the snap held where it was
+    /// (`SteeringHold`): one still pinching while its thumb loads the snap never swerves the dragon.
     @MainActor
     static func steeringHands(_ state: inout DragonRideComponent, root: Entity,
                               snapped: Set<HandSample.Chirality>) -> (left: SIMD3<Float>?, right: SIMD3<Float>?) {
-        let hands = state.hands.samples
-        let left = hands[.left].map { root.convert(position: $0.knuckle, from: nil) }
-        let right = hands[.right].map { root.convert(position: $0.knuckle, from: nil) }
+        let (left, right) = pinchedHands(&state, root: root)
         let loaded = Set([HandSample.Chirality.left, .right].filter { state.snap.isLoaded($0) })
         return state.steeringHold.steering(left: left, right: right, loaded: loaded, snapped: snapped,
                                            time: state.ride.time)
@@ -52,7 +72,8 @@ extension DragonRideSystem {
         play(.roar, from: state.mouth, sounds: state.sounds)
     }
 
-    /// The fruit and the waves: eaten, spat out, poisoning the dragon, burnt; the tally; the end of the feast.
+    /// The fruit and the waves: eaten, spat out, poisoning the dragon, burnt; the tally; the medallion's petals (one
+    /// per fruit eaten; out of hearts, the wave's petals fade with it).
     @MainActor
     static func feed(_ state: inout DragonRideComponent, mouth: SIMD3<Float>, deltaTime: Float) {
         guard var feast = state.feast else { return }
@@ -62,17 +83,19 @@ extension DragonRideSystem {
         state.story.showFeast(feast.progress)
         for event in events {
             switch event {
-            case .ate(let fruit): play(.eating(fruit), from: state.mouth, sounds: state.sounds)
+            case .ate(let fruit):
+                state.shamseh.colour(with: fruit)
+                play(.eating(fruit), from: state.mouth, sounds: state.sounds)
             case .refused: play(.growl, from: state.mouth, sounds: state.sounds)
             case .poisoned: play(.squish, from: state.mouth, sounds: state.sounds)
             case .burned: break
             case .waveCleared: play(.chime, from: state.mouth, sounds: state.sounds)
-            case .exhausted: play(.rumble, from: state.mouth, sounds: state.sounds)
+            case .exhausted:
+                state.shamseh.uncolour(last: feast.eaten)
+                play(.rumble, from: state.mouth, sounds: state.sounds)
             case .finished: play(.chime, from: state.mouth, sounds: state.sounds)
             }
         }
-        // "The dragon is full!" for a moment, then the story's last page.
-        if feast.isOver { state.story.feastFinished() }
         draw(feast, in: &state)
     }
 
@@ -157,6 +180,16 @@ extension DragonRideSceneBuilder {
     /// A poisoned fruit's colour (it tints the fruit's own) and its haze.
     static let poisonTint = UIColor(red: 0.42, green: 0.22, blue: 0.5, alpha: 1)
     static let poisonGlow = UIColor(red: 0.35, green: 0.85, blue: 0.25, alpha: 1)
+
+    /// The breath of fire at the dragon's mouth (ride space) and the puffs of embers where fruit burn (sky space).
+    @MainActor
+    static func addFire(root: Entity, sky: Entity) -> (breath: Entity, embers: [Entity]) {
+        let breath = makeFireBreath()
+        root.addChild(breath)
+        let embers = (0..<4).map { _ in makeEmbers() }
+        embers.forEach { sky.addChild($0) }
+        return (breath, embers)
+    }
 
     /// The long breath of fire: flames along +Z, fast enough to reach the fruit ~12 m ahead, growing as they go.
     @MainActor

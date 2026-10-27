@@ -51,8 +51,8 @@ protocol DragonRig: AnyObject {
     /// colliders: visionOS's hover effect lights up the children of the entity being looked at.
     func attach(to colliders: [Entity])
     func update(_ frame: DragonFrame, deltaTime: Float)
-    /// The nodes the player can grab in the mini-game, with the radius of their grab sphere (m). nil: every node
-    /// but the anchored head, with the default sphere.
+    /// The nodes the player can grab in the mini-game, with the radius of their grab sphere (m). nil: every node,
+    /// the head included, with the default sphere.
     var grabTargets: [Int: Float]? { get }
     /// The middle of the mouth, its +Z the way fire leaves (the ride's long breath of fire starts there). nil: the
     /// rig does not know it.

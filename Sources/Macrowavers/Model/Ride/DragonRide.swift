@@ -1,7 +1,8 @@
 import Foundation
 import simd
 
-/// The end of the story: the player rides on the dragon's back, steering it with both hands as if holding its horns.
+/// The end of the story: the player rides on the dragon's back, steering it with both hands as if holding its horns:
+/// a pinch with both hands takes hold of them, and where the hands go from there, the dragon goes.
 /// Pure state, no RealityKit: the RealityKit layer (`DragonRideSystem`) feeds it the hands and draws the flight.
 ///
 /// The player never moves: the world flies past them. Everything here is in the *ride space*: origin at the
@@ -20,12 +21,11 @@ struct DragonRide {
         /// Hands let go: the dragon glides straight and levels out.
         static let level = Steering()
 
-        /// Both hands on the horns (ride space). A hand lower than the other turns towards its side, both raised
-        /// above `rest` climb, both lowered dive, both pushed forward speed up.
+        /// Both hands holding the horns (ride space), `rest` where they took hold: the arms raised climb, lowered
+        /// dive, moved to one side turn that way, pushed forward speed up.
         init(left: SIMD3<Float>, right: SIMD3<Float>, rest: SIMD3<Float>) {
-            let tilt = left.y - right.y
-            turn = Self.clamp(tilt / Settings.fullTurnTilt)
             let middle = (left + right) / 2
+            turn = Self.clamp((middle.x - rest.x) / Settings.fullTurnReach)
             climb = Self.clamp((middle.y - rest.y) / Settings.fullClimbRaise)
             boost = max(0, Self.clamp((rest.z - middle.z) / Settings.fullBoostReach))
             // A small dead zone: hands held still never drift the flight.
@@ -54,8 +54,8 @@ struct DragonRide {
     }
 
     enum Settings {
-        /// Hand height difference (m) for a full turn, and the turn rate it gives (rad/s).
-        static let fullTurnTilt: Float = 0.22
+        /// Both hands moved this far to one side (m) for a full turn, and the turn rate it gives (rad/s).
+        static let fullTurnReach: Float = 0.2
         static let maxTurnRate: Float = 0.6
         /// Raise or lower of both hands (m) for a full climb or dive, and the pitch it gives (rad).
         static let fullClimbRaise: Float = 0.2
@@ -74,8 +74,6 @@ struct DragonRide {
         /// by this much (rad; the body only: the player's view never sways).
         static let weakSlowdown: Float = 0.45
         static let weakSway: Float = 0.22
-        /// Where the hands rest on the horns before the player has held them (ride space, m).
-        static let defaultRest = SIMD3<Float>(0, -0.35, -0.35)
         /// The dark arrival: a glow comes out of the dark (s), then the dragon appears under the player.
         static let arrivalDuration: Float = 3.5
     }
@@ -95,8 +93,14 @@ struct DragonRide {
     private(set) var position = SIMD3<Float>(repeating: 0)
     /// Seconds since the ride began.
     private(set) var time: Float = 0
-    /// Hands' rest position on the horns: taken the first time both hands hold them.
+    /// Where the hands took hold of the horns (nil while they don't hold them): straight and level.
     private(set) var rest: SIMD3<Float>?
+
+    /// Where the dragon flies on its own (a direction, sky space), whatever the hands do: the finale.
+    var destination: SIMD3<Float>?
+
+    /// The player holds the horns (both hands pinching, after the arrival).
+    var isHolding: Bool { rest != nil }
 
     /// 0...1 through the dark arrival; the hands steer only once it is over.
     var arrival: Float { min(time / Settings.arrivalDuration, 1) }
@@ -114,8 +118,9 @@ struct DragonRide {
 
     // MARK: - Frame update
 
-    /// Advances the flight. `left`/`right`: the hands in ride space (nil when not tracked); `isHandTrackingAvailable`
-    /// false flies the autopilot instead; `weakness` 0...1 slows the dragon down and makes it sway.
+    /// Advances the flight. `left`/`right`: the hands in ride space while they pinch (nil otherwise);
+    /// `isHandTrackingAvailable` false flies the autopilot instead; `weakness` 0...1 slows the dragon down and makes
+    /// it sway.
     mutating func update(deltaTime: Float, left: SIMD3<Float>?, right: SIMD3<Float>?, isHandTrackingAvailable: Bool,
                          weakness: Float = 0) {
         time += deltaTime
@@ -136,16 +141,30 @@ struct DragonRide {
 
     func steering(left: SIMD3<Float>?, right: SIMD3<Float>?, isHandTrackingAvailable: Bool) -> Steering {
         guard !isArriving else { return .level }
+        if let destination { return homing(on: destination) }
         guard isHandTrackingAvailable else { return .autopilot(time: time) }
-        guard let left, let right else { return .level }
-        return Steering(left: left, right: right, rest: rest ?? Settings.defaultRest)
+        guard let left, let right, let rest else { return .level }
+        return Steering(left: left, right: right, rest: rest)
     }
 
-    /// The first time both hands hold the horns (after the arrival) is where they rest: the player's own
-    /// comfortable position becomes "straight and level".
+    /// Turns towards `direction` (sky space) and climbs or dives to it, at full speed.
+    private func homing(on direction: SIMD3<Float>) -> Steering {
+        let heading = atan2(-direction.x, -direction.z)
+        let height = asin(min(max(simd_normalize(direction).y, -1), 1))
+        // A positive turn goes right: the heading (yaw) decreases.
+        let turn = min(max(-remainder(heading - yaw, 2 * .pi) * 2, -1), 1)
+        let climb = min(max(height / Settings.maxPitch, -1), 1)
+        return Steering(turn: turn, climb: climb, boost: 1)
+    }
+
+    /// Where both hands take hold (pinch) is "straight and level", wherever the player holds them; letting go
+    /// (either hand) releases the horns, and the next hold starts level again.
     mutating func holdHorns(left: SIMD3<Float>?, right: SIMD3<Float>?) {
-        guard rest == nil, !isArriving, let left, let right else { return }
-        rest = (left + right) / 2
+        guard !isArriving, let left, let right else {
+            rest = nil
+            return
+        }
+        if rest == nil { rest = (left + right) / 2 }
     }
 
     /// From sky space to ride space (where the player sits).
@@ -180,4 +199,22 @@ struct DragonRide {
 
     /// A hint of the climb for the body's shape: the neck rises ahead when climbing.
     private var pitchRateHint: Float { pitch * 0.6 }
+}
+
+/// A pinch (thumb and index tips together) held through the small gaps of hand tracking: it closes under one
+/// distance and opens only past a larger one, so it never flickers.
+struct Pinch {
+    static let closing: Float = 0.02
+    static let opening: Float = 0.045
+
+    private(set) var isPinching = false
+
+    mutating func update(thumbTip: SIMD3<Float>, indexTip: SIMD3<Float>) {
+        let gap = simd_distance(thumbTip, indexTip)
+        isPinching = isPinching ? gap < Self.opening : gap < Self.closing
+    }
+
+    mutating func release() {
+        isPinching = false
+    }
 }

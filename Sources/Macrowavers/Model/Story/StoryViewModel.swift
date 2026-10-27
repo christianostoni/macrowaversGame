@@ -28,8 +28,8 @@ final class StoryViewModel {
         case .gratitude: .safety
         case .safety: .ride
         case .secondChapter: .feast
-        case .finale: .ended
-        case .start, .adventure, .ride, .feast, .ended: nil
+        case .epilogue: .ended
+        case .start, .adventure, .ride, .feast, .finale, .ended: nil
         }
         if let next { step = next }
     }
@@ -75,10 +75,16 @@ final class StoryViewModel {
         return true
     }
 
-    /// The last wave is eaten: the dragon is full, the story's last page.
-    func feastFinished() {
-        guard step == .feast else { return }
+    /// The last wave is eaten (the dragon is full) and its medallion complete: it flies off into it.
+    func feastCelebrated() {
+        guard step == .feast, feast.phase == .finished else { return }
         step = .finale
+    }
+
+    /// The dragon has flown into the heart of the medallion: the story's last page, in its light.
+    func rideEnded() {
+        guard step == .finale else { return }
+        step = .epilogue
     }
 
     #if DEBUG
