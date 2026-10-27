@@ -4,9 +4,9 @@ import simd
 import ARKit
 #endif
 
-/// The player's hands, for the gestures SwiftUI does not offer: chopping the pineapple and snapping the fingers
-/// to brew the elixir. ARKit hand tracking (asks the player's permission once); when it is not available
-/// (simulator, permission denied) `start()` returns false and the taps take over.
+/// The player's hands, for the gestures SwiftUI does not offer: chopping the pineapple, snapping the fingers
+/// to brew the elixir and steering the dragon on the ride. ARKit hand tracking (asks the player's permission once);
+/// when it is not available (simulator, permission denied) `start()` returns false and the taps take over.
 @MainActor
 final class HandTracker {
     /// Latest reading of each hand still tracked.
@@ -17,6 +17,15 @@ final class HandTracker {
     private let handTracking = HandTrackingProvider()
     private var isRunning = false
     #endif
+
+    /// The hands are being tracked (false in the simulator or without the player's permission).
+    var isTracking: Bool {
+        #if os(visionOS)
+        isRunning
+        #else
+        false
+        #endif
+    }
 
     /// Starts the tracking; returns whether it runs.
     func start() async -> Bool {

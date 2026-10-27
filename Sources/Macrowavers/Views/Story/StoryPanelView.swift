@@ -9,11 +9,14 @@ struct StoryPanelView: View {
     static let attachmentID = "StoryPanel"
 
     @Environment(StoryViewModel.self) private var story
+    /// Pages on a glass panel, legible over a bright sky (the ride); without it, white words over the darkened room.
+    var hasBackdrop = false
 
     var body: some View {
         ZStack {
             if let page = story.step.page {
                 StoryPageView(page: page) { story.advance() }
+                    .glassBackgroundEffect(displayMode: hasBackdrop ? .always : .never)
                     .id(story.step)
                     .transition(.opacity)
             }

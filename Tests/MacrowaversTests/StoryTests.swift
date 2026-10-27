@@ -27,9 +27,9 @@ struct StoryTests {
         story.advance()
         #expect(story.step == .safety)
         story.advance()
-        #expect(story.step == .farewell)
+        #expect(story.step == .ride)
         story.advance()
-        #expect(story.step == .farewell)
+        #expect(story.step == .ride)
     }
 
     @Test func restartingTheDragonOrTheSpaceGoesBack() {

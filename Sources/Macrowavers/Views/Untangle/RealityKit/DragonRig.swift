@@ -32,6 +32,10 @@ struct FlightFrame {
     var progress: Float
     /// Velocity of the head in the dragon's space.
     var velocity: SIMD3<Float>
+    /// Cruising with the player on its back: 0...1, jaws opening for a fruit ahead (`DragonFeast.appetite`).
+    var bite: Float = 0
+    /// 0...1: just spat out a banana: shakes its head and snorts (`DragonFeast.disgust`).
+    var disgust: Float = 0
 }
 
 /// The dragon's "skin": how it is drawn. Collisions and physics are separate,
@@ -288,6 +292,12 @@ struct DragonLifeAnimator {
             // Beats when climbing, glides when descending.
             let effort = max(0.15, min(1, 0.4 + climb * 1.5))
             target.wingFlap = 0.5 * effort * sin(time * 6)
+            // Fed on the wing: jaws open for the fruit ahead; a banana makes it shake its head, snorting.
+            target.jawOpen = max(0.8 * flight.bite, 0.35 * flight.disgust)
+            target.smoke = flight.disgust
+            if flight.disgust > 0 {
+                look = rotate(look, by: 0.45 * flight.disgust * sin(time * 14))
+            }
         case .swoop:
             // Wings tucked in the dive, open again when climbing.
             target.wingFlare = progress < 0.5 ? 0.35 : 1

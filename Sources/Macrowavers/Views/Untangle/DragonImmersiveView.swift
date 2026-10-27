@@ -5,9 +5,10 @@ import SwiftUI
 /// Immersive space in mixed reality: a floating island (the player spins it) with the dragon captive
 /// around the tree and fruit on its branches. Every fruit hides an ingredient that joins an orbit around the
 /// player: three of them and a snap of the fingers brew the elixir that soothes the dragon: it flies to
-/// the player and settles tangled in front of them; untangled, it thanks them and flies away into the sky.
+/// the player and settles tangled in front of them; untangled, it thanks them and offers to take them along.
 /// The story (`StoryViewModel`) frames it: the narrator's pages in a darkened room before the island fades in,
-/// the dragon's words above it once it is free; its farewell waits for the player's answer.
+/// the dragon's words above it once it is free. When the player is ready the room darkens, the island fades and
+/// this space hands over to the ride's (`DragonRideView`, full immersion).
 struct DragonImmersiveView: View {
     static let spaceID = "DragonSpace"
 
@@ -22,6 +23,8 @@ struct DragonImmersiveView: View {
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(StoryViewModel.self) private var story
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     /// Rotation of the island and the hand's position (scene) when the current drag started.
     @State private var islandSpinStart: (yaw: Float, location: SIMD3<Float>)?
     /// Rotation of the island when the current two-hand rotation started (nil: not rotating).
@@ -119,6 +122,7 @@ struct DragonImmersiveView: View {
                 IslandControlsView()
                     .environment(viewModel)
                     .environment(orchard)
+                    .environment(story)
             }
         }
         .gesture(tapDragonGesture)
@@ -126,14 +130,16 @@ struct DragonImmersiveView: View {
         .simultaneousGesture(spinIslandGesture)
         .simultaneousGesture(rotateIslandGesture)
         // The narrator's pages and the dragon's words darken the room (passthrough) around them.
-        .preferredSurroundingsEffect(story.step.dimsSurroundings ? .dark : nil)
+        // So does the way to the ride.
+        .preferredSurroundingsEffect(story.step.dimsSurroundings || story.step.isFullyImmersed ? .dark : nil)
+        // The player is ready: the room darkens and the island fades, then the ride's space takes over.
+        .onChange(of: story.step.isFullyImmersed) { _, isFullyImmersed in
+            guard isFullyImmersed else { return }
+            Task { await handOverToRide() }
+        }
         .onChange(of: viewModel.isSolved) { _, isSolved in
             // Free, the dragon speaks; back around the tree (Restart Scene), its words are still to come.
             if isSolved { story.dragonFreed() } else { story.dragonRecaptured() }
-        }
-        .onChange(of: story.step) { _, step in
-            // The player answered "I'm Ready": the dragon takes off.
-            if step == .farewell { viewModel.beginFarewell() }
         }
         // The music follows the story and steps back while the dragon roars.
         .onChange(of: MusicTrack.playing(story: story.step, dragon: viewModel.phase), initial: true) { _, track in
@@ -148,9 +154,35 @@ struct DragonImmersiveView: View {
         }
         .onAppear { viewModel.immersiveSpaceState = .open }
         .onDisappear {
-            // Closed from the island panel or by the system (Digital Crown): start over from the launch window.
             viewer.stop()
             hands.stop()
+            // Handed over to the ride: the story goes on there.
+            guard !story.step.isFullyImmersed else { return }
+            // Closed from the island panel or by the system (Digital Crown): start over from the launch window.
+            viewModel.resetGame()
+            orchard.reset()
+            story.reset()
+            viewModel.immersiveSpaceState = .closed
+            openWindow(id: ContentView.windowID)
+        }
+    }
+
+    // MARK: - Ride
+
+    /// How long the room stays dark, with the island fading, before the ride's space opens (s).
+    private static let rideHandOverDelay: Duration = .seconds(1.2)
+
+    /// Closes this space and opens the ride's (only one immersive space can be open at a time).
+    private func handOverToRide() async {
+        try? await Task.sleep(for: Self.rideHandOverDelay)
+        guard story.step.isFullyImmersed, viewModel.immersiveSpaceState == .open else { return }
+        viewModel.immersiveSpaceState = .inTransition
+        await dismissImmersiveSpace()
+        switch await openImmersiveSpace(id: DragonRideView.spaceID) {
+        case .opened:
+            break
+        default:
+            // No ride: back to the launch window, as when the space closes.
             viewModel.resetGame()
             orchard.reset()
             story.reset()

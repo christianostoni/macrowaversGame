@@ -86,7 +86,8 @@ struct FocusDimmingComponent: Component {
     @MainActor
     var focus: SceneFocus {
         SceneFocus(isFruitFocused: orchard.focusedFruitID != nil, isElixirFlying: orchard.elixir.state == .flying,
-                   phase: untangle.phase, isDragonSpeaking: story.step.focusesOnDragon)
+                   phase: untangle.phase, isDragonSpeaking: story.step.focusesOnDragon,
+                   isRiding: story.step.isFullyImmersed)
     }
 }
 
