@@ -395,10 +395,6 @@ extension OrchardSystem {
     @MainActor
     static func detectSnap(_ orchard: inout OrchardComponent) {
         let viewModel = orchard.viewModel
-        defer {
-            let isLoaded = orchard.snap.isLoaded
-            if viewModel.isSnapLoaded != isLoaded { viewModel.isSnapLoaded = isLoaded }
-        }
         guard viewModel.elixir.state == .ready else {
             orchard.snap.reset()
             return

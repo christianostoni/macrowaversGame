@@ -37,10 +37,10 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 
 4. The orb rises out of the fruit and, after a moment, flies into the orbit on your right (tap it to send it at
    once). The fruit goes back to its branch.
-5. With 3 ingredients in orbit, **snap your fingers**: press the thumb on the middle finger's pad (the label
-   then says "Now snap!") and snap, either hand. Without hand
-   tracking (simulator) tap one of the orbiting ingredients, or press **Brew the Elixir** on the label under
-   the orbit.
+5. With 3 ingredients in orbit, **snap your fingers**, either hand. No words say how: a **hologram hand** to the
+   left of the flask shows it, snapping its fingers in a loop (it glows brighter while your thumb presses on your middle
+   finger). Without hand tracking (simulator) tap one of the orbiting ingredients, or press **Brew the Elixir** on
+   the label under the orbit.
 
 ## What the player sees
 
@@ -54,9 +54,9 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
 | In orbit | The ingredients go round a small ellipse (26 × 28 cm) 60 cm away, 30° to the player's right and a little below their eyes, facing them, its far side tilted up so they see it whole: always between ~18° and ~42° to the right, never in the middle of the view where the fruit comes close; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). A small label under the orbit counts them |
 | Hold an ingredient | Pinch an ingredient in orbit and move it (before the brew): it follows the hand and turns with the wrist, while the others keep going round. With two hands (in the simulator: hold Option) move them apart or together to make it bigger or smaller (0.5×–3×), turn them around it to turn it about any axis. Let go (the last hand), it flies back to its slot in the same arc it came in from its fruit (1.4 s), turns upright again and takes back its own size. A pinch that does not move stays a tap. Looking at it or taking it draws no highlight |
-| Orbit complete | The label says "Press your thumb on your middle finger and snap to brew the elixir.", and "Now snap!" while the thumb is pressed |
+| Orbit complete | The label goes away and a **hologram hand** fades in to the left of the flask, a little lower, clear of the ingredients' path: a ghostly white right hand alone (no arm), one smooth see-through skin with no joints showing, turned so the player sees the thumb and the palm. It snaps in a loop (2.8 s): open hand, thumb pressed on the middle finger's pad, the middle finger flicks into the palm with a puff of white sparks, the hand opens again. It flickers faintly like a hologram, glows brighter while the player's own thumb presses on the middle finger, and fades out at the snap or while a fruit is close. Without hand tracking the label stays ("Tap an ingredient to brew the elixir." and **Brew the Elixir**) under the orbit |
 | The flask | With the first ingredient found, an empty, corked glass flask appears in the middle of the orbit (0.6 s) and turns slowly there; the ingredients go round it. Each time one reaches the orbit the flask wobbles and its glass glows in that ingredient's colour |
-| Snap (3.6 s) | The cork pops out and tumbles above the neck (0.4 s). The ingredients dive in **one at a time** (0.75 s each): each leaves its place in an arc up above the neck, drops down into the flask, shrinking, and lands with a burst of bubbles; the liquid rises by a third, sloshes and takes its colour (red, then mixed with gold, then with green). The cork goes back on (2.7–3.2 s) and the liquid swirls into the elixir's glowing blue (3.2–3.6 s) |
+| Snap (3.6 s) | No words: the label stays hidden while the elixir brews and flies. The cork pops out and tumbles above the neck (0.4 s). The ingredients dive in **one at a time** (0.75 s each): each leaves its place in an arc up above the neck, drops down into the flask, shrinking, and lands with a burst of bubbles; the liquid rises by a third, sloshes and takes its colour (red, then mixed with gold, then with green). The cork goes back on (2.7–3.2 s) and the liquid swirls into the elixir's glowing blue (3.2–3.6 s) |
 | Brewed (1.2 s) | The flask swells a little with a flash of sparks and floats there, throbbing; bubbles rise, and its glow lights the player's hands |
 | The elixir flies | The flask flies in an arc rising above the straight line, to just above the dragon's head (upright, its bottom clear of it) even as it moves. The scene comes back from focus mode. If the dragon has already left the island, the flask keeps floating in front of the player |
 | Poured (3.2 s) | The dragon has stopped and lifted its snout. Above its head the flask stops turning and turns side-on to the player, the cork pops, and it tips over slowly around its neck's mouth, held above the head. A thick, glowing blue stream falls straight onto the head, droplets bounce off it, and the flask drains (fastest at first) while the stream thins to a trickle. When the last of it has landed, a shimmer rises around the dragon's head and the flask fades. **Only then** does the dragon, soothed, come to the player |
@@ -186,6 +186,32 @@ Each hand on its own, with a 0.6 s cooldown; repeated readings (the frame is fas
 The snap is read only while the orbit is complete. A tap on an orbiting ingredient does the same, so the game also
 works without hand tracking.
 
+**The hologram hand** (`SnapHint`, its skin `HandSurface`, drawn by `SnapHintRig`) teaches the gesture without
+words. Its pose is pure maths in its own space (wrist at the origin, fingers up, palm towards the viewer): each
+finger bends at its three joints (the last at 0.7 of the middle one); the thumb's metacarpal turns towards the palm
+and its two phalanges reach a target by two-bone IK, so in the loaded pose the thumb's tip touches the middle
+finger's pad exactly. Key poses (open → loaded at 0.8 s → snapped at 1.3 s → open at 2.6 s) are eased with
+`smootherstep`. A test feeds its loaded and snapped poses to `SnapDetector`: the hologram shows a snap the game
+accepts.
+
+Its skin is one smooth surface, like a real hand's: a signed distance field made of a rounded box for the palm
+(narrower at the wrist), a round cone for the ball of the thumb melted into it, and three tapering round cones per
+finger (their radii match at the joints, so each finger is one tube). Each finger and the thumb melt into the palm
+at their base (smooth minimum), never into each other, so fingers pressed together stay apart. The mesh is
+extracted with naive surface nets (2.8 mm grid, ~7k vertices, normals from the field's gradient). The grid is
+sampled in 4×4×4 blocks: a block whose centre is far from the skin takes that value everywhere (only the cells the
+skin crosses need exact values), and a finger whose bounding sphere is far from a point is skipped: ~10 ms per mesh
+in release, ~0.5 s in Debug. The loop is fixed, so its skin is built once (one mesh per frame at 30 fps, held poses
+reusing theirs: ~50 meshes), in parallel at low priority, when the first ingredient joins the orbit: built while the
+immersive space loaded, it competed with the island's and the dragon's assets. The frames are swapped into one
+model as it plays. The model has a `ModelSortGroup` with a depth pre-pass, so only its outer surface is drawn (the fingers in
+front of the palm do not show it through them); the fade, flicker and flash are one `OpacityComponent` on its root.
+It is 0.8 of an adult hand, facing the player, turned 50° so the palm faces left and leaning back towards their
+eyes; its middle 25 cm to the left of the orbit's centre (along the orbit's side-to-side axis) and 6 cm below it:
+next to the flask, a little lower, clear of the ingredients' path all the way round (from the eyes 3° at the
+closest, 5 cm in space; 9° from the flask). Seen from the eyes it spans ~3–12° to the right and ~13–26° below the
+horizon (the flask: 30° right, 17° down); it shows only while no fruit is close, so it never covers one.
+
 **Tuning on the headset.** `SnapDetector` keeps what it reads: `closestContact` is the closest thumb–pad distance
 in the current frame (it must go under 3 cm when the thumb presses) and `lastAttempt` the separation, curl and
 speed the latest release measured, and whether it counted as a snap. Log them while tuning: a missed snap shows
@@ -204,11 +230,13 @@ Sources/Macrowavers/
 │   ├── CupTurn.swift                      A cupped hand next to the close fruit turns it
 │   ├── LiquidVolume.swift                 The flask's liquid at any level: the glass's profile (32 heights), its mesh
 │   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
+│   ├── SnapHint.swift                     The hologram hand's snapping loop: poses (finger bends, thumb IK), fade
+│   ├── HandSurface.swift                  The hologram hand's skin: distance field (palm, tapering fingers), surface nets
 │   └── OrchardViewModel.swift             @Observable: fruit focus, openings, worms, one ingredient per fruit, elixir
 │                                          (not observed: views read `elixirState` and `orbitingCount`)
 └── Views/Orchard/
     ├── FruitPanelView.swift               Panel under the focused fruit (RealityView attachment, not a window)
-    ├── ElixirPanelView.swift              Label under the orbit: ingredients in orbit, how to brew
+    ├── ElixirPanelView.swift              Label under the orbit: ingredients in orbit (the tap, without hand tracking)
     ├── OrchardInteractions.swift          Gestures (tap fruit/worm/pineapple/ingredient, pull stem, peel, open
     │                                      pomegranate, drag seeds) and the link elixir → dragon
     └── RealityKit/
@@ -217,6 +245,8 @@ Sources/Macrowavers/
         ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, glow); orbit,
         │                                    snap, flight and pour in the system
         ├── ElixirParticles.swift            The flash, the bubbles, the pour's stream, splash and shimmer
+        ├── SnapHintRig.swift                The hologram hand: one mesh per frame built in the background, depth
+        │                                    pre-pass sort group, sparks
         ├── LiquidLevels.swift               One liquid mesh per level step (48), built once when the flask loads
         ├── HandTracker.swift                ARKit hand tracking → HandSample
         ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, worms
@@ -256,6 +286,8 @@ elixir's flight (`OrchardComponent.flight`).
    the cupped palm's turn since the last reading (scene space).
 5. **Orbit.** `ElixirOrbit.follow` with the head's pose (faster spin while brewing); the label's anchor follows it.
 6. **Snap.** With the orbit complete, it feeds `SnapDetector` with both hands; a snap calls `orchard.brewElixir()`.
+   **Hologram.** `SnapHint.update` (shown while the orbit is complete and no fruit is close) and
+   `SnapHintRig.draw` next to the flask, facing the player (its meshes start building with the first ingredient).
 7. **Orbs.** It moves each orb: sealed, rising above its fruit, flying into its slot, orbiting, diving into the flask.
 8. **Elixir.** `ElixirRig.apply` draws the flask from `Elixir`'s curves (size, wobble, cork, liquid level, colour,
    glow and slosh, glass glow, bubbles, stream, light), splashes for each landing, flashes it, flies it. On arrival
@@ -376,6 +408,9 @@ elixir's flight (`OrchardComponent.flight`).
 | `ChopDetector.Settings` | `speed`, `cooldown` | how fast the hand must come down |
 | `CupTurn.Settings` | `bend`, `keepMargin`, `pinchClearance`, `reach`, `keepReach`, `grace`, `smoothing` | how curled the fingers must be, how close to the fruit, how forgiving once holding, how smooth the turn is |
 | `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
+| `SnapHint` | `period`, `snapTime`, `fadeDuration`, `keys`, `open`/`loaded`/`snapped`, `fingers`, `thumb…` | the hologram's loop, its key poses and its bones |
+| `HandSurface` | `cellSize`, `palmBlend`, `fingerBlend`, `palm…`, `wristHalfWidth`, `palmWidening`, `taper` | the hologram's skin: detail, how softly fingers join the palm, the palm's shape, how fingers taper |
+| `SnapHintRig` | `framesPerSecond`, `scale`, `side`, `drop`, `turn`, `lean`, `opacity`, `flashOpacity`, `readyOpacity` | the hologram's smoothness, size, place, angle and brightness |
 | `WormSwarm.Settings` | `count`, `crawlSpeed`, `speedUpPerCatch`, `burrowInterval`, `burrowDuration` | worm difficulty |
 | `OrchardSceneBuilder` | `…SizeOnTree`, `…SizeFocused` | fruit sizes on the tree and in front of the player (the apple's is its width) |
 | `AppleShape` | `turns`, `gapPerTurn` | how many slices the apple opens into, how far apart |
@@ -493,6 +528,10 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   fastest at first, the trickle, the soothing) and the fade, and `.poured` only after it; the orbit's place to the right and its
   shape (always seen whole, to the side, clear of the fruit), period, lazy follow and the dive into the neck; the
   flight's arc and arrival.
+- **`Tests/MacrowaversTests/SnapHintTests.swift`:** the hologram's thumb touching the middle finger's pad when
+  loaded, the finger flicking into the palm, finite poses, its snap accepted by `SnapDetector`, one snap per loop,
+  the fade and the loop starting over when shown again; its skin (inside the palm and fingertips, no webbing
+  between fingers, tapering, every vertex on the surface, faces turned out, closed).
 
 ## Known limits
 

@@ -146,8 +146,8 @@ struct OrchardFruit {
 }
 
 /// Connects the orchard to its view model. Every frame the `OrchardSystem` advances the worms, brings the
-/// focused fruit close or puts it back, applies openings, moves the orbit and the orbs, reads the snap and draws
-/// the elixir.
+/// focused fruit close or puts it back, applies openings, moves the orbit and the orbs, reads the snap (shown by
+/// the hologram hand) and draws the elixir.
 struct OrchardComponent: Component {
     let viewModel: OrchardViewModel
     let viewer: ViewerTracker
@@ -160,6 +160,8 @@ struct OrchardComponent: Component {
     /// The orb of each fruit, by fruit id.
     let orbs: [Int: Entity]
     let elixir: ElixirRig
+    /// The hologram hand showing how to snap.
+    let snapRig: SnapHintRig
     /// Where the elixir flies: the dragon's head.
     let deliveryTarget: Entity
     /// Interactive things behind the fruit (island rock, dragon colliders): switched off while a fruit is close,
@@ -172,6 +174,7 @@ struct OrchardComponent: Component {
     var chop = ChopDetector()
     var cup = CupTurn()
     var snap = SnapDetector()
+    var snapHint = SnapHint()
     /// The small ellipse at the player's side the ingredients go round on.
     var orbit = ElixirOrbit()
     /// The elixir's flight to the dragon, once it has left.
@@ -229,6 +232,7 @@ struct OrchardSystem: System {
             Self.detectCup(&orchard)
             Self.updateOrbit(&orchard, deltaTime: deltaTime)
             Self.detectSnap(&orchard)
+            Self.updateSnapHint(&orchard, deltaTime: deltaTime)
             Self.updateOrbs(orchard: orchard, root: entity, deltaTime: deltaTime)
             Self.updateElixir(&orchard, root: entity, deltaTime: deltaTime)
             orchard.sounds.update(orchard)
@@ -420,12 +424,15 @@ enum OrchardSceneBuilder {
         let elixir = await ElixirRig.make()
         root.addChild(elixir.elixir)
         root.addChild(elixir.hintAnchor)
+        let snapRig = SnapHintRig()
+        root.addChild(snapRig.root)
 
         let sounds = OrchardSounds()
         Task { await sounds.load() }
         root.components.set(OrchardComponent(viewModel: viewModel, viewer: player.viewer, hands: player.hands,
                                              island: island.root, stage: stage, fruits: fruits, orbs: orbs,
-                                             elixir: elixir, deliveryTarget: deliveryTarget, background: background,
+                                             elixir: elixir, snapRig: snapRig, deliveryTarget: deliveryTarget,
+                                             background: background,
                                              sounds: sounds))
         return root
     }

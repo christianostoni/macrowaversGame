@@ -91,6 +91,8 @@ struct DragonImmersiveView: View {
                 anchor.addChild(panel)
             }
             subscriptions = subscribeToDragonGrabs(content)
+            // Everything is built: the launch window's spinner steps aside, the narrator speaks.
+            viewModel.isWorldLoaded = true
         } update: { content, _ in
             // Reading `story.step` here re-runs this block when the story moves on.
             if story.step.revealsWorld { world.reveal(in: content) }

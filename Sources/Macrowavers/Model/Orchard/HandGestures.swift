@@ -193,7 +193,7 @@ struct SnapDetector {
         self.settings = settings
     }
 
-    /// A hand holds the loaded pose right now: the label tells the player to snap.
+    /// A hand holds the loaded pose right now: the hologram hand (`SnapHint`) brightens.
     var isLoaded: Bool { hands.values.contains { $0.isLoadedNow } }
 
     /// Feeds one hand reading; returns true when this reading completes a snap.

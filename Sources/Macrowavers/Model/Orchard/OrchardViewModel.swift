@@ -84,9 +84,6 @@ final class OrchardViewModel {
     var isDragonOnIsland = true
     /// The player's hands are tracked: the snap can brew the elixir (a tap on an ingredient always can).
     var isHandTrackingAvailable = false
-    /// A hand holds the thumb on the middle finger, ready to snap: the elixir's label says "Now snap!".
-    /// Set by the `OrchardSystem`.
-    var isSnapLoaded = false
 
     // MARK: - Model
 

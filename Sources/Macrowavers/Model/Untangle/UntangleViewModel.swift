@@ -16,6 +16,9 @@ final class UntangleViewModel {
     // MARK: - State for the views
 
     var immersiveSpaceState = ImmersiveSpaceState.closed
+    /// The immersive space has built its world (island, dragon, fruit: a few seconds after it opens). Until then the
+    /// launch window stays, with a spinner, so the player never waits in front of nothing.
+    var isWorldLoaded = false
     /// Current chapter of the story.
     private(set) var phase = DragonPhase.captive
     private(set) var crossingCount = 0
