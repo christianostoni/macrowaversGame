@@ -12,8 +12,9 @@ team's devices. Tracker: Jira project AR126.
 The game plays in mixed reality, in the player's room:
 
 1. **Start.** A Start button floats in the room, with a small **App Icon** menu under it (Stone Dragon, Red
-   Dragon, Black Dragon). The room dims and the narrator speaks: "What are you searching for?", then "Chapter I".
-   Tap the text to go on.
+   Dragon, Black Dragon). The room dims and a Persian scroll appears: pull it open, drag its paper up to read the
+   chapter's story, *The Shah's Tree*, down to its painting, and continue (or skip it). Then "Chapter I": tap the
+   text to go on.
 2. **The island.** A floating island fades in, with a dragon bound to the tree at its centre, circling it. Tap the
    dragon and it gets angry for a moment.
 3. **The fruit.** Apples, a pomegranate, a banana, an orange and a pineapple hang on the tree. Pick one and it

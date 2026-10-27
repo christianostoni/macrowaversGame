@@ -1,13 +1,14 @@
 import Foundation
 
-/// The storytelling screens around the game, in order: the start, the narrator's words before the island
-/// appears, the game itself, the dragon's words once it is free, then the ride on its back: chapter II, where the
+/// The storytelling screens around the game, in order: the start, the story's scroll and the chapter's title
+/// before the island appears, the game itself, the dragon's words once it is free, then the ride on its back: chapter II, where the
 /// player feeds the dragon in the sky.
 enum StoryStep: Equatable, CaseIterable {
     /// Screen 1: a lone "Start" button in the room (the launch window).
     case start
-    /// Screen 2: the narrator asks the player what they are looking for.
-    case searching
+    /// Screen 2: the story's scroll (`StoryScroll`): the player opens it and reads the chapter's story in Persian,
+    /// down to its painting of the tree and the dragon.
+    case scroll
     /// Screen 3: the chapter's title and its proverb.
     case chapter
     /// No story text: the island, its fruit and the dragon's puzzle.
@@ -51,19 +52,16 @@ enum StoryStep: Equatable, CaseIterable {
     /// The text of the screens shown inside the immersive space (`start` is the launch window's button).
     var page: Page? {
         switch self {
-        case .start, .adventure, .ride, .feast:
+        case .start, .scroll, .adventure, .ride, .feast:
             nil
-        case .searching:
-            Page(title: "What are you searching for?", lines: ["I can see you are eager to find…"],
-                 anchor: .viewer, advance: .tap)
         case .chapter:
             Page(title: "Chapter I", lines: ["Patience is bitter, but its fruit is sweet."],
                  anchor: .viewer, advance: .tap)
         case .gratitude:
-            Page(title: "Thank you", lines: ["You freed me from the curse.", "You don't need to be afraid."],
+            Page(title: "Thank you", lines: ["You freed me from the curse of the Black Div.", "You don't need to be afraid."],
                  anchor: .dragon, advance: .tap)
         case .safety:
-            Page(title: "Thank you", lines: ["I will take you to safety. Are you ready?"],
+            Page(title: "Thank you", lines: ["Child of the Shah, I will take you to safety.", "Are you ready?"],
                  anchor: .dragon, advance: .answer("I'm Ready"))
         case .secondChapter:
             Page(title: "Chapter II", lines: ["Feed the dragon the right plants.", "It doesn't like bananas!"],
@@ -71,13 +69,13 @@ enum StoryStep: Equatable, CaseIterable {
         }
     }
 
-    /// The room is darkened so the eyes stay on the words (and on the dragon, when it speaks).
-    var dimsSurroundings: Bool { page != nil }
+    /// The room is darkened so the eyes stay on the words, the scroll's included (and on the dragon, when it speaks).
+    var dimsSurroundings: Bool { page != nil || self == .scroll }
 
     /// The island, its fruit and the dragon are in the room (they appear after the chapter's title).
     var revealsWorld: Bool {
         switch self {
-        case .start, .searching, .chapter: false
+        case .start, .scroll, .chapter: false
         case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast: true
         }
     }
@@ -89,7 +87,7 @@ enum StoryStep: Equatable, CaseIterable {
     var isFullyImmersed: Bool {
         switch self {
         case .ride, .secondChapter, .feast: true
-        case .start, .searching, .chapter, .adventure, .gratitude, .safety: false
+        case .start, .scroll, .chapter, .adventure, .gratitude, .safety: false
         }
     }
 }

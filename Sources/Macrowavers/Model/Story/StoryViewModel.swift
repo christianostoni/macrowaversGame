@@ -21,13 +21,13 @@ final class StoryViewModel {
     /// Screen 1: the player presses Start (the immersive space is opening).
     func begin() {
         guard step == .start else { return }
-        step = .searching
+        step = .scroll
     }
 
-    /// The player taps the page or answers its question.
+    /// The player taps the page or answers its question; or closes the story's scroll.
     func advance() {
         let next: StoryStep? = switch step {
-        case .searching: .chapter
+        case .scroll: .chapter
         case .chapter: .adventure
         case .gratitude: .safety
         case .safety: .ride

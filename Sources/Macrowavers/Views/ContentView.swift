@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Launch window, the story's first screen: a lone Start button floating in the room (plain window, no glass).
-/// Start opens the immersive space, where the story goes on (`StoryStep.searching`); this window closes, so it
+/// Start opens the immersive space, where the story goes on (`StoryStep.scroll`); this window closes, so it
 /// can never overlap the island, the dragon or the fruit: from then on the controls are panels inside the space
 /// (`IslandControlsView`). The window comes back when the space closes (Restart Game or Digital Crown).
 /// Under Start, a small menu picks the app icon (`AppIconMenu`).
