@@ -5,8 +5,8 @@ import ARKit
 #endif
 
 /// The player's hands, for the gestures SwiftUI does not offer: chopping the pineapple, snapping the fingers
-/// to brew the elixir and steering the dragon on the ride. ARKit hand tracking (asks the player's permission once); when it is not available
-/// (simulator, permission denied) `start()` returns false and the taps take over.
+/// to brew the elixir and steering the dragon on the ride. ARKit hand tracking (asks the player's permission once);
+/// when it is not available (simulator, permission denied) `start()` returns false and the taps take over.
 @MainActor
 final class HandTracker {
     /// Latest reading of each hand still tracked.

@@ -5,21 +5,21 @@ import simd
 /// it. It eats the fruit it likes and spits out the bananas: it doesn't like bananas.
 /// Pure state, no RealityKit, like `DragonRide`: positions are in its sky space; `DragonRideSystem` draws them.
 struct DragonFeast {
+    enum PlantState: Equatable {
+        case floating
+        /// In the dragon's mouth, swallowed as `progress` goes 0...1.
+        case eaten(progress: Float)
+        /// Spat out: flung away (velocity in sky space, m/s), fading as `progress` goes 0...1.
+        case spat(progress: Float, velocity: SIMD3<Float>)
+    }
+
     /// A fruit floating in the sky.
     struct Plant: Identifiable, Equatable {
-        enum State: Equatable {
-            case floating
-            /// In the dragon's mouth, swallowed as `progress` goes 0...1.
-            case eaten(progress: Float)
-            /// Spat out: flung away (velocity in sky space, m/s), fading as `progress` goes 0...1.
-            case spat(progress: Float, velocity: SIMD3<Float>)
-        }
-
         let id: Int
         var kind: FruitKind
         /// Sky space (m).
         var position: SIMD3<Float>
-        var state = State.floating
+        var state = PlantState.floating
         /// Its slow tumble (radians), random so the fruit don't turn in step.
         var spin: Float
 
@@ -88,34 +88,9 @@ struct DragonFeast {
             plant.spin += deltaTime * 0.6
             switch plant.state {
             case .floating:
-                let toMouth = mouth - plant.position
-                let distance = simd_length(toMouth)
-                if distance < Settings.biteRadius {
-                    if plant.kind.isLikedByDragon {
-                        plant.state = .eaten(progress: 0)
-                        events.append(.ate(plant.kind))
-                    } else {
-                        // Spat forward and to one side, the way it came from.
-                        let side = simd_normalize(simd_cross(ride.forward, SIMD3(0, 1, 0)))
-                            * (Bool.random(using: &random) ? 1 : -1)
-                        plant.state = .spat(progress: 0, velocity: ride.forward * ride.speed * 0.5 + side * 4
-                                            + SIMD3(0, 2.5, 0))
-                        disgust = 1
-                        events.append(.refused(plant.kind))
-                    }
-                } else if plant.kind.isLikedByDragon {
-                    let inFront = simd_dot(-toMouth, ride.forward) > 0
-                    if inFront {
-                        nearest = min(nearest, distance)
-                        if distance < Settings.pullRadius {
-                            plant.position += toMouth / distance * min(Settings.pullSpeed * deltaTime, distance)
-                        }
-                    }
-                }
-                let seen = ride.rideFromSky(plant.position)
-                if seen.z > Settings.behind || simd_length(seen) > Settings.farAway {
-                    plant = Self.newPlant(id: plant.id, ride: ride, ahead: Settings.ahead, using: &random)
-                }
+                let (event, reach) = float(&plant, deltaTime: deltaTime, mouth: mouth, ride: ride, using: &random)
+                if let event { events.append(event) }
+                if let reach { nearest = min(nearest, reach) }
             case .eaten(let progress):
                 plant.position = mouth
                 let next = progress + deltaTime / Settings.eatDuration
@@ -134,6 +109,39 @@ struct DragonFeast {
         let wanted = nearest.isFinite ? min(max(1 - (nearest - Settings.biteRadius) / Settings.appetiteRange, 0), 1) : 0
         appetite += (wanted - appetite) * min(deltaTime * 6, 1)
         return events
+    }
+
+    /// A floating fruit: bitten when it reaches the mouth, pulled in when it is close and liked, sent back ahead
+    /// when left behind. `reach`: its distance from the mouth (m) when it is a liked fruit in front of it.
+    private mutating func float(_ plant: inout Plant, deltaTime: Float, mouth: SIMD3<Float>, ride: DragonRide,
+                                using random: inout some RandomNumberGenerator) -> (event: Event?, reach: Float?) {
+        let toMouth = mouth - plant.position
+        let distance = simd_length(toMouth)
+        if distance < Settings.biteRadius {
+            if plant.kind.isLikedByDragon {
+                plant.state = .eaten(progress: 0)
+                return (.ate(plant.kind), nil)
+            }
+            // Spat forward and to one side, the way it came from.
+            let side = simd_normalize(simd_cross(ride.forward, SIMD3(0, 1, 0)))
+                * (Bool.random(using: &random) ? 1 : -1)
+            plant.state = .spat(progress: 0, velocity: ride.forward * ride.speed * 0.5 + side * 4
+                                + SIMD3(0, 2.5, 0))
+            disgust = 1
+            return (.refused(plant.kind), nil)
+        }
+        var reach: Float?
+        if plant.kind.isLikedByDragon, simd_dot(-toMouth, ride.forward) > 0 {
+            reach = distance
+            if distance < Settings.pullRadius {
+                plant.position += toMouth / distance * min(Settings.pullSpeed * deltaTime, distance)
+            }
+        }
+        let seen = ride.rideFromSky(plant.position)
+        if seen.z > Settings.behind || simd_length(seen) > Settings.farAway {
+            plant = Self.newPlant(id: plant.id, ride: ride, ahead: Settings.ahead, using: &random)
+        }
+        return (nil, reach)
     }
 
     #if DEBUG

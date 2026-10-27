@@ -242,7 +242,11 @@ struct DragonRideSystem: System {
                 play(.growl, from: state.mouth, sounds: state.sounds)
             }
         }
+        draw(feast, in: &state)
+    }
 
+    @MainActor
+    private static func draw(_ feast: DragonFeast, in state: inout DragonRideComponent) {
         for plant in feast.plants {
             var drawn = state.fruit[plant.id]
             if drawn?.kind != plant.kind {
@@ -304,8 +308,8 @@ struct DragonRideSystem: System {
 }
 
 private func smoothstep(_ edge0: Float, _ edge1: Float, _ x: Float) -> Float {
-    let t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
-    return t * t * (3 - 2 * t)
+    let amount = min(max((x - edge0) / (edge1 - edge0), 0), 1)
+    return amount * amount * (3 - 2 * amount)
 }
 
 // MARK: - Building
