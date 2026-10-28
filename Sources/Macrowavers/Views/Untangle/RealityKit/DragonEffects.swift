@@ -7,12 +7,18 @@ import UIKit
 import AppKit
 #endif
 
-/// Dragon effects shared by every rig: smoke from the nostrils, fire, sounds.
+/// Dragon effects shared by every rig, on the island and on the ride: smoke from the nostrils, fire, sounds. The fire
+/// is the ride's breath of fire (`fireEmitter`), sized to the dragon's roar.
 /// Sounds are optional: if the bundle contains `DragonGrowl`, `DragonRoar`, `DragonRumble`,
 /// `DragonWhoosh` (m4a/wav/mp3/caf) they play as spatial audio from the head.
 @MainActor
 final class DragonEffects {
     nonisolated static let soundNames = ["DragonGrowl", "DragonRoar", "DragonRumble", "DragonWhoosh"]
+    /// Flames per second of the breath of fire at its strongest (the roar's and the ride's long breath).
+    static let fireRate: Float = 520
+    /// The roar's flames at birth and how fast they leave (head space; they reach ~0.65 × `roarSpeed`).
+    static let roarFlameSize: Float = 0.008
+    static let roarSpeed: Float = 0.6
 
     /// One puff of smoke per nostril.
     private var smokes: [Entity] = []
@@ -27,7 +33,7 @@ final class DragonEffects {
 
     init() {
         fire.name = "FireBreath"
-        fire.components.set(Self.fireEmitter())
+        fire.components.set(Self.fireEmitter(size: Self.roarFlameSize, speed: Self.roarSpeed, followsMouth: true))
     }
 
     /// `nostrils` (one or two) and `mouth` are where smoke and fire come out (children of the head). `voice` is the
@@ -64,7 +70,7 @@ final class DragonEffects {
         let newFire = Int((pose.fire * 10).rounded())
         if newFire != fireLevel {
             fireLevel = newFire
-            fire.components[ParticleEmitterComponent.self]?.mainEmitter.birthRate = Float(newFire) * 60
+            fire.components[ParticleEmitterComponent.self]?.mainEmitter.birthRate = Float(newFire) / 10 * Self.fireRate
         }
 
         playSounds(for: frame)
@@ -132,25 +138,31 @@ final class DragonEffects {
         return emitter
     }
 
-    /// Short burst of fire, yellow → red.
-    private static func fireEmitter() -> ParticleEmitterComponent {
+    /// The dragon's breath of fire, one look in both chapters: flames along +Z from a small ball, growing sevenfold
+    /// as they go, pale yellow → red, glowing (additive). `size`: a flame at birth (the ball is a third of it);
+    /// `speed`: how far they reach (~0.65 × `speed` over their 0.8 s, damped). `followsMouth`: the flames move with
+    /// the head (the roar, so they keep coming out of the mouth) or stay where they were born (the ride's long
+    /// breath, trailing as the dragon flies).
+    static func fireEmitter(size: Float, speed: Float, followsMouth: Bool) -> ParticleEmitterComponent {
         var emitter = ParticleEmitterComponent()
-        emitter.emitterShape = .point
+        emitter.emitterShape = .sphere
+        emitter.emitterShapeSize = SIMD3(repeating: size / 3)
         // `.local`: along `emissionDirection` (the snout). The default, `.normal`, ignores it and fires upwards.
         emitter.birthDirection = .local
         emitter.emissionDirection = SIMD3(0, 0, 1)
-        // The flames move with the head while it roars, so they keep coming out of the mouth.
-        emitter.particlesInheritTransform = true
-        emitter.speed = 0.6
-        emitter.speedVariation = 0.15
+        emitter.particlesInheritTransform = followsMouth
+        emitter.speed = speed
+        emitter.speedVariation = speed / 5
         emitter.mainEmitter.birthRate = 0
-        emitter.mainEmitter.lifeSpan = 0.35
-        emitter.mainEmitter.size = 0.012
-        emitter.mainEmitter.sizeMultiplierAtEndOfLifespan = 3
-        emitter.mainEmitter.spreadingAngle = 0.25
+        emitter.mainEmitter.lifeSpan = 0.8
+        emitter.mainEmitter.size = size
+        emitter.mainEmitter.sizeMultiplierAtEndOfLifespan = 7
+        emitter.mainEmitter.spreadingAngle = 0.12
+        emitter.mainEmitter.dampingFactor = 0.6
         emitter.mainEmitter.opacityCurve = .quickFadeInOut
-        emitter.mainEmitter.color = .evolving(start: .single(.init(red: 1, green: 0.85, blue: 0.3, alpha: 1)),
-                                              end: .single(.init(red: 0.9, green: 0.15, blue: 0.05, alpha: 0)))
+        emitter.mainEmitter.blendMode = .additive
+        emitter.mainEmitter.color = .evolving(start: .single(.init(red: 1, green: 0.92, blue: 0.55, alpha: 1)),
+                                              end: .single(.init(red: 0.95, green: 0.25, blue: 0.05, alpha: 0)))
         return emitter
     }
 }

@@ -177,7 +177,8 @@ sways, never the view). The aim's help never pulls poison to the mouth. Out of h
 the sky clears, it rests 4 s, then the wave starts over with full hearts.
 
 **Fire.** A **snap of the fingers** (the gesture learnt for the elixir, either hand) makes the dragon breathe fire
-for 0.9 s: a long jet from the middle of its mouth (`DragonRideSceneBuilder.makeFireBreath`) burns every fruit in a
+for 0.9 s: a long jet from the middle of its mouth (`DragonRideSceneBuilder.makeFireBreath`, the same fire as the island's
+roar, `DragonEffects.fireEmitter`) burns every fruit in a
 cone ahead (14 m, ±0.2 rad, plus the fruit's size), with a puff of embers: poisoned fruit are cleared off the way,
 a good one burnt is lost. Then it recharges for 2.5 s (the flame in the tally is grey meanwhile). The flame is also a button: pressed, it
 breathes fire like a snap (`StoryViewModel.requestFire()`), the way to do it without hand tracking (simulator). The snap and the
@@ -249,7 +250,8 @@ preloaded (`DragonEffects`, `OrchardSounds`).
 | `DragonRide.Settings` | `weakSlowdown`, `weakSway` | how a sick or exhausted dragon flies |
 | `SteeringHold` | `afterSnap`, `longestHold` | how long a snapping hand stops steering |
 | `SnapDetector.Settings.whileSteering` | `maxWristTravel` | how still the wrist must stay for a snap on the ride |
-| `DragonRideSceneBuilder` | `fireRate`, `poisonTint`, `poisonGlow` | the fire jet's density, the poisoned look |
+| `DragonRideSceneBuilder` | `poisonTint`, `poisonGlow` | the poisoned look |
+| `DragonEffects` | `fireRate`, `fireEmitter(size:speed:followsMouth:)` | the fire's density and look, shared with the island's roar |
 | `DragonSnout` | `frontShare`, `nostrilSpread`, `nostrilDrop`, `inset` | where the smoke and the fire leave the head |
 | `ScrollSceneBuilder` | `width` | the scroll's width (0.45 m); its length follows from the page |
 | `ScrollRoll` | `openWindow`, `lead`, `coreRadius`, `layerGap`, `wave` | how much paper shows when open (the painting must fit), the silk at the ends, the rolls' thickness, the open paper's wave |
