@@ -117,3 +117,47 @@ private func sample(_ time: Float, at timestamp: TimeInterval) -> HandSample {
         #expect(edges.values.allSatisfy { $0 == 2 || $0 == 4 })
     }
 }
+
+@Suite struct SnapHintBakeTests {
+    /// The resource the app ships is the skins the code builds: if this fails, run
+    /// `sh Assets/SnapHint/make_snap_hint_hand.sh` (the app would build them itself, slowly).
+    @Test func theBakedHandMatchesTheCode() throws {
+        let url = try #require(Bundle.main.url(forResource: SnapHintBake.resourceName,
+                                               withExtension: SnapHintBake.resourceExtension))
+        let bake = try SnapHintBake(data: Data(contentsOf: url))
+        #expect(bake.matchesCode)
+        #expect(bake.frames == SnapHintBake.loop().frames)
+        // One skin, rebuilt here, is the baked one (to Float16 precision: a twentieth of a millimetre).
+        let skin = try #require(bake.skins.last)
+        let mesh = HandSurface(pose: try #require(SnapHintBake.loop().poses.last)).mesh()
+        #expect(mesh.indices == skin.mesh.indices)
+        #expect(zip(mesh.positions, skin.mesh.positions).allSatisfy { simd_distance($0, $1) < 1e-4 })
+    }
+
+    @Test func aChangedPoseNoLongerMatches() {
+        let loop = SnapHintBake.loop()
+        let skins = loop.poses.map { pose in
+            SnapHintBake.Skin(signature: HandSurface(pose: pose).signature, mesh: HandSurface.Mesh())
+        }
+        #expect(SnapHintBake(framesPerSecond: SnapHintBake.framesPerSecond, frames: loop.frames, skins: skins)
+            .matchesCode)
+        var moved = skins
+        moved[0].signature[0] += 0.001
+        #expect(!SnapHintBake(framesPerSecond: SnapHintBake.framesPerSecond, frames: loop.frames, skins: moved)
+            .matchesCode)
+    }
+
+    @Test func theFileRoundTrips() throws {
+        let mesh = HandSurface.Mesh(positions: [SIMD3(0, 0.1, 0), SIMD3(0.05, 0, -0.02), SIMD3(-0.03, 0.2, 0.01)],
+                                    normals: [SIMD3(0, 0, 1), SIMD3(1, 0, 0), SIMD3(0, 1, 0)], indices: [0, 1, 2])
+        let bake = SnapHintBake(framesPerSecond: 30, frames: [0, 0, 1],
+                                skins: [.init(signature: [1, 2], mesh: mesh), .init(signature: [3, 4], mesh: mesh)])
+        let read = try SnapHintBake(data: bake.encoded())
+        #expect(read.frames == bake.frames)
+        #expect(read.framesPerSecond == 30)
+        #expect(read.skins.map(\.signature) == [[1, 2], [3, 4]])
+        #expect(read.skins[1].mesh.indices == [0, 1, 2])
+        #expect(zip(read.skins[1].mesh.positions, mesh.positions).allSatisfy { simd_distance($0, $1) < 1e-4 })
+        #expect(throws: SnapHintBake.DecodingError.self) { try SnapHintBake(data: Data([1, 2, 3])) }
+    }
+}

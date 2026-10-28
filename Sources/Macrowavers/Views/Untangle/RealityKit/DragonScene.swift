@@ -44,6 +44,8 @@ struct DragonBodySystem: System {
         FocusDimmingSystem.registerSystem()
         StoryPanelComponent.registerComponent()
         StoryPanelSystem.registerSystem()
+        ScrollSystem.registerAll()
+        StorySubtitleSystem.registerAll()
         registerSystem()
     }
 

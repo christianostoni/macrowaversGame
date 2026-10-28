@@ -22,8 +22,8 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 
 1. Install Xcode's Metal Toolchain once: `xcodebuild -downloadComponent MetalToolchain`. It's needed to compile
    `AppleSpiral.metal`.
-2. Run the app and choose **Start**. Tap through the narrator's pages ("What are you searching for?", "Chapter I"):
-   the island fades in. Look at a fruit on the tree and pinch (fruit can be picked only while the dragon is still on
+2. Run the app and choose **Start**. Skip the story's scroll (or read it), then tap "Chapter I": the island
+   fades in. Look at a fruit on the tree and pinch (fruit can be picked only while the dragon is still on
    the island).
 3. Open the fruit:
 
@@ -202,13 +202,15 @@ finger (their radii match at the joints, so each finger is one tube). Each finge
 at their base (smooth minimum), never into each other, so fingers pressed together stay apart. The mesh is
 extracted with naive surface nets (2.8 mm grid, ~7k vertices, normals from the field's gradient). The grid is
 sampled in 4×4×4 blocks: a block whose centre is far from the skin takes that value everywhere (only the cells the
-skin crosses need exact values), and a finger whose bounding sphere is far from a point is skipped: ~10 ms per mesh
-in release, ~0.5 s in Debug. The loop is fixed, so its skin is built once (one mesh per frame at 30 fps, held poses
-reusing theirs: ~50 meshes), one at a time on a single background thread from the orchard's first frame, each
-handed to RealityKit as soon as it is ready: built while the immersive space loaded, it competed with the island's and
-the dragon's assets; built on every core at once when the first ingredient joined the orbit, it starved the frames
-while the player opened the next fruit (the worms' apple stuttered). The frames are swapped into one
-model as it plays. The model has a `ModelSortGroup` with a depth pre-pass, so only its outer surface is drawn (the fingers in
+skin crosses need exact values), and a finger whose bounding sphere is far from a point is skipped: ~7 ms per mesh
+optimised, ~0.5 s in Debug (unoptimised Swift is ~65 times slower at this maths). The loop is fixed, so its skin is
+too: one mesh per frame at 30 fps, held poses reusing theirs (44 meshes for 84 frames), **baked ahead of time** by
+`Assets/SnapHint/make_snap_hint_hand.sh` into `Resources/SnapHintHand.bin` (`SnapHintBake`; see
+[The hologram hand's bake](#the-hologram-hands-bake)). On the orchard's first frame `SnapHintRig` reads it on a
+background thread (~0.15 s even in Debug) and hands the meshes to RealityKit one at a time, so the hand is ready long
+before the orbit is complete. Built at run time instead (~20 s of processor time in a Debug build, far more on the
+headset's background threads) the hand showed up long after the orbit was complete; built on every core at once it
+starved the frames (the worms' apple stuttered). The frames are swapped into one model as it plays. The model has a `ModelSortGroup` with a depth pre-pass, so only its outer surface is drawn (the fingers in
 front of the palm do not show it through them); the fade, flicker and flash are one `OpacityComponent` on its root.
 It is 0.8 of an adult hand, facing the player, turned 50° so the palm faces left and leaning back towards their
 eyes; its middle 25 cm to the left of the orbit's centre (along the orbit's side-to-side axis) and 6 cm below it:
@@ -236,6 +238,7 @@ Sources/Macrowavers/
 │   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
 │   ├── SnapHint.swift                     The hologram hand's snapping loop: poses (finger bends, thumb IK), fade
 │   ├── HandSurface.swift                  The hologram hand's skin: distance field (palm, tapering fingers), surface nets
+│   ├── SnapHintBake.swift                 The hologram hand's skins baked into a resource: file format, check against the code
 │   └── OrchardViewModel.swift             @Observable: fruit focus, openings, worms, one ingredient per fruit, elixir
 │                                          (not observed: views read `elixirState` and `orbitingCount`)
 └── Views/Orchard/
@@ -249,8 +252,8 @@ Sources/Macrowavers/
         ├── ElixirScene.swift                ElixirRig (the flask: glass, liquid, cork, bubbles, glow); orbit,
         │                                    snap, flight and pour in the system
         ├── ElixirParticles.swift            The flash, the bubbles, the pour's stream, splash and shimmer
-        ├── SnapHintRig.swift                The hologram hand: one mesh per frame built in the background, depth
-        │                                    pre-pass sort group, sparks
+        ├── SnapHintRig.swift                The hologram hand: its baked meshes (one per frame) read in the background,
+        │                                    depth pre-pass sort group, sparks
         ├── LiquidLevels.swift               One liquid mesh per level step (48), built once when the flask loads
         ├── HandTracker.swift                ARKit hand tracking → HandSample
         ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, worms
@@ -292,7 +295,7 @@ elixir's flight (`OrchardComponent.flight`).
 5. **Orbit.** `ElixirOrbit.follow` with the head's pose (faster spin while brewing); the label's anchor follows it.
 6. **Snap.** With the orbit complete, it feeds `SnapDetector` with both hands; a snap calls `orchard.brewElixir()`.
    **Hologram.** `SnapHint.update` (shown while the orbit is complete and no fruit is close) and
-   `SnapHintRig.draw` next to the flask, facing the player (its meshes start building with the first ingredient).
+   `SnapHintRig.draw` next to the flask, facing the player (its baked meshes are read on the orchard's first frame).
 7. **Orbs.** It moves each orb: sealed, rising above its fruit, flying into its slot, orbiting, diving into the flask.
 8. **Elixir.** `ElixirRig.apply` draws the flask from `Elixir`'s curves (size, wobble, cork, liquid level, colour,
    glow and slosh, glass glow, bubbles, stream, light), splashes for each landing, flashes it, flies it. On arrival
@@ -416,8 +419,9 @@ elixir's flight (`OrchardComponent.flight`).
 | `CupTurn.Settings` | `bend`, `keepMargin`, `pinchClearance`, `reach`, `keepReach`, `grace`, `smoothing` | how curled the fingers must be, how close to the fruit, how forgiving once holding, how smooth the turn is |
 | `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
 | `SnapHint` | `period`, `snapTime`, `fadeDuration`, `keys`, `open`/`loaded`/`snapped`, `fingers`, `thumb…` | the hologram's loop, its key poses and its bones |
-| `HandSurface` | `cellSize`, `palmBlend`, `fingerBlend`, `palm…`, `wristHalfWidth`, `palmWidening`, `taper` | the hologram's skin: detail, how softly fingers join the palm, the palm's shape, how fingers taper |
-| `SnapHintRig` | `framesPerSecond`, `scale`, `side`, `drop`, `turn`, `lean`, `opacity`, `flashOpacity`, `readyOpacity` | the hologram's smoothness, size, place, angle and brightness |
+| `HandSurface` | `cellSize`, `palmBlend`, `fingerBlend`, `palm…`, `wristHalfWidth`, `palmWidening`, `taper` | the hologram's skin: detail, how softly fingers join the palm, the palm's shape, how fingers taper (after any change to `SnapHint` or `HandSurface`, bake the hand again) |
+| `SnapHintBake` | `framesPerSecond` | the hologram's smoothness (bake it again after changing it) |
+| `SnapHintRig` | `scale`, `side`, `drop`, `turn`, `lean`, `opacity`, `flashOpacity`, `readyOpacity` | the hologram's smoothness, size, place, angle and brightness |
 | `WormSwarm.Settings` | `count`, `crawlSpeed`, `speedUpPerCatch`, `burrowInterval`, `burrowDuration` | worm difficulty |
 | `OrchardSceneBuilder` | `…SizeOnTree`, `…SizeFocused` | fruit sizes on the tree and in front of the player (the apple's is its width) |
 | `OrchardSceneBuilder` | `gemSpinSpeed`, `glowSize` | how fast the gem turns, how wide its glow is |
@@ -543,13 +547,31 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
 - **`Tests/MacrowaversTests/SnapHintTests.swift`:** the hologram's thumb touching the middle finger's pad when
   loaded, the finger flicking into the palm, finite poses, its snap accepted by `SnapDetector`, one snap per loop,
   the fade and the loop starting over when shown again; its skin (inside the palm and fingertips, no webbing
-  between fingers, tapering, every vertex on the surface, faces turned out, closed).
+  between fingers, tapering, every vertex on the surface, faces turned out, closed); its bake (the shipped
+  `SnapHintHand.bin` matches the code and one of its skins is the one the code builds, a changed pose no longer
+  matches, the file round-trips).
 - **`Tests/MacrowaversTests/LiquidVolumeTests.swift`:** the liquid at every level stays inside a round glass (Y-up and
   Z-up), matches the full liquid when full, every face turns outwards.
 - **`Tests/MacrowaversTests/FlaskLiquidTests.swift`:** with the real `ElixirFlask.usdz`, the liquid takes the glass's
   shape (full: the designers' liquid; a third full: narrower than the full width).
 - **`Tests/MacrowaversTests/ElixirDiveTests.swift`:** with the real flask at the orbit's centre, a diving gem stays out
   of the glass until it drops, its glow never reaches the neck, its sparks stop above it.
+
+### The hologram hand's bake
+
+```sh
+sh Assets/SnapHint/make_snap_hint_hand.sh
+```
+
+Run from the repository's root after any change to `SnapHint.swift`, `HandSurface.swift` or
+`SnapHintBake.framesPerSecond`. It compiles `Assets/SnapHint/make_snap_hint_hand.swift` with the app's model
+(`Sources/Macrowavers/Model`), optimised, and writes `Sources/Macrowavers/Resources/SnapHintHand.bin` (~1 s, ~4.5 MB,
+Git LFS): every skin of the loop with its pose's signature (`HandSurface.signature`: every bone's ends and radii and
+the skin's constants), positions and normals in Float16 (~0.06 mm off), LZFSE-compressed. The app compares each
+frame's pose with the signatures (`SnapHintBake.matchesCode`, ~5 ms): if the file is missing or out of date it says
+so in the console and builds the skins itself, one at a time in the background, as slowly as before; the test
+`theBakedHandMatchesTheCode` fails too. A change to `HandSurface`'s code that keeps its numbers (the distance
+field's maths, the surface nets) is not caught: bake it again by hand.
 
 ## Known limits
 

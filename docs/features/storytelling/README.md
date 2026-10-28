@@ -1,21 +1,21 @@
 # Storytelling
 
 The words around the game, from the low-fidelity wireframes (5 screens): a Start button in the room, the
-narrator's two pages in a darkened room before the island appears, and the freed dragon's two pages above it.
-Then the ride: the player flies on the dragon's back through a night sky in a full immersive space and feeds it,
-wave after wave (chapter II); every fruit lights a petal of a star medallion in the sky, and once the dragon is full
-it flies into the medallion's heart, where the story ends.
+story's scroll and the chapter's title in a darkened room before the island appears, and the freed dragon's two
+pages above it. Then the ride: the player flies on the dragon's back through a night sky in a full immersive space
+and feeds it, wave after wave (chapter II); every fruit lights a petal of a star medallion in the sky, and once the
+dragon is full it flies into the medallion's heart, where the story ends.
 
 ## The screens
 
 | # | Step (`StoryStep`) | Where | Text | Moves on |
 |---|---|---|---|---|
 | 1 | `start` | Launch window (plain, no glass) | **Start**, and under it a small **App Icon** menu (see below) | Start opens the immersive space; until it has built its world (island, dragon, fruit: a few seconds) a spinner with "Loading…" turns in place of Start, then the window steps aside (`UntangleViewModel.isWorldLoaded`) |
-| 2 | `searching` | In front of the player's eyes | **What are you searching for?** / I can see you are eager to find… | Tap the text |
+| 2 | `scroll` | In front of the player's eyes | The story's scroll: the chapter's story in Persian Nastaliq, down to its painting of the tree and the dragon (see [The story's scroll](#the-storys-scroll)) | Pull it open (or pinch it), drag the paper up to the painting, **Continue** (or **Skip the story**): it rolls up and fades away |
 | 3 | `chapter` | Same spot | **Chapter I** / Patience is bitter, but its fruit is sweet. | Tap the text: the island fades in |
 | – | `adventure` | – | No story text: the island, its fruit, the dragon and its puzzle | The dragon is freed |
-| 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the curse. / You don't need to be afraid. | Tap the text |
-| 5 | `safety` | Above the dragon | **Thank you** / I will take you to safety. Are you ready? | **I'm Ready** button: the room goes dark, the ride's space takes over |
+| 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the curse of the Black Div. / You don't need to be afraid. | Tap the text |
+| 5 | `safety` | Above the dragon | **Thank you** / Child of the Shah, I will take you to safety. / Are you ready? | **I'm Ready** button: the room goes dark, the ride's space takes over |
 | – | `ride` | Full immersion | A spinner ("Loading…", placed once 1.2 m in front of the eyes) while the ride's world loads; then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
 | 6 | `secondChapter` | In front of the eyes, above the dragon's head | **Chapter II** / Feed the dragon the right plants. / It doesn't like bananas! | Tap the text |
 | – | `feast` | Above the dragon's head | No page: four waves of fruit in the sky and a tally (hearts, fire, wave, fruit eaten); see [Chapter II: the feast](#chapter-ii-the-feast) | The last wave eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s |
@@ -24,8 +24,9 @@ it flies into the medallion's heart, where the story ends.
 | – | `ended` | – | No text: the ride's space closes and the launch window comes back | – |
 
 Text changes from the wireframes: "ti safety" → "to safety", "Dont need to be afraid" → "You don't need to be
-afraid.", the curse is not named yet ("the curse of XXX" → "the curse"; add the name in `StoryStep.page`),
-and the narrator's cut-off line ends with an ellipsis. All the text lives in `StoryStep.page`.
+afraid.", and the curse is named after the scroll's story ("the curse of XXX" → "the curse of the Black Div"); the
+player is the Shah's lost child. The narrator's "What are you searching for?" page became the scroll. All the
+pages' text lives in `StoryStep.page`; the scroll's, in `Assets/Scroll/make_scroll_page.swift`.
 
 ## How it works
 
@@ -62,6 +63,76 @@ and the narrator's cut-off line ends with an ellipsis. All the text lives in `St
 - **Interaction**: a narrator's or thank-you page is one big plain button (look at it, it highlights; pinch to
   go on), with a "Tap to continue" hint and an accessibility hint. The last question has its own prominent
   **I'm Ready** button. Pages cross-fade (0.6 s).
+
+## The story's scroll
+
+The chapter's story, *The Shah's Tree* (درخت شاه), on a Persian scroll (*tumār*), in the game's low-poly airbrush
+style: a paper with an ornamental border, the story in Nastaliq and, at its end, a painting of the island, the tree
+and the dragon. It floats closed in front of the player in the darkened room; they pull its bottom roll down to
+open it (or pinch it), drag the paper up to read, and once the painting is in sight **Continue** rolls it up and
+it fades away: the chapter's title comes next. **Skip the story** does the same at any time.
+
+The story, in English: the narrator reads it when the scroll opens (below), with these words as subtitles:
+
+> Once there was, once there was not. Long ago, a Shah planted a tree on an island floating between earth and
+> sky. Its fruit held the light of fallen stars, and only royal hands could pick it. To guard it, the Shah called
+> on an old friend: a dragon of the sky.
+> But the Black Div wanted that light. He could not take the fruit, so he cursed its guardian: circle the tree
+> forever, guard it forever, and never touch a single fruit. He left his worms inside the fruit, then hunted the
+> Shah's family until the world forgot them. With every circle, the dragon's body knots tighter and its heart
+> grows angrier.
+> Only an elixir brewed from the tree's own fruit can soften the curse, and only patient hands can untie what it
+> has knotted. But no royal hands were left to pick the fruit.
+> So the div believed. One child of the Shah's line survived and never knew it. The tree remembers you.
+> Patience is bitter, but its fruit is sweet.
+
+- **The page** (`ScrollPage.jpg`, 1536 px wide) is made by `Assets/Scroll/make_scroll_page.swift` from two
+  images made with ChatGPT in the game's style, with a screenshot of the island as reference and without any text
+  (image models cannot write Persian): the paper (`paper.png`) and the painting (`painting.png`). The script sets
+  the title in the paper's cartouche and the story in Noto Nastaliq Urdu (it comes with macOS; any Nastaliq font
+  installed on the Mac works, the font is not shipped), in the game's indigo, then the proverb in pink and the
+  painting. It lengthens the paper as the story needs without stretching its border: the band of side borders is
+  repeated one period of their pattern (216 rows) at a time, then each row of the band is evened out to the
+  average of its neighbours, so the paper's airbrush gradient leaves no line at the joins. A new `paper.png` needs
+  its measurements (header, footer, cartouche, borders, period) updated at the top of the script. Run it from the
+  repository's root (`swift Assets/Scroll/make_scroll_page.swift`) after changing the text or the images: the
+  scroll takes its length from the page's proportions.
+- **The paper** (`ScrollRoll`, no RealityKit) is a port of the design team's Blender scroll
+  (`Assets/Scroll/scroll_rollable_5.blend`, node group "Scroll Roll"): each roll is an Archimedean spiral that
+  keeps the paper's length, curling towards the reader with the page inside, and the open paper has their gentle
+  wave. Theirs opens from the middle; this one opens from the top (the bottom roll lets the paper out) and the
+  paper slides through the window, so a page longer than the window can be read. A violet silk lead at each end
+  stays around the rods.
+- **The mesh** (`ScrollPaper`, `Views/Story/ScrollScene.swift`) is a `LowLevelMesh` (~700 vertices) rewritten
+  in place whenever the pose changes: the front, smooth, with the page unlit in its painted colours, and the back
+  in flat facets, like the rest of the game. A box collider around paper and rods takes the gestures.
+- **Its look** (`ScrollLooks`): the design team's airbrush shader graph, loaded from the island's file
+  (`Airbrush_Trunk`) and recoloured through its parameters (`Stop0Color`…`Stop3Color`, `EmissionBoost`): the
+  silk in the flowers' violet, the paper's back in cream, the rods in the trunk's colours, low-poly prisms with a
+  gold crystal at each end like the island's floating gems. Without the island's file it falls back to plain
+  colours.
+- **The player** (`StoryScroll`, no RealityKit): closed, a drag down opens it (past 30% it opens all the way,
+  otherwise it closes again); open, the paper follows the hand up and down; at 97% the painting is in sight and
+  **Continue** appears under it (`ScrollHintView`, an attachment placed by `ScrollSystem`). Closing rolls the
+  paper up, then it fades; `isDone` moves the story on (`DragonImmersiveView`).
+- **Where it floats** (`ScrollSystem`): 0.95 m in front of the eyes, its window's top 19 cm above them (the open
+  page a little below), facing the player; it waits for head tracking (up to 3 s) so it appears in front of the
+  real eyes, and glides back in front of them if they look more than 40° away or move 30 cm, never while they hold
+  it. Under it, `ScrollHintView` (placed from its real size, its top 2 cm under the bottom roll): the hint,
+  **Continue** or **Skip the story**.
+- **The narration** (`StoryNarration`, `StoryNarrator`): the English story read by an ElevenLabs voice (Eleven
+  Multilingual v2, made in Pika's Speech Studio; source `Assets/Audio/story_narration.mp3`, in the game
+  `StoryNarration.m4a`, 59 s). It starts when the scroll opens, in the player's ears like the music, which steps back
+  under it (`GameMusic.duck`); Continue or Skip fades it out. "Div" is written "Deev" in the text given to the
+  voice, so it is not said like "divide". The subtitles are one cue a sentence (the long one in two), their times
+  the pauses in the recording: its 29 spoken phrases match the story's 29 clauses one for one, so a new recording
+  needs new times (`StoryNarration.cues`). The subtitles (`StorySubtitleView`) float a little below wherever the
+  player looks, like visionOS's Live Captions, so they are read without bending the neck (under the scroll they
+  were too low): 15° below the gaze, 0.8 m away (in front of the scroll), on a dark background over the scroll's
+  writing. They follow lazily (`GazeFollow`): the small movements of reading leave them still, a turn of more than
+  12° makes them glide after the gaze. The paper moves with the voice (`StoryNarration.pageProgress`): from 7 s
+  it scrolls down so the painting comes into the window as the narrator says "The tree remembers you"; once the
+  player drags the paper, it is theirs.
 
 ## Chapter II: the feast
 
@@ -106,7 +177,8 @@ sways, never the view). The aim's help never pulls poison to the mouth. Out of h
 the sky clears, it rests 4 s, then the wave starts over with full hearts.
 
 **Fire.** A **snap of the fingers** (the gesture learnt for the elixir, either hand) makes the dragon breathe fire
-for 0.9 s: a long jet from the middle of its mouth (`DragonRideSceneBuilder.makeFireBreath`) burns every fruit in a
+for 0.9 s: a long jet from the middle of its mouth (`DragonRideSceneBuilder.makeFireBreath`, the same fire as the island's
+roar, `DragonEffects.fireEmitter`) burns every fruit in a
 cone ahead (14 m, ±0.2 rad, plus the fruit's size), with a puff of embers: poisoned fruit are cleared off the way,
 a good one burnt is lost. Then it recharges for 2.5 s (the flame in the tally is grey meanwhile). The flame is also a button: pressed, it
 breathes fire like a snap (`StoryViewModel.requestFire()`), the way to do it without hand tracking (simulator). The snap and the
@@ -129,6 +201,16 @@ moved with the jaw every frame, so the fire leaves from the middle of the openin
 Sources/Macrowavers/
 ├── Model/Story/StoryStep.swift          Steps, pages and their text, dimming / reveal / focus rules
 ├── Model/Story/StoryViewModel.swift     @Observable @MainActor state machine
+├── Model/Story/StoryScroll.swift        The scroll in the player's hands: open, read, continue / skip
+├── Model/Story/ScrollRoll.swift         The scroll's paper: rolls, window, mesh (port of the Blender roll)
+├── Views/Story/ScrollScene.swift        ScrollPaper (LowLevelMesh, rods, collider), ScrollComponent/System
+├── Views/Story/ScrollHintView.swift     Under the scroll: what to do, Continue, Skip (attachment)
+├── Views/Story/StorySubtitleView.swift  The narrator's subtitles (attachment), StorySubtitleComponent/System
+├── Model/Story/GazeFollow.swift         Where the subtitles float: a little below the gaze, following it lazily
+├── Model/Story/StoryNarration.swift     The narration's subtitles and their times, the paper following the voice
+├── Views/Story/StoryNarrator.swift      Plays the narration in the player's ears
+├── Resources/StoryNarration.m4a         The narration (source Assets/Audio/story_narration.mp3)
+├── Resources/ScrollPage.jpg             The page, made by Assets/Scroll/make_scroll_page.swift
 ├── Views/ContentView.swift              Screen 1: the Start button (launch window, plain style)
 ├── Views/AppIconMenu.swift              Screen 1: the app icon picker under Start
 ├── Model/AppIconChoice.swift            The app icons (asset catalog names, titles)
@@ -136,7 +218,9 @@ Sources/Macrowavers/
 ├── Views/GameMusic.swift                Plays it: channel audio, crossfades, ducks while the dragon roars
 ├── Views/Story/StoryPanelView.swift     The page (attachment): title, lines, tap / answer
 └── Views/Story/StoryPanelPlacement.swift StoryPanelComponent/System: in front of the player or above the dragon
-Tests/MacrowaversTests/StoryTests.swift
+Tests/MacrowaversTests/StoryTests.swift, ScrollRollTests.swift, StoryScrollTests.swift, StoryNarrationTests.swift,
+                                         GazeFollowTests.swift
+Assets/Scroll/                           paper.png, painting.png, make_scroll_page.swift, the Blender scroll
 ```
 
 ## The music
@@ -166,8 +250,17 @@ preloaded (`DragonEffects`, `OrchardSounds`).
 | `DragonRide.Settings` | `weakSlowdown`, `weakSway` | how a sick or exhausted dragon flies |
 | `SteeringHold` | `afterSnap`, `longestHold` | how long a snapping hand stops steering |
 | `SnapDetector.Settings.whileSteering` | `maxWristTravel` | how still the wrist must stay for a snap on the ride |
-| `DragonRideSceneBuilder` | `fireRate`, `poisonTint`, `poisonGlow` | the fire jet's density, the poisoned look |
+| `DragonRideSceneBuilder` | `poisonTint`, `poisonGlow` | the poisoned look |
+| `DragonEffects` | `fireRate`, `fireEmitter(size:speed:followsMouth:)` | the fire's density and look, shared with the island's roar |
 | `DragonSnout` | `frontShare`, `nostrilSpread`, `nostrilDrop`, `inset` | where the smoke and the fire leave the head |
+| `ScrollSceneBuilder` | `width` | the scroll's width (0.45 m); its length follows from the page |
+| `ScrollRoll` | `openWindow`, `lead`, `coreRadius`, `layerGap`, `wave` | how much paper shows when open (the painting must fit), the silk at the ends, the rolls' thickness, the open paper's wave |
+| `StoryScroll` | `openThreshold`, `endThreshold`, `openRate`, `closeRate`, `fadeDuration` | how far to pull before it opens by itself, when Continue appears, how fast it opens, closes and fades |
+| `StoryNarration` | `cues`, `scrollStartTime`, `paintingTime` | the subtitles and their times, when the paper starts following the voice and when the painting is in sight |
+| `StoryNarrator` | `level`, `fadeOut` | how loud the narrator is, how fast the voice fades on Continue or Skip |
+| `GazeFollow` | `distance`, `drop`, `startAngle`, `responsiveness` | how far and how far below the gaze the subtitles float, how big a turn moves them, how fast they follow |
+| `ScrollComponent` | `distance`, `rise`, `lookAwayAngle`, `driftTolerance` | where the scroll floats and when it comes back in front of the player |
+| `make_scroll_page.swift` | text, `bodySize`, `titleSize`, painting width | the story's words, their size on the page, how much room the painting takes |
 
 ## Tests
 
@@ -199,6 +292,21 @@ starts over. `RideShapesTests.swift`: the lantern and the mountains well formed.
 `MusicTrackTests.swift`: silence before Start, the intro under the pages and the fruit, the puzzle from the flight
 to the knot, the farewell once the dragon is free (played once).
 
+`ScrollRollTests.swift`: the paper keeps its length however it is rolled, the window goes from the page's top to
+its end, each roll is a spiral around its rod in front of the window, the closed rolls touch without crossing, the
+page sits between the leads the right way up, and every face turns its side.
+
+`StoryScrollTests.swift`: it fades in closed, opens when pulled past a third (closes again if not) or tapped, the
+paper follows the hand to the painting (Continue then stays), opened the narrator speaks and the paper follows the
+voice to the painting (until the player drags it), finishing rolls it up, stops the voice and fades it, and it can be
+skipped even without its page.
+
+`StoryNarrationTests.swift`: the cues follow the voice from the first word to the last (the last stays a moment),
+the subtitles spell "Div" as the scroll does, and the paper reaches the painting with the voice.
+
+`GazeFollowTests.swift`: the subtitles float 15° below the gaze, stay still while the player reads, and glide under
+the new gaze after a bigger turn.
+
 `AppIconTests.swift`: the stone dragon is the primary icon, every choice is found again from the system's icon
 name, and every alternate icon is declared in the app's Info.plist.
 
@@ -224,3 +332,5 @@ layers in the middle, and the document's fill behind (`automatic` light, `system
   only after a 35° look away.
 - Above the dragon, the words sit ~0.6 m from a seated player's eyes: font sizes need checking on device.
 - The darkened room is the system's effect: how dark it looks depends on the real room's lighting.
+- The scroll is in Persian, the narration and subtitles in English only.
+- In the simulator the scroll opens with a click (no hand to pull it) and the paper is dragged with the pointer.

@@ -15,4 +15,7 @@ is sold or earns money. Replace it before any commercial release.
 The dragon, the island, the fruit models, the ingredient gem and the flask are the design team's own work.
 
 The other sounds and the puzzle and farewell music were generated for this project (ElevenLabs sound effects and
-MiniMax music, through Pika). Their sources are in `Assets/Audio/`.
+MiniMax music, through Pika). Their sources are in `Assets/Audio/`. The story's English narration was made with an
+ElevenLabs voice (Eleven Multilingual v2) in Pika's Speech Studio, its source in `Assets/Audio/`. The story scroll's
+paper and painting were made with ChatGPT for this project, and its text is set in Noto Nastaliq Urdu (SIL Open Font
+License, part of macOS); their sources are in `Assets/Scroll/`.

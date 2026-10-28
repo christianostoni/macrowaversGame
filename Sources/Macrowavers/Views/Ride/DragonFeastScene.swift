@@ -161,7 +161,7 @@ extension DragonRideSystem {
         if simd_length(direction) > 1e-4 {
             state.fireBreath.orientation = simd_quatf(from: SIMD3(0, 0, 1), to: simd_normalize(direction))
         }
-        ElixirRig.emit(state.fireBreath, rate: DragonRideSceneBuilder.fireRate * (state.feast?.fire ?? 0),
+        ElixirRig.emit(state.fireBreath, rate: DragonEffects.fireRate * (state.feast?.fire ?? 0),
                        direction: nil)
     }
 
@@ -175,8 +175,6 @@ extension DragonRideSystem {
 // MARK: - Building
 
 extension DragonRideSceneBuilder {
-    /// Flames per second of the breath of fire at its strongest.
-    static let fireRate: Float = 520
     /// A poisoned fruit's colour (it tints the fruit's own) and its haze.
     static let poisonTint = UIColor(red: 0.42, green: 0.22, blue: 0.5, alpha: 1)
     static let poisonGlow = UIColor(red: 0.35, green: 0.85, blue: 0.25, alpha: 1)
@@ -191,30 +189,14 @@ extension DragonRideSceneBuilder {
         return (breath, embers)
     }
 
-    /// The long breath of fire: flames along +Z, fast enough to reach the fruit ~12 m ahead, growing as they go.
+    /// The long breath of fire: the dragon's fire (`DragonEffects.fireEmitter`, its roar's on the island), fast
+    /// enough to reach the fruit ~10 m ahead.
     @MainActor
     static func makeFireBreath() -> Entity {
         let entity = Entity()
         entity.name = "RideFireBreath"
-        var emitter = ParticleEmitterComponent()
-        emitter.emitterShape = .sphere
-        emitter.emitterShapeSize = SIMD3(repeating: 0.04)
-        // `.local`: along `emissionDirection` (the snout).
-        emitter.birthDirection = .local
-        emitter.emissionDirection = SIMD3(0, 0, 1)
-        emitter.speed = 15
-        emitter.speedVariation = 3
+        var emitter = DragonEffects.fireEmitter(size: 0.12, speed: 15, followsMouth: false)
         emitter.isEmitting = false
-        emitter.mainEmitter.birthRate = 0
-        emitter.mainEmitter.lifeSpan = 0.8
-        emitter.mainEmitter.size = 0.12
-        emitter.mainEmitter.sizeMultiplierAtEndOfLifespan = 7
-        emitter.mainEmitter.spreadingAngle = 0.12
-        emitter.mainEmitter.dampingFactor = 0.6
-        emitter.mainEmitter.opacityCurve = .quickFadeInOut
-        emitter.mainEmitter.blendMode = .additive
-        emitter.mainEmitter.color = .evolving(start: .single(UIColor(red: 1, green: 0.92, blue: 0.55, alpha: 1)),
-                                              end: .single(UIColor(red: 0.95, green: 0.25, blue: 0.05, alpha: 0)))
         entity.components.set(emitter)
         return entity
     }

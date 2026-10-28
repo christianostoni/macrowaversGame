@@ -78,7 +78,8 @@ Sources/Macrowavers/
         ├── IslandScene.swift             Floating island (asset), tree anchor, floor occluder, FloatingComponent/System,
         │                                 TurntableComponent/System, FocusDimmingComponent/System (applies `SceneFocus`)
         ├── DragonRig.swift               DragonRig protocol, DragonFrame, DragonPose, DragonLifeAnimator
-        ├── DragonEffects.swift           Smoke, fire, the dragon's spatial sounds (via GameAudio), placeholder wings
+        ├── DragonEffects.swift           Smoke, fire (one emitter for the roar and the ride's breath), the dragon's
+        │                                 spatial sounds (via GameAudio), placeholder wings
         ├── ViewerTracker.swift           Player head position and gaze (ARKit world tracking, no permission needed)
         ├── DragonCurve.swift             The stone dragon's curve: spline, point at a distance, neck
         ├── StoneDragonRig.swift          Rig for the design team's stone dragon, used when it is in the bundle
@@ -469,7 +470,9 @@ story).
 - Damping, ground friction, the pull towards the plane and the friction are per sub-step: changing `substeps`
   silently changes them too (they should become per-second values).
 - While rearing up the neck is raised only visually; colliders stay on the play area plane for ~1 s.
-- Smoke and fire sizes are eyeballed and need tuning on device.
+- Smoke and fire sizes are eyeballed and need tuning on device. Smoke and fire look the same in both chapters: the
+  rig's nostril smoke is the same on the ride, and the roar's fire is the ride's breath of fire
+  (`DragonEffects.fireEmitter`), sized to the island's dragon (`roarFlameSize`, `roarSpeed`).
 - The island (2.8 m away, ~2.5 m wide, floating rocks ~3.7 m) does not know the room: reduce
   `IslandPlacement.standard` in small spaces.
 - The floor occluder assumes a flat floor at the immersive space's origin (y = 0); on a step or a rug it may

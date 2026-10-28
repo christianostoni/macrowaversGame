@@ -6,20 +6,19 @@ import UIKit
 /// smooth see-through skin (`HandSurface`), to the left of the flask, facing the player, snapping its fingers in a
 /// loop, with a puff of sparks at each snap.
 ///
-/// The loop is fixed, so its skin is built once, in the background (`prepareIfNeeded()`), from the orchard's first
-/// frame: one mesh per frame at `framesPerSecond` (a frame that holds the previous pose reuses its mesh), swapped
-/// into one model as the loop plays. The ~50 meshes take ~25 s of processor time in a Debug build: built while the
-/// immersive space loaded, they slowed it down; built on every core at once while the player opened a fruit, they
-/// starved the frames (the worms' apple stuttered). So they are built one at a time, on a single background thread,
-/// each handed to RealityKit as soon as it is ready.
+/// The loop is fixed, so its skin is too: one mesh per frame at `SnapHintBake.framesPerSecond` (a frame that holds
+/// the previous pose reuses its mesh), swapped into one model as the loop plays. The meshes are baked ahead of time
+/// (`SnapHintBake`, the `SnapHintHand.bin` resource) and read from the orchard's first frame (`prepareIfNeeded()`):
+/// ~0.15 s on a background thread, even in a Debug build, so the hand is ready long before the orbit is complete.
+/// Built at run time they took ~20 s of processor time in a Debug build and showed up late; that stays only as the
+/// fallback when the resource does not match the code (bake it again): one mesh at a time, on a single background
+/// thread, so the frames are never starved.
 /// The model has a sort group with a depth pre-pass: only the hand's outer surface is drawn, so the fingers in front
 /// of the palm do not show it through them. The fade, the flicker and the flash of the snap go through one
 /// `OpacityComponent` on the root.
 @MainActor
 final class SnapHintRig {
     static let name = "SnapHint"
-    /// Frames of the loop with a mesh of their own (the snap itself lasts ~4).
-    static let framesPerSecond: Float = 30
     /// The hand's size (1 = an adult's hand, ~19 cm from the wrist to the middle fingertip) and its height in hand
     /// space at its tallest (the open hand).
     static let scale: Float = 0.8
@@ -73,20 +72,22 @@ final class SnapHintRig {
         Task { await prepare() }
     }
 
-    /// Builds the loop's meshes (~7k vertices each) one after the other, off the main thread at background
-    /// priority (one core, never all of them); the hand shows once they are all ready.
+    /// Reads the loop's baked meshes (~7k vertices each) off the main thread, or, if they do not match the code,
+    /// builds them one after the other at background priority (one core, never all of them); hands them to
+    /// RealityKit one at a time. The hand shows once they are all ready.
     private func prepare() async {
-        let count = Int((SnapHint.period * Self.framesPerSecond).rounded(.up))
-        var poses: [SnapHint.Pose] = []
-        var frames: [Int] = []
-        for frame in 0..<count {
-            let pose = SnapHint.pose(at: Float(frame) / Self.framesPerSecond)
-            if pose != poses.last { poses.append(pose) }
-            frames.append(poses.count - 1)
-        }
+        let baked = await Task.detached(priority: .utility) { Self.bakedSkins() }.value
+        let loop = baked == nil ? SnapHintBake.loop() : (poses: [], frames: [])
+        let frames = baked?.frames ?? loop.frames
         var meshes: [MeshResource] = []
-        for pose in poses {
-            let skin = await Task.detached(priority: .background) { HandSurface(pose: pose).mesh() }.value
+        for index in 0..<(baked?.skins.count ?? loop.poses.count) {
+            let skin: HandSurface.Mesh
+            if let baked {
+                skin = baked.skins[index].mesh
+            } else {
+                let pose = loop.poses[index]
+                skin = await Task.detached(priority: .background) { HandSurface(pose: pose).mesh() }.value
+            }
             guard let mesh = try? await MeshResource(from: [Self.descriptor(skin)]) else {
                 print("⚠️ The hologram hand's mesh could not be built: no hand")
                 return
@@ -112,13 +113,29 @@ final class SnapHintRig {
             + (isPlayerReady ? Self.readyOpacity : 0))
         root.components.set(OpacityComponent(opacity: min(max(opacity, 0), 1)))
 
-        let frame = min(max(Int(hint.time * Self.framesPerSecond), 0), frames.count - 1)
+        let frame = min(max(Int(hint.time * SnapHintBake.framesPerSecond), 0), frames.count - 1)
         let mesh = frames[frame]
         if mesh != shownMesh {
             hand.model?.mesh = meshes[mesh]
             shownMesh = mesh
         }
         if hint.didSnap { ElixirRig.burst(sparks) }
+    }
+
+    /// The baked skins, if the resource is there and matches the code.
+    private nonisolated static func bakedSkins() -> SnapHintBake? {
+        guard let url = Bundle.main.url(forResource: SnapHintBake.resourceName,
+                                        withExtension: SnapHintBake.resourceExtension),
+              let bake = try? SnapHintBake(data: Data(contentsOf: url)) else {
+            print("⚠️ The hologram hand's baked meshes are missing: building them (slow in a Debug build)")
+            return nil
+        }
+        guard bake.matchesCode else {
+            print("⚠️ The hologram hand's baked meshes are out of date: building them (slow in a Debug build); "
+                + "run sh Assets/SnapHint/make_snap_hint_hand.sh")
+            return nil
+        }
+        return bake
     }
 
     private static func descriptor(_ skin: HandSurface.Mesh) -> MeshDescriptor {
@@ -167,8 +184,8 @@ final class SnapHintRig {
 
 extension OrchardSystem {
     /// The hologram hand: shown with every ingredient in orbit (until the snap), while no fruit is in front of the
-    /// player, to the left of the flask. Brighter while the player's own hand holds the loaded pose. Its meshes
-    /// start building on the orchard's first frame (the world is loaded by then), slowly, in the background.
+    /// player, to the left of the flask. Brighter while the player's own hand holds the loaded pose. Its baked
+    /// meshes are read on the orchard's first frame (the world is loaded by then), in the background.
     @MainActor
     static func updateSnapHint(_ orchard: inout OrchardComponent, deltaTime: Float) {
         let viewModel = orchard.viewModel
