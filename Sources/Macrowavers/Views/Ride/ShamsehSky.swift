@@ -1,13 +1,17 @@
+import CoreGraphics
 import RealityKit
 import simd
 import UIKit
 
 /// Chapter II's shamseh (`Shamseh`) drawn far away in the sky, in front of the dome, in the game's colours
-/// (`RidePalette`): its hair-thin strapwork faint at first, each petal glazed in the colour of a fruit the dragon
-/// ate; once they all are, the central star lights up in the dragon's blue, the kites and the strapwork are
-/// gilded, and the whole medallion swells for a moment. Rays, orbs and a ring of dots circle it like an
+/// (`RidePalette`): its hair-thin strapwork faint at first, a petal glazed for each fruit the dragon eats, its
+/// colour from a wheel of the game's colours around the medallion (pulled a little towards the fruit's own), so
+/// the finished shamseh reads as one rainbow; a poisoned fruit darkens the last petal for a moment. Once they all
+/// are lit, the central star lights up in the dragon's blue, the kites and the strapwork are gilded, the whole
+/// glass warms towards gold, and the medallion swells for a moment. Rays, orbs and a ring of dots circle it like an
 /// astrolabe's. It stays where it appeared, over the way ahead at the start of the feast; in the finale the dragon
-/// flies into its heart (`approach`).
+/// flies into its heart (`approach`). The tiles are stained glass (`RideGlass`): a light behind the medallion
+/// wanders across it, and the glass glows in its colours where it passes.
 struct ShamsehSky {
     /// How far (m, inside the dome), how high over the horizon and how big it looks (radians).
     static let distance: Float = 340
@@ -28,8 +32,43 @@ struct ShamsehSky {
     /// Where the medallion ends up in the finale: past the player (m), through its heart.
     static let passedDistance: Float = -12
 
-    /// The tiles' glazes: the petals take their fruit's, the star the dragon's blue, the kites the island's teal
-    /// (gold once complete), the lines the flowers' pale gold.
+    /// The petals' colours: a wheel of the game's colours around the medallion, so the finished shamseh reads as one
+    /// rainbow whatever order the fruit came in; each petal's fruit only pulls its colour a little (`fruitPull`).
+    /// The star is the dragon's blue, the kites the island's teal (gold once complete), the lines pale gold.
+    static let wheel: [SIMD3<Float>] = [
+        RidePalette.red, RidePalette.orange, RidePalette.yellow, RidePalette.lime,
+        RidePalette.teal, RidePalette.dragonBlue, RidePalette.violet, RidePalette.pink,
+    ]
+    static let fruitPull: Float = 0.2
+    /// A poisoned fruit darkens the last lit petal (how much, towards a sickly dark, and for how long, s).
+    static let poisonDarkening: Float = 0.8
+    static let poisonColour = SIMD3<Float>(0.05, 0.015, 0.04)
+    static let poisonTime: Float = 3
+    /// Complete, the whole medallion's glass warms towards gold over the celebration (how far).
+    static let goldWarmth: Float = 0.7
+
+    /// The colour of petal `index` of `folds`, lit by `fruit`.
+    static func glaze(petal index: Int, of fruit: FruitKind, folds: Int) -> SIMD3<Float> {
+        let place = (Float(index) + 0.5) / Float(max(folds, 1))
+        return simd_mix(wheelColour(at: place), glaze(of: fruit), SIMD3(repeating: fruitPull))
+    }
+
+    /// The wheel's colour at `place` (0...1 around the medallion, wrapping), blended between its stops.
+    static func wheelColour(at place: Float) -> SIMD3<Float> {
+        let turn = (place - place.rounded(.down)) * Float(wheel.count)
+        let index = Int(turn) % wheel.count
+        let blend = turn - turn.rounded(.down)
+        let smooth = blend * blend * (3 - 2 * blend)
+        return simd_mix(wheel[index], wheel[(index + 1) % wheel.count], SIMD3(repeating: smooth))
+    }
+
+    /// `colour` darkened by poison (`sickness` 0...1) and warmed towards gold once complete (`warmth` 0...1).
+    static func shown(_ colour: SIMD3<Float>, sickness: Float, warmth: Float) -> SIMD3<Float> {
+        let sick = simd_mix(colour, poisonColour, SIMD3(repeating: poisonDarkening * min(max(sickness, 0), 1)))
+        return simd_mix(sick, RidePalette.gold, SIMD3(repeating: goldWarmth * min(max(warmth, 0), 1)))
+    }
+
+    /// The fruit's own colour (it pulls its petal's a little).
     static func glaze(of fruit: FruitKind) -> SIMD3<Float> {
         switch fruit {
         case .apple: RidePalette.red
@@ -50,6 +89,10 @@ struct ShamsehSky {
     let ornaments: ModelEntity
     /// The airbrush material to glaze the tiles with (flat unlit colours without it).
     let airbrush: RideAirbrush?
+    /// The stained glass the tiles are made of (`RideGlass`; airbrushed tiles without it), and the time its light
+    /// has wandered behind the medallion (s).
+    let glass: ShaderGraphMaterial?
+    var lightTime: Float = 0
     /// Where it hangs (radians around the vertical, sky space): over the way ahead when the feast began.
     var heading: Float?
     /// 0...1 as it appears with the feast.
@@ -58,6 +101,9 @@ struct ShamsehSky {
     /// since it was completed (nil before).
     var glazes: [FruitKind?]
     var completedFor: Float?
+    /// The petal darkened by a poisoned fruit, and how long it stays dark (s).
+    var poisonedPetal: Int?
+    var poisonLeft: Float = 0
     /// 0...1 through the finale's flight into its heart.
     var approach: Float = 0
 
@@ -70,8 +116,9 @@ struct ShamsehSky {
     }
 
     @MainActor
-    init(_ shamseh: Shamseh, airbrush: RideAirbrush?) {
+    init(_ shamseh: Shamseh, airbrush: RideAirbrush?, glass: ShaderGraphMaterial? = nil) {
         self.airbrush = airbrush
+        self.glass = glass
         pivot = Entity()
         pivot.name = "RideShamseh"
         pivot.isEnabled = false
@@ -81,17 +128,17 @@ struct ShamsehSky {
         medallion.scale = SIMD3(repeating: Self.size)
         pivot.addChild(medallion)
 
-        // Tiles first, then the lines over them (a hair closer, drawn after).
-        let sortGroup = ModelSortGroup()
+        // Tiles first, then the lines over them (a hair closer, drawn after), both over the sky's lace.
+        let sortGroup = RideGlass.sortGroup
         let materials = (lines: Self.material(RidePalette.paleGold, airbrush: airbrush),
-                         blank: Self.material(RidePalette.lilac, airbrush: airbrush),
-                         star: Self.material(RidePalette.dragonBlue, airbrush: airbrush),
-                         kite: Self.material(RidePalette.teal, airbrush: airbrush))
+                         blank: Self.tileMaterial(RidePalette.lilac, airbrush: airbrush, glass: glass),
+                         star: Self.tileMaterial(RidePalette.dragonBlue, airbrush: airbrush, glass: glass),
+                         kite: Self.tileMaterial(RidePalette.teal, airbrush: airbrush, glass: glass))
         func tile(_ shape: Shamseh.Shape, material: any RealityKit.Material) -> ModelEntity {
             let entity = ModelEntity(mesh: Self.mesh(shamseh.fill(shape), name: "ShamsehTile"), materials: [material])
             entity.position = SIMD3(shape.centre, 0)
             entity.components.set(OpacityComponent(opacity: 0))
-            entity.components.set(ModelSortGroupComponent(group: sortGroup, order: 0))
+            entity.components.set(ModelSortGroupComponent(group: sortGroup, order: 2))
             medallion.addChild(entity)
             return entity
         }
@@ -102,7 +149,7 @@ struct ShamsehSky {
         func lines(_ mesh: Shamseh.Mesh, name: String) -> ModelEntity {
             let entity = ModelEntity(mesh: Self.mesh(mesh, name: name), materials: [materials.lines])
             entity.position.z = 0.003
-            entity.components.set(ModelSortGroupComponent(group: sortGroup, order: 1))
+            entity.components.set(ModelSortGroupComponent(group: sortGroup, order: 3))
             medallion.addChild(entity)
             return entity
         }
@@ -125,7 +172,8 @@ struct ShamsehSky {
         pivot.components.set(OpacityComponent(opacity: smoothstep(shown)))
 
         for (index, fruit) in zip(petals.indices, shamseh.colours) where glazes[index] != fruit {
-            petals[index].model?.materials = [Self.material(Self.glaze(of: fruit), airbrush: airbrush)]
+            let colour = Self.glaze(petal: index, of: fruit, folds: shamseh.folds)
+            petals[index].model?.materials = [Self.tileMaterial(colour, airbrush: airbrush, glass: glass)]
             glazes[index] = fruit
         }
         for index in petals.indices {
@@ -141,7 +189,8 @@ struct ShamsehSky {
                 // Gilded: the lines and the kites.
                 let gold = Self.material(RidePalette.gold, airbrush: airbrush)
                 [strapwork, ornaments].forEach { $0.model?.materials = [gold] }
-                kites.forEach { $0.model?.materials = [gold] }
+                let goldGlass = Self.tileMaterial(RidePalette.gold, airbrush: airbrush, glass: glass)
+                kites.forEach { $0.model?.materials = [goldGlass] }
             }
             let time = (completedFor ?? 0) + deltaTime
             completedFor = time
@@ -153,6 +202,54 @@ struct ShamsehSky {
         medallion.position.z = -(Self.distance + (Self.passedDistance - Self.distance) * reach)
         let filled = Float(shamseh.colours.count) / Float(max(shamseh.folds, 1))
         strapwork.components.set(OpacityComponent(opacity: Self.faintStrap + (1 - Self.faintStrap) * filled))
+        lightTime += deltaTime
+        poisonLeft = max(poisonLeft - deltaTime, 0)
+        shine(shamseh)
+    }
+
+    /// A poisoned fruit: the last lit petal darkens for a moment (`shamseh`: the petals lit now).
+    mutating func poison(_ shamseh: Shamseh) {
+        guard !shamseh.colours.isEmpty else { return }
+        poisonedPetal = shamseh.colours.count - 1
+        poisonLeft = Self.poisonTime
+    }
+
+    /// The light behind the medallion, where it has wandered to, seen through every glass tile; the petals' and the
+    /// star's glass darkened by poison or warmed to gold.
+    @MainActor
+    private func shine(_ shamseh: Shamseh) {
+        guard glass != nil else { return }
+        let warmth = min((completedFor ?? 0) / Self.celebration, 1)
+        let sickness = poisonLeft / Self.poisonTime
+        for (index, fruit) in zip(petals.indices, glazes) {
+            guard let fruit else { continue }
+            let colour = Self.shown(Self.glaze(petal: index, of: fruit, folds: shamseh.folds),
+                                    sickness: index == poisonedPetal ? sickness : 0, warmth: warmth)
+            Self.setGlaze(colour, of: petals[index])
+        }
+        Self.setGlaze(Self.shown(RidePalette.dragonBlue, sickness: 0, warmth: warmth), of: star)
+        let spot = RideGlass.lightSpot(time: lightTime)
+        let light = medallion.convert(position: SIMD3(spot, -RideGlass.depth), to: nil)
+        // From the unit disc to metres in the world: the medallion swells and comes at the player.
+        let scale = medallion.scale(relativeTo: nil).x
+        for tile in [star] + petals + kites {
+            guard var material = tile.model?.materials.first as? ShaderGraphMaterial else { continue }
+            try? material.setParameter(name: "LightPosition", value: .simd3Float(light))
+            try? material.setParameter(name: "HaloRadius", value: .float(RideGlass.haloRadius * scale))
+            try? material.setParameter(name: "CoreRadius", value: .float(RideGlass.coreRadius * scale))
+            tile.model?.materials = [material]
+        }
+    }
+
+    /// Sets a glass tile's colour.
+    @MainActor
+    private static func setGlaze(_ colour: SIMD3<Float>, of tile: ModelEntity) {
+        guard var material = tile.model?.materials.first as? ShaderGraphMaterial,
+              let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB),
+              let glaze = CGColor(colorSpace: space, components: [CGFloat(colour.x), CGFloat(colour.y),
+                                                                   CGFloat(colour.z), 1]) else { return }
+        try? material.setParameter(name: "GlazeColor", value: .color(glaze))
+        tile.model?.materials = [material]
     }
 
     /// Its size (m, unit disc to the sky).
@@ -173,6 +270,20 @@ struct ShamsehSky {
             : max(current - Self.lightRate * deltaTime, 0)
         tile.components.set(OpacityComponent(opacity: next))
         tile.scale = SIMD3(repeating: 1 + 0.8 * next * (1 - next))
+    }
+
+    /// A tile of stained glass in `colour`, or its airbrushed glaze without the glass.
+    @MainActor
+    private static func tileMaterial(_ colour: SIMD3<Float>, airbrush: RideAirbrush?,
+                                     glass: ShaderGraphMaterial?) -> any RealityKit.Material {
+        guard var material = glass, let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB),
+              let glaze = CGColor(colorSpace: space, components: [CGFloat(colour.x), CGFloat(colour.y),
+                                                                   CGFloat(colour.z), 1]) else {
+            return Self.material(colour, airbrush: airbrush)
+        }
+        try? material.setParameter(name: "GlazeColor", value: .color(glaze))
+        try? material.setParameter(name: "GrainScale", value: .float(grainScale))
+        return material
     }
 
     /// The glaze, airbrushed (only the grain speckles a flat tile), or plain without the airbrush material; seen

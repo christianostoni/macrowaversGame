@@ -1,5 +1,5 @@
 """Paints the ride's sky dome: an equirectangular airbrush night, almost black, a faint glow of colour on the
-horizon, with stars, sparkles, a crescent moon, far lantern lights and Persian clouds around the horizon: arches of
+horizon, with stars, sparkles, far lantern lights and Persian clouds around the horizon: arches of
 round lobes with long tails, in the game's colours, without outlines. Every cloud shape is a gradient from almost
 clear to fully opaque, sprayed with grain like the fruit's airbrush.
 
@@ -72,7 +72,6 @@ STARS = 2600
 # Big four-pointed sparkles, and their colours.
 SPARKLES = 70
 SPARKLE_COLOURS = [np.array(PALE_GOLD), np.array(PINK), np.array(MINT), np.array((1.0, 1.0, 1.0))]
-MOON = dict(longitude=330, elevation=32, radius=3.2, colour=np.array(PALE_GOLD))
 LIGHTS = 140
 
 # Persian clouds: how many, where (elevation of their base) and how long (degrees); the colour pairs their
@@ -168,20 +167,6 @@ for _ in range(SPARKLES):
     rays = np.clip((1 - shape) / 0.12, 0, 1)
     glow = 0.5 * np.clip(1 - np.sqrt(dx * dx + dy * dy) / (size * 0.35), 0, 1) ** 2
     paint(rows, columns, colour, np.clip(rays + glow, 0, 1) * rng.uniform(0.6, 1))
-
-# The crescent moon in a soft halo.
-rows, columns, dx, dy = block(MOON["longitude"], MOON["elevation"], MOON["radius"] * 4, MOON["radius"] * 4)
-distance = np.sqrt(dx * dx + dy * dy)
-paint(rows, columns, MOON["colour"], 0.35 * np.clip(1 - distance / (MOON["radius"] * 4), 0, 1) ** 2)
-shadow = np.sqrt((dx - 0.42 * MOON["radius"]) ** 2 + (dy - 0.18 * MOON["radius"]) ** 2)
-crescent = np.clip((MOON["radius"] - distance) / 0.12, 0, 1) * np.clip((shadow - 0.92 * MOON["radius"]) / 0.12, 0, 1)
-paint(rows, columns, MOON["colour"], crescent)
-# Around it, like an astrolabe's: a hair-thin ring and a ring of dots.
-ring = np.clip((0.03 - np.abs(distance - MOON["radius"] * 2.1)) / DEGREES_PER_PIXEL + 0.5, 0, 1)
-paint(rows, columns, MOON["colour"], 0.7 * ring)
-angle = np.arctan2(dy, dx)
-dots = (np.abs(distance - MOON["radius"] * 2.6) < 0.09) & (np.mod(angle, 2 * math.pi / 36) < 0.05)
-paint(rows, columns, MOON["colour"], 0.8 * dots)
 
 # Far lantern lights, low over the horizon.
 for _ in range(LIGHTS):

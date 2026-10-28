@@ -49,8 +49,9 @@ extension DragonRideSystem {
 extension DragonRideSceneBuilder {
     /// The medallion's drawing, hung in the sky.
     @MainActor
-    static func addShamseh(_ shamseh: Shamseh, root: Entity, airbrush: RideAirbrush?) -> ShamsehSky {
-        let sky = ShamsehSky(shamseh, airbrush: airbrush)
+    static func addShamseh(_ shamseh: Shamseh, root: Entity, airbrush: RideAirbrush?,
+                           glass: ShaderGraphMaterial?) -> ShamsehSky {
+        let sky = ShamsehSky(shamseh, airbrush: airbrush, glass: glass)
         root.addChild(sky.pivot)
         return sky
     }
