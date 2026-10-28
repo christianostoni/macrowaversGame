@@ -3,7 +3,7 @@
 The words around the game, from the low-fidelity wireframes (5 screens): a Start button in the room, the
 story's scroll and the chapter's title in a darkened room before the island appears, and the freed dragon's two
 pages above it. Then the ride: the player flies on the dragon's back through a night sky in a full immersive space
-and feeds it, wave after wave (chapter II); every fruit lights a petal of a star medallion in the sky, and once the
+and feeds it in a sky that grows harder as they do well (chapter II); every fruit lights a petal of a star medallion in the sky, and once the
 dragon is full it flies into the medallion's heart, where the story ends.
 
 ## The screens
@@ -18,7 +18,7 @@ dragon is full it flies into the medallion's heart, where the story ends.
 | 5 | `safety` | Above the dragon | **Thank you** / Child of the Shah, I will take you to safety. / Are you ready? | **I'm Ready** button: the room goes dark, the ride's space takes over |
 | – | `ride` | Full immersion | A spinner ("Loading…", placed once 1.2 m in front of the eyes) while the ride's world loads; then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
 | 6 | `secondChapter` | In front of the eyes, above the dragon's head | **Chapter II** / Feed the dragon the right plants. / It doesn't like bananas! | Tap the text |
-| – | `feast` | Above the dragon's head | No page: four waves of fruit in the sky and a tally (hearts, fire, wave, fruit eaten); see [Chapter II: the feast](#chapter-ii-the-feast) | The last wave eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s |
+| – | `feast` | Above the dragon's head | No page: fruit in the sky, harder as the player does well, and a tally (hearts, fire, fruit eaten); see [Chapter II: the feast](#chapter-ii-the-feast) | The 10th fruit eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s |
 | – | `finale` | Full immersion | No page: the dragon roars, turns to the medallion on its own and flies into its heart through a rush of light (`ShamsehFinale.swift`); the light fills the view | 6 s at most turning, 7 s of flight, 1.2 s of light |
 | 7 | `epilogue` | In front of the player's eyes, in the light | **Home at last** / The dragon is full, and the curse is gone. / Thank you for flying with it. | **The End** button |
 | – | `ended` | – | No text: the ride's space closes and the launch window comes back | – |
@@ -150,22 +150,37 @@ floating Persian lanterns and mountain peaks far below (made in code, shaded wit
 material, recoloured from `RidePalette`), a twinkling glitter wound around the dragon, which glows. The
 canopy-shaped 3D clouds are off for now (`DragonRideSystem.cloudCount = 0`).
 
-**Waves** (`DragonFeast.Settings.waves`), 12 fruit in the sky at a time, new ones ahead as the old are passed:
+**A sky that grows harder** (`DragonFeast.difficulty`, 0…1): **10 fruit** to eat, 12 in the sky at a time, new
+ones ahead as the old are passed, and no waves and no pauses. The ride makes some players dizzy (the sky turns
+around them in every turn), so the chapter is short and gets hard quickly instead of long:
+- each fruit eaten raises the difficulty by 0.1, plus 0.04 for each fruit before it in a streak (up to two; a
+  banana or a poisoned fruit breaks the streak). Without a slip, bananas come with the 2nd fruit, poison with the
+  3rd, the last stretch with the 5th and the hardest sky with the 7th: the last four are eaten in it;
+- a poisoned fruit lowers it by 0.12, being exhausted by 0.25, and after 10 s without eating it falls by 0.02 a
+  second: a player who struggles gets help.
 
-| Wave | Goal | Bananas | Poisoned | Aim help (good fruit drift to the mouth within) | Hint |
+The difficulty sets the new fruit (`DragonFeast.Settings.levels`; between two levels the values ease from one to
+the next, but a kind of fruit comes only with its stage, and its hint):
+
+| Stage, from difficulty | Bananas | Poisoned | Aim help (good fruit drift to the mouth within) | Swing (to either side) | Hint (the first time the stage is reached) |
 |---|---|---|---|---|---|
-| 1 | 3 | – | – | 3.2 m | Fly into the fruit; push the horns forward to fly faster |
-| 2 | 4 | 30% | – | 2.6 m | Bananas: the dragon spits them out (a waste of time) |
-| 3 | 4 | 15% | 30% | 2.1 m | Poisoned fruit: avoid them, or let go of a horn and snap your fingers to breathe fire |
-| 4 | 5 | 15% | 45% | 1.6 m | The last stretch: less help aiming |
+| 0, 0 | – | – | 3.2 m | – | Fly into the fruit; push the horns forward to fly faster |
+| 1, 0.15 | 30% | – | 2.8 m | – | Bananas: the dragon spits them out (a waste of time) |
+| 2, 0.4 | 15% | 30% | 2.4 m | 0.15 m | Poisoned fruit: avoid them, or let go of a horn and snap your fingers to breathe fire |
+| 3, 0.75 | 10% | 45% | 2.1 m | 0.3 m | The last stretch: the fruit dodge and less help aiming |
+| hardest, 1 | 10% | 55% | 2 m | 0.4 m | – |
 
-A wave's goal eaten, the sky clears ("Wave cleared!", 3.5 s) and the next wave fills it. After the last, "The dragon
-is full!" while the medallion celebrates, then the finale.
+The fruit swing slowly from side to side across the flight (4 s a swing; one being pulled in stops). The hard sky
+is hard in what to eat and what to burn more than in aiming: with the aim helped down to 1.2 m and swings of 1 m,
+lining up each fruit took many more turns and the ride ~40 s longer. A headless simulation of the feast with a bot
+rider (the real model, 300 rides) gave ~36–40 s instead of the four waves' ~64–69 s, and about a third less turning
+of the view (~700–830° instead of ~1050–1250°); real riders are slower than the bot. The 10th fruit eaten, "The
+dragon is full!" while the medallion celebrates, then the finale.
 
 **The shamseh** (`Shamseh`, drawn by `ShamsehSky`): a Persian star medallion hung far away over the way ahead when
 the feast begins, its strapwork faint. Every fruit the dragon eats glazes one of its petals in that fruit's colour;
-there is a petal for every fruit of every wave (`DragonFeast.Settings.totalGoal`, 16, the goals add up to a classic
-16-point shamseh). Out of hearts, the wave starts over and its petals lose their colour (`Shamseh.uncolour(last:)`).
+there is a petal for every fruit to eat (`DragonFeast.Settings.totalGoal`: a ten-pointed shamseh). Out of hearts,
+the petals of the fruit the dragon loses lose their colour (`Shamseh.uncolour(last:)`).
 Complete, its star lights up in the dragon's blue, the lines and kites turn gold and it swells for 2.5 s; then the
 dragon flies into its heart (`DragonRide.destination`) and the story's last page shows in the light there (the
 light widens to 2.4 m around the player, past the page).
@@ -174,7 +189,8 @@ light widens to 2.4 m around the player, past the page).
 in a clinging green haze (its own model, tinted: no new asset), turning slowly. Eaten, it costs one of the dragon's
 **3 hearts**: it coughs smoke from its nostrils, its head droops and sways, and for 3 s it flies slower (its body
 sways, never the view). The aim's help never pulls poison to the mouth. Out of hearts the dragon is **exhausted**:
-the sky clears, it rests 4 s, then the wave starts over with full hearts.
+it loses 2 of the fruit it ate (`exhaustionCost`), the sky clears and eases, it rests 4 s, then flies on with
+full hearts.
 
 **Fire.** A **snap of the fingers** (the gesture learnt for the elixir, either hand) makes the dragon breathe fire
 for 0.9 s: a long jet from the middle of its mouth (`DragonRideSceneBuilder.makeFireBreath`, the same fire as the island's
@@ -240,8 +256,9 @@ preloaded (`DragonEffects`, `OrchardSounds`).
 | `StoryPanelComponent` | `viewerDistance`, `viewerDrop`, `lookAwayAngle`, `driftTolerance` | where the narrator's pages float, when they follow the gaze or a player who stands up / walks |
 | `StoryPanelComponent` | `dragonClearance`, `responsiveness` | how high above the dragon its words float, how fast the page glides |
 | `DragonImmersiveView` | `.preferredSurroundingsEffect(.dark)` | how dark the room gets (`.semiDark`, `.ultraDark`, `.dim(intensity:)`) |
-| `DragonFeast.Settings` | `waves` (goal, shares, `pullRadius`), `hearts`, `biteRadius`, `count` | how long and how hard chapter II is |
-| `DragonFeast.Settings` | `sicknessDuration`, `breakDuration`, `restDuration` | how long poison lasts, the pauses |
+| `DragonFeast.Settings` | `totalGoal`, `levels` (shares, `pullRadius`, `sway`), `hearts`, `biteRadius`, `count` | how long and how hard chapter II is |
+| `DragonFeast.Settings` | `rise`, `streakBonus`, `longestStreakBonus`, `poisonRelief`, `exhaustionRelief`, `reliefDelay`, `reliefRate`, `exhaustionCost`, `swayPeriod` | how fast the sky grows harder, how it eases for a player who struggles |
+| `DragonFeast.Settings` | `sicknessDuration`, `restDuration` | how long poison lasts, the dragon's rest |
 | `DragonFeast.Settings` | `fireDuration`, `fireCooldown`, `fireRange`, `fireAngle` | how the fire breath plays |
 | `DragonRide.Settings` | `fullTurnReach`, `fullClimbRaise`, `fullBoostReach`, `cruiseSpeed`, `boostSpeed` | how the hands steer and how fast it flies |
 | `Pinch` | `closing`, `opening` | how close thumb and index hold the horns, how far they let go |
@@ -272,9 +289,11 @@ preloaded (`DragonEffects`, `OrchardSounds`).
   and `restartScene()` putting it back around the tree.
 
 `DragonFeastTests.swift`:
-- `DragonFeastTests`: the first wave only good fruit, harder waves, the goal clearing a wave (the sky empties, the
-  next brings bananas), the last wave ending the feast, poison costing a
-  heart and slowing the dragon, out of hearts resting then starting the wave over, bananas costing nothing, only
+- `DragonFeastTests`: the first sky only good fruit, the levels growing harder (a kind of fruit only with its
+  stage), each fruit raising the difficulty and more on a streak (each stage's hint once, no pause), the hardest
+  sky with the 7th fruit without a slip, the goal ending the feast, poison costing a heart, slowing the dragon,
+  easing the sky and breaking the streak, help for a player who does not eat, out of hearts losing two fruit and
+  resting, the fruit swinging sideways in a hard sky, bananas costing nothing, only
   good fruit drifting to the mouth, fire burning only the fruit ahead and recharging, a weak dragon flying slower
   without turning the view, the tally on the story, the finale only once the feast is finished, then the last
   page → `ended`;
@@ -286,8 +305,8 @@ preloaded (`DragonEffects`, `OrchardSounds`).
 `DragonRideTests.swift`: the flight, both hands moved to a side turning that way, letting go levelling out and a
 new hold starting level, the pinch holding through small gaps, a destination flown to whatever the hands.
 `ShamsehTests.swift`: the medallion's tiles (8, 10 and 16 folds) convex and turning counter-clockwise, shared edges
-drawn once, rays, orbs and dots around the rim, petals coloured by every fruit but bananas and uncoloured when a wave
-starts over. `RideShapesTests.swift`: the lantern and the mountains well formed.
+drawn once, rays, orbs and dots around the rim, petals coloured by every fruit but bananas and uncoloured when the dragon,
+exhausted, loses fruit. `RideShapesTests.swift`: the lantern and the mountains well formed.
 
 `MusicTrackTests.swift`: silence before Start, the intro under the pages and the fruit, the puzzle from the flight
 to the knot, the farewell once the dragon is free (played once).

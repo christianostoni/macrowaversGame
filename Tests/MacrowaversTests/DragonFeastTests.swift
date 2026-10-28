@@ -35,7 +35,7 @@ struct DragonFeastTests {
         return events
     }
 
-    @Test func theFirstWaveFillsTheSkyWithGoodFruitOnly() {
+    @Test func theFirstSkyHoldsGoodFruitOnly() {
         var random = SeededRandom(seed: 3)
         let ride = flying()
         let feast = DragonFeast(ride: ride, using: &random)
@@ -47,50 +47,85 @@ struct DragonFeastTests {
             #expect(abs(seen.x) <= DragonFeast.Settings.side + 0.01)
         }
         #expect(feast.plants.allSatisfy { $0.isGood })
-        #expect(feast.wave == 0 && feast.hearts == DragonFeast.Settings.hearts && feast.phase == .playing)
+        #expect(feast.difficulty == 0 && feast.stage == 0)
+        #expect(feast.hearts == DragonFeast.Settings.hearts && feast.phase == .playing)
     }
 
-    @Test func theWavesGrowHarder() {
-        let waves = DragonFeast.Settings.waves
-        #expect(waves.first?.bananaShare == 0 && waves.first?.poisonShare == 0)
-        #expect(zip(waves, waves.dropFirst()).allSatisfy { $0.goal <= $1.goal && $0.pullRadius >= $1.pullRadius })
-        #expect(waves.contains { $0.poisonShare > 0 })
+    @Test func theSkyGrowsHarderWithTheDifficulty() {
+        let levels = DragonFeast.Settings.levels
+        #expect(levels.first?.start == 0 && levels.last?.start == 1)
+        #expect(levels.first?.bananaShare == 0 && levels.first?.poisonShare == 0)
+        #expect(zip(levels, levels.dropFirst()).allSatisfy {
+            $0.start < $1.start && $0.pullRadius >= $1.pullRadius && $0.sway <= $1.sway
+        })
+        // A new kind of fruit comes only with its stage (and its hint), not little by little before it.
+        let easy = DragonFeast.Level.at(levels[1].start - 0.01)
+        #expect(easy.bananaShare == 0 && easy.poisonShare == 0)
+        #expect(DragonFeast.Level.at(levels[1].start).bananaShare > 0)
+        #expect(DragonFeast.Level.at(levels[2].start - 0.01).poisonShare == 0)
+        #expect(DragonFeast.Level.at(levels[2].start).poisonShare > 0)
+        // In between, the values ease from one level to the next; past the hardest, the hardest.
+        let middle = DragonFeast.Level.at((levels[2].start + levels[3].start) / 2)
+        #expect(middle.pullRadius < levels[2].pullRadius && middle.pullRadius > levels[3].pullRadius)
+        #expect(DragonFeast.Level.at(1) == levels[levels.count - 1])
     }
 
-    @Test func eatingTheGoalClearsTheWaveAndTheNextOneBringsBananas() {
+    @Test func eatingRaisesTheDifficultyFasterOnAStreak() {
         var random = SeededRandom(seed: 5)
         let ride = flying()
         var feast = DragonFeast(ride: ride, using: &random)
         var events: [DragonFeast.Event] = []
-        for _ in 0..<DragonFeast.Settings.waves[0].goal { events += feed(&feast, ride: ride, random: &random) }
-        #expect(events.last == .waveCleared(next: 1))
-        #expect(feast.phase == .waveCleared)
-        // The sky clears: nothing more to eat until the next wave.
-        _ = wait(&feast, ride: ride, seconds: 1, random: &random)
-        #expect(!feast.plants.contains { $0.isFloating })
-        let duringTheBreak = feed(&feast, ride: ride, random: &random)
-        #expect(duringTheBreak.isEmpty)
+        for _ in 0..<2 { events += feed(&feast, ride: ride, random: &random) }
+        let rise = DragonFeast.Settings.rise
+        let bonus = DragonFeast.Settings.streakBonus
+        #expect(abs(feast.difficulty - (2 * rise + bonus)) < 1e-5)
+        #expect(feast.eaten == 2 && feast.streak == 2)
+        // The second fruit took the sky past the bananas' stage: its hint, once. No pause: the sky still floats.
+        #expect(events == [.ate(.apple), .ate(.apple), .stageReached(1)])
+        #expect(feast.stage == 1 && feast.phase == .playing)
+        #expect(feast.plants.dropFirst().allSatisfy { $0.isFloating })
+        // On a streak each fruit raises it more: the third, by two fruit's bonus, into the poison's stage.
+        events = feed(&feast, ride: ride, random: &random)
+        #expect(abs(feast.difficulty - (3 * rise + 3 * bonus)) < 1e-5)
+        #expect(events.last == .stageReached(2))
 
-        _ = wait(&feast, ride: ride, seconds: DragonFeast.Settings.breakDuration, random: &random)
-        #expect(feast.phase == .playing && feast.wave == 1 && feast.eaten == 0)
-        #expect(feast.plants.allSatisfy { $0.isFloating })
-        #expect(feast.progress.goal == DragonFeast.Settings.waves[1].goal)
+        // A banana breaks the streak: the next fruit raises the difficulty by the plain step.
+        _ = feed(&feast, ride: ride, kind: .banana, random: &random)
+        #expect(feast.streak == 0)
+        let before = feast.difficulty
+        _ = feed(&feast, ride: ride, index: 1, random: &random)
+        #expect(abs(feast.difficulty - before - rise) < 1e-5)
     }
 
-    @Test func theLastWaveEatenTheDragonIsFull() {
+    @Test func withoutASlipTheSkyIsAtItsHardestBeforeTheEnd() {
+        var random = SeededRandom(seed: 6)
+        let ride = flying()
+        var feast = DragonFeast(ride: ride, using: &random)
+        var events: [DragonFeast.Event] = []
+        var hardestAt: Int?
+        for fruit in 1..<DragonFeast.Settings.totalGoal {
+            events += feed(&feast, ride: ride, random: &random)
+            if hardestAt == nil && feast.difficulty >= 1 { hardestAt = fruit }
+        }
+        // Poison comes with the 3rd fruit, the hardest sky with the 7th: the last fruit are eaten in it.
+        #expect(hardestAt == 7)
+        #expect(events.contains(.stageReached(DragonFeast.Settings.stageCount - 1)))
+        #expect(feast.stage == DragonFeast.Settings.stageCount - 1)
+    }
+
+    @Test func theGoalEatenTheDragonIsFull() {
         var random = SeededRandom(seed: 7)
         let ride = flying()
         var feast = DragonFeast(ride: ride, using: &random)
         var events: [DragonFeast.Event] = []
-        for wave in DragonFeast.Settings.waves.indices {
-            #expect(feast.wave == wave)
-            for _ in 0..<DragonFeast.Settings.waves[wave].goal { events += feed(&feast, ride: ride, random: &random) }
-            events += wait(&feast, ride: ride, seconds: DragonFeast.Settings.breakDuration + 0.1, random: &random)
-        }
-        #expect(events.last == .finished || events.contains(.finished))
-        #expect(feast.phase == .finished && !feast.isFireReady)
-        #expect(events.filter { if case .waveCleared = $0 { true } else { false } }.count
-                == DragonFeast.Settings.waves.count - 1)
+        for _ in 0..<DragonFeast.Settings.totalGoal { events += feed(&feast, ride: ride, random: &random) }
+        #expect(events.last == .finished)
+        #expect(feast.phase == .finished && !feast.isFireReady && feast.eaten == DragonFeast.Settings.totalGoal)
+        // Every stage's hint came once, and never a pause in between.
+        #expect(events.filter { if case .stageReached = $0 { true } else { false } }.count
+                == DragonFeast.Settings.stageCount - 1)
+        _ = wait(&feast, ride: ride, seconds: 1, random: &random)
+        #expect(!feast.plants.contains { $0.isFloating })
     }
 
     @Test func aPoisonedFruitCostsAHeartAndMakesTheDragonSick() {
@@ -105,22 +140,77 @@ struct DragonFeastTests {
         #expect(feast.sickness == 0 && feast.weakness == 0)
     }
 
-    @Test func outOfHeartsTheDragonRestsThenTheWaveStartsOver() {
+    @Test func aPoisonedFruitEasesTheSkyAndBreaksTheStreak() {
+        var random = SeededRandom(seed: 8)
+        let ride = flying()
+        var feast = DragonFeast(ride: ride, using: &random)
+        for _ in 0..<4 { _ = feed(&feast, ride: ride, random: &random) }
+        let before = feast.difficulty
+        _ = feed(&feast, ride: ride, kind: .orange, isPoisoned: true, random: &random)
+        #expect(abs(before - feast.difficulty - DragonFeast.Settings.poisonRelief) < 1e-5)
+        #expect(feast.streak == 0)
+        // The poison's hint already shown stays shown: the stage does not go back.
+        #expect(feast.stage == 2)
+    }
+
+    @Test func aPlayerWhoDoesNotEatGetsHelp() {
+        var random = SeededRandom(seed: 9)
+        let ride = flying()
+        var feast = DragonFeast(ride: ride, using: &random)
+        for _ in 0..<4 { _ = feed(&feast, ride: ride, random: &random) }
+        let before = feast.difficulty
+        _ = wait(&feast, ride: ride, seconds: DragonFeast.Settings.reliefDelay - 1, random: &random)
+        #expect(feast.difficulty == before)
+        _ = wait(&feast, ride: ride, seconds: 6, random: &random)
+        #expect(feast.difficulty < before - 4 * DragonFeast.Settings.reliefRate)
+    }
+
+    @Test func outOfHeartsTheDragonLosesSomeFruitAndRests() {
         var random = SeededRandom(seed: 2)
         let ride = flying()
         var feast = DragonFeast(ride: ride, using: &random)
-        var events = feed(&feast, ride: ride, random: &random)
-        #expect(feast.eaten == 1)
+        var events: [DragonFeast.Event] = []
+        for _ in 0..<3 { events += feed(&feast, ride: ride, random: &random) }
         for _ in 0..<DragonFeast.Settings.hearts {
             events += feed(&feast, ride: ride, kind: .orange, isPoisoned: true, random: &random)
         }
-        #expect(events.last == .exhausted)
+        let cost = DragonFeast.Settings.exhaustionCost
+        #expect(events.last == .exhausted(lost: cost))
         #expect(feast.phase == .exhausted && feast.hearts == 0 && feast.weakness == 1)
+        #expect(feast.eaten == 3 - cost)
 
         _ = wait(&feast, ride: ride, seconds: DragonFeast.Settings.restDuration + 0.1, random: &random)
-        #expect(feast.phase == .playing && feast.wave == 0 && feast.eaten == 0)
+        #expect(feast.phase == .playing && feast.eaten == 3 - cost)
         #expect(feast.hearts == DragonFeast.Settings.hearts)
+        #expect(feast.plants.allSatisfy { $0.isFloating })
         #expect(feast.progress.poisoned == DragonFeast.Settings.hearts)
+    }
+
+    @Test func inAHardSkyTheFruitDodge() {
+        var random = SeededRandom(seed: 10)
+        let ride = flying()
+        var calm = DragonFeast(ride: ride, using: &random)
+        var hard = calm
+        hard.setDifficulty(1)
+        // Far from the mouth, poisoned (never pulled in): only the swing moves it.
+        let spot = ride.skyFromRide(SIMD3(0, 0, -20))
+        calm.place(plant: 0, at: spot, kind: .apple, isPoisoned: true)
+        hard.place(plant: 0, at: spot, kind: .apple, isPoisoned: true)
+        let mouthInSky = ride.skyFromRide(mouth)
+        let sway = DragonFeast.Settings.levels[DragonFeast.Settings.levels.count - 1].sway
+        var farthest: Float = 0
+        // A whole swing: whatever its phase, the fruit strays at least `sway` from where it was.
+        for _ in 0..<Int(DragonFeast.Settings.swayPeriod * 60) {
+            _ = calm.update(deltaTime: 1.0 / 60.0, mouth: mouthInSky, ride: ride, using: &random)
+            _ = hard.update(deltaTime: 1.0 / 60.0, mouth: mouthInSky, ride: ride, using: &random)
+            let moved = hard.plants[0].position - spot
+            farthest = max(farthest, simd_length(moved))
+            // Sideways, level, never towards the player, and never farther than its swing.
+            #expect(abs(moved.y) < 1e-3 && abs(simd_dot(moved, ride.forward)) < 1e-3)
+            #expect(simd_length(moved) <= 2 * sway + 0.01)
+        }
+        #expect(calm.plants[0].position == spot)
+        #expect(farthest > 0.9 * sway)
     }
 
     @Test func aBananaIsSpatOutAndCostsNothing() {

@@ -70,7 +70,7 @@ struct ShamsehTests {
         shamseh.colour(with: .pineapple)
         #expect(shamseh.colours == [.pomegranate, .orange, .apple])
         #expect(shamseh.isComplete)
-        // The dragon exhausted: its wave's petals lose their colour, and take the next fruit's.
+        // The dragon exhausted: the petals of the fruit it lost lose their colour, and take the next fruit's.
         shamseh.uncolour(last: 2)
         #expect(shamseh.colours == [.pomegranate] && !shamseh.isComplete)
         shamseh.uncolour(last: 5)
