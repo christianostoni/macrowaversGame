@@ -34,9 +34,8 @@ The game plays in mixed reality, in the player's room:
    star medallion in the sky; once the dragon is full, it flies into the medallion's heart and the story ends.
 
 No window covers the game: the launch window steps aside when the immersive space opens. Inside the space,
-panels are attached to the scene: the island panel (left) rotates the island and restarts the game, a small panel
-under the picked fruit says what to do, and a hologram hand beside the flask shows the snap that brews the
-elixir.
+panels are attached to the scene: a small panel under the picked fruit says what to do, and a hologram hand
+beside the flask shows the snap that brews the elixir.
 
 The dragon, the fruit and the elixir play spatial sound effects. Music follows the story: a setar under the
 narrator's pages and the fruit, the puzzle theme from the dragon's flight to the knot, and the farewell theme once

@@ -49,7 +49,7 @@ pages' text lives in `StoryStep.page` (chapter II's name, shown while the ride l
 - **Dimming**: every step with a page darkens the passthrough with `.preferredSurroundingsEffect(.dark)` (the
   system's own dimming of the room, applied to the immersive space). While the dragon speaks, focus mode also
   fades the island, tree and fruit to 25% (`SceneFocus.dragon`), so only the dragon and its words stand out.
-- **Reveal**: the island, the dragon, the orchard and the island panel are built when the space opens but added
+- **Reveal**: the island, the dragon and the orchard are built when the space opens but added
   to the scene only when the story reaches `adventure` (`HiddenWorld` in `DragonImmersiveView`); island and
   dragon start at opacity 0 and focus mode fades them in. Until then nothing can be tapped by mistake and the
   dragon does not fly.

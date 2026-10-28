@@ -91,7 +91,7 @@ P       = O + across · a sin φ + depth · b cos φ
 
 | Symbol | Value | Why |
 |---|---|---|
-| `α` (`bearing`) | 30° to the right | clear of the fruit in front of the player and of the island panel (50° to the left) |
+| `α` (`bearing`) | 30° to the right | clear of the fruit in front of the player |
 | `distance` | 0.60 m | within the comfortable focus range (0.5–1 m), beyond the hands snapping in front of the chest |
 | `drop` | 0.18 m | centre ~17° below the line of sight: the comfortable band for looking down without bending the neck |
 | `a` | 0.13 m | ±12° around `α`: the whole orbit between ~18° and ~42° to the right, inside the field of view with no head turn; the flask (~15 cm wide, in the middle) still fits between the two sides |
