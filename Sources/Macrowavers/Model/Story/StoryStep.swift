@@ -21,7 +21,7 @@ enum StoryStep: Equatable, CaseIterable {
     /// The player is ready: the room goes dark (full immersion) and they fly on the dragon's back, steering it
     /// with both hands, out of the dark into the sky.
     case ride
-    /// Over the clouds: chapter II's title and its goal.
+    /// Over the clouds: chapter II's goal (its name was shown while the ride loaded).
     case secondChapter
     /// Fruit float in the sky, harder as the player does well: they steer the dragon into the ones it likes (not the
     /// bananas, not the poisoned ones: fire burns those away) (`DragonFeast`).
@@ -49,7 +49,7 @@ enum StoryStep: Equatable, CaseIterable {
         case answer(String)
     }
 
-    /// A page of text: a short title and its lines.
+    /// A page of text: a short title (none when empty) and its lines.
     struct Page: Equatable {
         let title: String
         let lines: [String]
@@ -72,14 +72,19 @@ enum StoryStep: Equatable, CaseIterable {
             Page(title: "Thank you", lines: ["Child of the Shah, I will take you to safety.", "Are you ready?"],
                  anchor: .dragon, advance: .answer("I'm Ready"))
         case .secondChapter:
-            Page(title: "Chapter II", lines: ["Feed the dragon the right plants.", "It doesn't like bananas!"],
-                 anchor: .viewer, advance: .tap)
+            // Named while the ride loaded (`rideTitle`): only its goal, without a title.
+            Page(title: "", lines: ["Feed the dragon the right plants."], anchor: .viewer, advance: .tap)
         case .epilogue:
             Page(title: "Home at last", lines: ["The dragon is full, and the curse is gone.",
                                                 "Thank you for flying with it."],
                  anchor: .viewer, advance: .answer("The End"))
         }
     }
+
+    /// Chapter II's name, over the ride's loading animation while its sky is built (`DragonRideView`): the wait in the
+    /// dark opens the chapter as chapter I's title does. No step of its own: it goes once the sky is built and read.
+    static let rideTitle = Page(title: "Chapter II", lines: ["Havā-tō dāram: I have your back"],
+                                anchor: .viewer, advance: .tap)
 
     /// The room is darkened so the eyes stay on the words, the scroll's included (and on the dragon, when it speaks).
     var dimsSurroundings: Bool { page != nil || self == .scroll }

@@ -16,8 +16,8 @@ dragon is full it flies into the medallion's heart, where the story ends.
 | – | `adventure` | – | No story text: the island, its fruit, the dragon and its puzzle | The dragon is freed |
 | 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the curse of the Black Div. / You don't need to be afraid. | Tap the text |
 | 5 | `safety` | Above the dragon | **Thank you** / Child of the Shah, I will take you to safety. / Are you ready? | Tap the text (its hint says **I'm Ready**): the room goes dark, the ride's space takes over |
-| – | `ride` | Full immersion | The loading animation ("Loading…", placed once 1.2 m in front of the eyes) while the ride's world loads; then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
-| 6 | `secondChapter` | In front of the eyes, above the dragon's head | **Chapter II** / Feed the dragon the right plants. / It doesn't like bananas! | Tap the text |
+| – | `ride` | Full immersion | While the ride's world loads (the dragon, the sky, the clouds, the fruit, the sounds: a few seconds in the dark), chapter II's name in its page's frame, placed once 1.2 m in front of the eyes: **Chapter II** / Havā-tō dāram: I have your back (`StoryStep.rideTitle`), the loading animation and "Loading…" under it; it stays 3 s at least, so it is read even when the sky is built at once. Then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
+| 6 | `secondChapter` | In front of the eyes, above the dragon's head | Feed the dragon the right plants. (no title: chapter II was named while the ride loaded; the bananas get their own hint when the sky first has them) | Tap the text |
 | – | `feast` | Above the dragon's head | No page: fruit in the sky, harder as the player does well, and a tally (hearts, fire, fruit eaten); see [Chapter II: the feast](#chapter-ii-the-feast) | The 10th fruit eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s |
 | – | `finale` | Full immersion | No page: the dragon roars, turns to the medallion on its own and flies into its heart through a rush of light (`ShamsehFinale.swift`); the light fills the view | 6 s at most turning, 7 s of flight, 1.2 s of light |
 | 7 | `epilogue` | In front of the player's eyes, in the light | **Home at last** / The dragon is full, and the curse is gone. / Thank you for flying with it. | Tap the text (its hint says **The End**) |
@@ -26,7 +26,7 @@ dragon is full it flies into the medallion's heart, where the story ends.
 Text changes from the wireframes: "ti safety" → "to safety", "Dont need to be afraid" → "You don't need to be
 afraid.", and the curse is named after the scroll's story ("the curse of XXX" → "the curse of the Black Div"); the
 player is the Shah's lost child. The narrator's "What are you searching for?" page became the scroll. All the
-pages' text lives in `StoryStep.page`; the scroll's, in `Assets/Scroll/make_scroll_page.swift`.
+pages' text lives in `StoryStep.page` (chapter II's name, shown while the ride loads, in `StoryStep.rideTitle`); the scroll's, in `Assets/Scroll/make_scroll_page.swift`.
 
 ## How it works
 
@@ -264,7 +264,8 @@ materials' body ramp, the horns blue) and a navy outline, on a transparent backg
 closer to the knot (60% of the difference: the bunched-up body is far smaller than the ring), so the dragon seems to
 breathe. The view decodes the sheet once, off the main thread, into frames that share its pixels (~10 MB, kept for
 the next loading screen); until then, or without the file, the system spinner turns. With Reduce Motion on, the
-dragon rests in its ring.
+dragon rests in its ring. In the ride's space it plays under chapter II's name (`RideLoadingView`, in the story
+pages' framed card, `StoryPageCard`), so the wait opens the chapter as chapter I's title does.
 
 ## The music
 

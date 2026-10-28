@@ -13,7 +13,7 @@ struct DragonRideView: View {
     private static let tallyID = "FeastTally"
     private static let hintID = "HornsHint"
     private static let loadingID = "RideLoading"
-    /// The spinner's distance in front of the eyes (m).
+    /// Chapter II's name and the loading animation: their distance in front of the eyes (m).
     private static let loadingDistance: Float = 1.2
 
     @Environment(UntangleViewModel.self) private var untangle
@@ -27,7 +27,7 @@ struct DragonRideView: View {
     @State private var hands = HandTracker()
     /// Whether the hands hold the horns, for the hint.
     @State private var status = RideStatus()
-    /// The ride's world is built (the dragon, the sky, the fruit): the spinner goes.
+    /// The ride's world is built (the dragon, the sky, the fruit): the loading animation goes.
     @State private var isLoaded = false
     /// The ride's music, in the player's ears (the island's closed with its space).
     @State private var music = GameMusic()
@@ -35,7 +35,7 @@ struct DragonRideView: View {
     var body: some View {
         RealityView { content, attachments in
             content.add(music.entity)
-            // A spinner in the dark while the ride's assets load, placed once in front of the eyes.
+            // Chapter II's name in the dark while the ride's assets load, placed once in front of the eyes.
             if let loading = attachments.entity(for: Self.loadingID) {
                 let anchor = AnchorEntity(.head, trackingMode: .once)
                 loading.position = SIMD3(0, 0, -Self.loadingDistance)
@@ -99,27 +99,39 @@ struct DragonRideView: View {
     }
 }
 
-/// The dragon tangling and untangling (`DragonLoadingView`) while the ride's world loads. Hidden in SwiftUI once it
-/// is built (its attachment entity is never disabled).
+/// Chapter II's name (`StoryStep.rideTitle`) in the dark while the ride's world loads, the dragon tangling and
+/// untangling under it (`DragonLoadingView`): the wait opens the chapter, as chapter I's title does. It stays at
+/// least `readingTime`, so it is read even when the sky is built at once; the loading animation goes as soon as it is
+/// built. Hidden in SwiftUI (its attachment entity is never disabled).
 private struct RideLoadingView: View {
+    /// The least time chapter II's name stays in front of the eyes.
+    private static let readingTime: Duration = .seconds(3)
+
     let isLoaded: Bool
+    @State private var isRead = false
 
     var body: some View {
         ZStack {
-            if !isLoaded {
-                VStack(spacing: 12) {
-                    DragonLoadingView()
-                    Text("Loading…")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+            if !isLoaded || !isRead {
+                StoryPageCard(page: StoryStep.rideTitle, isChapter: true) {
+                    HStack(spacing: 10) {
+                        DragonLoadingView(size: 52)
+                        Text("Loading…")
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .opacity(isLoaded ? 0 : 1)
                 }
-                .padding(24)
-                .glassBackgroundEffect()
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: isLoaded)
+        .animation(.easeInOut(duration: 0.6), value: isLoaded)
+        .animation(.easeInOut(duration: 0.6), value: isRead)
+        .task {
+            try? await Task.sleep(for: Self.readingTime)
+            isRead = true
+        }
     }
 }
 

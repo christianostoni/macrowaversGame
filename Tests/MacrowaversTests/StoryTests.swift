@@ -66,8 +66,11 @@ struct StoryTests {
         // The island appears only after the chapter's title.
         #expect(StoryStep.allCases.filter { !$0.revealsWorld } == [.start, .scroll, .chapter])
         // No placeholder text left from the wireframes.
-        let text = StoryStep.allCases.compactMap(\.page).flatMap { [$0.title] + $0.lines }
+        let pages = StoryStep.allCases.compactMap(\.page) + [StoryStep.rideTitle]
+        let text = pages.flatMap { [$0.title] + $0.lines }
         #expect(!text.contains { $0.contains("XXX") })
+        // Chapter II is named while the ride loads, in front of the eyes.
+        #expect(StoryStep.rideTitle.title == "Chapter II" && StoryStep.rideTitle.anchor == .viewer)
     }
 }
 
