@@ -191,7 +191,8 @@ light widens to 2.4 m around the player, past the page).
 **Poison and hearts.** A poisoned fruit is one the dragon likes, darkened to a sickly purple with a faint green glow
 in a clinging green haze (its own model, tinted: no new asset), turning slowly. Eaten, it costs one of the dragon's
 **3 hearts**: it coughs smoke from its nostrils, its head droops and sways, and for 3 s it flies slower (its body
-sways, never the view). The aim's help never pulls poison to the mouth. Out of hearts the dragon is **exhausted**:
+sways, never the view). It growls, sick, from its mouth (`DragonSick`), and a sour hit of poison (`PoisonSting`)
+plays in the player's ears like the music (`DragonRideComponent.ears`, channel audio), so the wind never covers it. The aim's help never pulls poison to the mouth. Out of hearts the dragon is **exhausted**:
 it loses 2 of the fruit it ate (`exhaustionCost`), the sky clears and eases, it rests 4 s, then flies on with
 full hearts.
 

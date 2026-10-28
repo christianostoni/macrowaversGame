@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct GameAudioTests {
     @Test(arguments: DragonEffects.soundNames + OrchardSounds.Sound.allCases.map(\.rawValue)
-        + MusicTrack.allCases.map(\.rawValue))
+        + DragonRideSystem.Sound.allCases.map(\.rawValue) + MusicTrack.allCases.map(\.rawValue))
     func soundLoads(name: String) async {
         #expect(await GameAudio.load(name) != nil)
     }
