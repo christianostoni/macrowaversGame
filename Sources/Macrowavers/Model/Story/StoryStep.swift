@@ -3,7 +3,7 @@ import Foundation
 /// The storytelling screens around the game, in order: the start, the story's scroll and the chapter's title
 /// before the island appears, the game itself, the dragon's words once it is free, then the ride on its back: chapter
 /// II, where the player feeds the dragon in the sky, the sky harder as they do well, until it is full and flies into the star
-/// medallion its fruit lit up, and the story ends.
+/// medallion its fruit lit up, and the story pauses: the next chapter is still being written.
 enum StoryStep: Equatable, CaseIterable {
     /// Screen 1: a lone "Start" button in the room (the launch window).
     case start
@@ -26,11 +26,14 @@ enum StoryStep: Equatable, CaseIterable {
     /// Fruit float in the sky, harder as the player does well: they steer the dragon into the ones it likes (not the
     /// bananas, not the poisoned ones: fire burns those away) (`DragonFeast`).
     case feast
-    /// The dragon is full: it flies on its own into the heart of the shamseh, in a rush of light.
+    /// The dragon is full: it flies on its own into the heart of the shamseh, in a rush of light, and through it.
     case finale
-    /// In the light at the medallion's heart: the story's last page.
+    /// Through the medallion the ride's space closes: back in the room, in the launch window, chapter II's last
+    /// page, and a hint of what comes next.
     case epilogue
-    /// The player closed the story: the ride's space closes and the launch window comes back.
+    /// Still in the room: the story will go on, in chapters still being written.
+    case toBeContinued
+    /// The player closed the story: the system asks them to rate the game, over the Start button.
     case ended
 
     /// Where a page is shown.
@@ -75,11 +78,17 @@ enum StoryStep: Equatable, CaseIterable {
             // Named while the ride loaded (`rideTitle`): only its goal, without a title.
             Page(title: "", lines: ["Feed the dragon the right plants."], anchor: .viewer, advance: .tap)
         case .epilogue:
-            Page(title: "Home at last", lines: ["The dragon is full, and the curse is gone.",
-                                                "Thank you for flying with it."],
-                 anchor: .viewer, advance: .answer("The End"))
+            Page(title: "Home at last", lines: ["The curse is gone, and the dragon is full.",
+                                                "But far beyond the clouds, the Black Div stirs…"],
+                 anchor: .viewer, advance: .tap)
+        case .toBeContinued:
+            Page(title: "To be continued", lines: ["The next chapter is still being written."],
+                 anchor: .viewer, advance: .answer("Until next time"))
         }
     }
+
+    /// Chapter II's last pages, back in the room (the launch window): its ending, then the promise of more.
+    var isLastPages: Bool { self == .epilogue || self == .toBeContinued }
 
     /// Chapter II's name, over the ride's loading animation while its sky is built (`DragonRideView`): the wait in the
     /// dark opens the chapter as chapter I's title does. No step of its own: it goes once the sky is built and read.
@@ -93,7 +102,8 @@ enum StoryStep: Equatable, CaseIterable {
     var revealsWorld: Bool {
         switch self {
         case .start, .scroll, .chapter: false
-        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast, .finale, .epilogue, .ended: true
+        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast, .finale, .epilogue, .toBeContinued,
+             .ended: true
         }
     }
 
@@ -103,8 +113,8 @@ enum StoryStep: Equatable, CaseIterable {
     /// The room is gone: the player is in the sky (full immersion), on the dragon's back.
     var isFullyImmersed: Bool {
         switch self {
-        case .ride, .secondChapter, .feast, .finale, .epilogue, .ended: true
-        case .start, .scroll, .chapter, .adventure, .gratitude, .safety: false
+        case .ride, .secondChapter, .feast, .finale: true
+        case .start, .scroll, .chapter, .adventure, .gratitude, .safety, .epilogue, .toBeContinued, .ended: false
         }
     }
 }

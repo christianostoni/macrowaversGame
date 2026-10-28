@@ -69,6 +69,9 @@ struct StoryTests {
         let pages = StoryStep.allCases.compactMap(\.page) + [StoryStep.rideTitle]
         let text = pages.flatMap { [$0.title] + $0.lines }
         #expect(!text.contains { $0.contains("XXX") })
+        // Chapter II's last pages: its ending, then the promise of the next chapter, in gold like a chapter's name.
+        #expect(StoryStep.allCases.filter(\.isLastPages) == [.epilogue, .toBeContinued])
+        #expect(StoryPanelView.isChapterStyled(.toBeContinued) && !StoryPanelView.isChapterStyled(.epilogue))
         // Chapter II is named while the ride loads, in front of the eyes.
         #expect(StoryStep.rideTitle.title == "Chapter II" && StoryStep.rideTitle.anchor == .viewer)
     }
