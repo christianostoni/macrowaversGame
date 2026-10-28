@@ -34,9 +34,11 @@ struct MusicTrackTests {
         #expect(MusicTrack.ride.loops)
     }
 
-    @Test func theFarewellUnderTheLastPageThenSilence() {
-        #expect(MusicTrack.riding(story: .epilogue) == .farewell)
-        #expect(MusicTrack.riding(story: .ended) == nil)
+    @Test func silenceAsTheRideEndsThroughTheMedallion() {
+        // The last pages are back in the room: the ride's space closes, its music fading out.
+        for step in [StoryStep.epilogue, .toBeContinued, .ended] {
+            #expect(MusicTrack.riding(story: step) == nil)
+        }
         // The ride's space only plays what it loads.
         for step in StoryStep.allCases {
             guard let track = MusicTrack.riding(story: step) else { continue }

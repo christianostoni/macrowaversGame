@@ -288,7 +288,8 @@ struct DragonFeastTests {
         story.skipToRide()
         story.rideArrived()
         #expect(story.step == .secondChapter)
-        #expect(story.step.page?.title == "Chapter II")
+        // Named while the ride loaded (`rideTitle`): its page is only the goal.
+        #expect(story.step.page?.title == "" && StoryStep.rideTitle.title == "Chapter II")
         story.advance()
         #expect(story.step == .feast)
         story.showFeast(progress)
@@ -303,8 +304,8 @@ struct DragonFeastTests {
         story.feastCelebrated()
         story.rideEnded()
         #expect(story.step == .feast)
-        // Full, its medallion complete: the dragon flies into it on its own (no page), then the last page shows in
-        // the light at its heart.
+        // Full, its medallion complete: the dragon flies into it on its own (no page), and through it: the room comes
+        // back, with the last pages.
         progress.phase = .finished
         story.showFeast(progress)
         story.feastCelebrated()
@@ -312,10 +313,14 @@ struct DragonFeastTests {
         story.advance()
         #expect(story.step == .finale)
         story.rideEnded()
-        #expect(story.step == .epilogue)
-        #expect(story.step.page?.advance == .answer("The End"))
+        #expect(story.step == .epilogue && story.step.isLastPages && !story.step.isFullyImmersed)
+        #expect(story.step.page?.advance == .tap)
+        // Then the promise of more, answered to close the story (the launch window then asks for a rating).
         story.advance()
-        #expect(story.step == .ended && story.step.isFullyImmersed)
+        #expect(story.step == .toBeContinued && story.step.isLastPages && !story.step.isFullyImmersed)
+        #expect(story.step.page?.advance == .answer("Until next time"))
+        story.advance()
+        #expect(story.step == .ended && !story.step.isLastPages)
         story.reset()
         #expect(story.step == .start && story.feast == FeastProgress())
     }

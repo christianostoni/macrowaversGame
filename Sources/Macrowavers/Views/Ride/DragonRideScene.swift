@@ -42,9 +42,8 @@ struct DragonRideComponent: Component {
     /// The finale: seconds since it began, and since the dragon set off into the medallion's heart (nil before).
     var finaleTime: Float?
     var approachTime: Float?
-    /// The rush of light flying into the medallion, and the light that fills the view at its heart.
+    /// The rush of light flying into the medallion.
     let rush: Entity
-    let flash: Entity
     let story: StoryViewModel
     let viewer: ViewerTracker
     let hands: HandTracker
@@ -115,13 +114,9 @@ struct DragonRideSystem: System {
     static let viewerWait: Float = 1.5
     /// After the arrival, a moment of flight before chapter II's title appears (s).
     static let titleDelay: Float = 2
-    /// The finale (s): at most this long turning towards the medallion, then the flight into its heart, then the
-    /// light held before the end.
+    /// The finale (s): at most this long turning towards the medallion, then the flight into and through its heart.
     static let finaleTurn: Float = 6
     static let finaleFlight: Float = 7
-    static let finaleHold: Float = 1.2
-    /// The light around the player on the story's last page: widened this much, past the page (`panelSpot`).
-    static let epilogueLight: Float = 6
 
     enum Sound: String, CaseIterable {
         case appleOpen = "AppleOpen"
@@ -407,7 +402,7 @@ enum DragonRideSceneBuilder {
         // A petal for every fruit to eat.
         let shamseh = Shamseh(folds: DragonFeast.Settings.totalGoal)
         let shamsehSky = addShamseh(shamseh, root: root, airbrush: airbrush)
-        let (rush, flash) = addFinaleLight(root: root)
+        let rush = addFinaleRush(root: root)
 
         var sounds: [DragonRideSystem.Sound: AudioFileResource] = [:]
         for sound in DragonRideSystem.Sound.allCases {
@@ -416,7 +411,7 @@ enum DragonRideSceneBuilder {
         let (fireBreath, embers) = addFire(root: root, sky: sky)
         let fruitModels = await makeFruitModels()
         root.components.set(DragonRideComponent(status: status, shamseh: shamseh, shamsehSky: shamsehSky,
-                                                scenery: scenery, rush: rush, flash: flash, story: story,
+                                                scenery: scenery, rush: rush, story: story,
                                                 viewer: viewer, hands: hands, rig: rig, config: config,
                                                 dragon: dragon, sky: sky, specks: specks, clouds: clouds, dome: dome,
                                                 beacon: beacon, mouth: mouth, fruitModels: fruitModels,

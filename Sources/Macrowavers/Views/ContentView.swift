@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 /// Launch window, the story's first screen: a lone Start button floating in the room (plain window, no glass).
@@ -8,7 +9,9 @@ import SwiftUI
 /// Handing over to the ride, the app has no scene open for a moment and visionOS brings this window back on its
 /// own: it steps aside again as soon as the ride's space is open, or its loading animation would float in
 /// chapter II.
-/// Under Start, a small menu picks the app icon (`AppIconMenu`).
+/// Under Start, a small menu picks the app icon (`AppIconMenu`). Back from the ride, the window shows the story's last
+/// pages in the room (`StoryStep.isLastPages`); once the player closes them, the system asks them to rate the game,
+/// over the Start button (small: the rating window covers it whole).
 struct ContentView: View {
     static let windowID = "IslandWindow"
 
@@ -16,10 +19,13 @@ struct ContentView: View {
     @Environment(StoryViewModel.self) private var story
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.requestReview) private var requestReview
 
     var body: some View {
         Group {
-            if viewModel.immersiveSpaceState == .closed {
+            if viewModel.immersiveSpaceState == .closed, story.step.isLastPages {
+                StoryPanelView()
+            } else if viewModel.immersiveSpaceState == .closed {
                 VStack(spacing: 16) {
                     Button("Start") {
                         Task { await start() }
@@ -45,6 +51,12 @@ struct ContentView: View {
         // also when it appears then (brought back by the system).
         .onChange(of: isInTheWay, initial: true) { _, isInTheWay in
             if isInTheWay { dismissWindow(id: Self.windowID) }
+        }
+        // The story's last page closed: the game asks to be rated (the next chapters are still being written).
+        .onChange(of: story.step == .ended) { _, isOver in
+            guard isOver else { return }
+            story.reset()
+            requestReview()
         }
         #if DEBUG
         .task {

@@ -12,11 +12,14 @@ struct StoryPanelView: View {
     /// Asked for by the ride, over its bright sky. Every page now has its own framed glass (`StoryPageView`),
     /// in the room as in the sky, so it changes nothing; it stays until `DragonRideView` stops passing it.
     var hasBackdrop = false
+    /// The story's last pages show in the launch window, back in the room: the ride's panel leaves them out, so they
+    /// never float in the sky as its space closes.
+    var showsLastPages = true
 
     var body: some View {
         ZStack {
-            if let page = story.step.page {
-                StoryPageView(page: page, isChapter: story.step == .chapter || story.step == .secondChapter) {
+            if let page = story.step.page, showsLastPages || !story.step.isLastPages {
+                StoryPageView(page: page, isChapter: Self.isChapterStyled(story.step)) {
                     story.advance()
                 }
                 .id(story.step)
@@ -24,6 +27,11 @@ struct StoryPanelView: View {
             }
         }
         .animation(.easeInOut(duration: 0.6), value: story.step)
+    }
+
+    /// Chapter pages, and the promise of the next one, name it in spaced gold capitals.
+    static func isChapterStyled(_ step: StoryStep) -> Bool {
+        step == .chapter || step == .secondChapter || step == .toBeContinued
     }
 }
 

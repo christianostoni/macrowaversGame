@@ -59,7 +59,7 @@ struct DragonRideView: View {
             }
         } attachments: {
             Attachment(id: StoryPanelView.attachmentID) {
-                StoryPanelView(hasBackdrop: true)
+                StoryPanelView(hasBackdrop: true, showsLastPages: false)
             }
             Attachment(id: Self.tallyID) {
                 FeastTallyView()
@@ -82,8 +82,9 @@ struct DragonRideView: View {
             await hands.track()
         }
         .onAppear { untangle.immersiveSpaceState = .open }
-        // "The End": the space closes; `onDisappear` starts the story over from the launch window.
-        .onChange(of: story.step == .ended) { _, isOver in
+        // Through the medallion: the space closes and the room comes back, where the launch window shows the story's
+        // last pages (`ContentView`).
+        .onChange(of: story.step.isLastPages) { _, isOver in
             guard isOver else { return }
             Task { await dismissImmersiveSpace() }
         }
@@ -92,7 +93,8 @@ struct DragonRideView: View {
             hands.stop()
             untangle.resetGame()
             orchard.reset()
-            story.reset()
+            // The story's last pages go on in the launch window; closed earlier (the Digital Crown), it starts over.
+            if !story.step.isLastPages { story.reset() }
             untangle.immersiveSpaceState = .closed
             openWindow(id: ContentView.windowID)
         }

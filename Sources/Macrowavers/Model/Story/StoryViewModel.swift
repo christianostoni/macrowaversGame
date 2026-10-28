@@ -14,6 +14,12 @@ final class StoryViewModel {
     /// on its next frame and clears it.
     private(set) var isFireRequested = false
 
+    init() {
+        #if DEBUG
+        if Self.showsEnd { step = .epilogue }
+        #endif
+    }
+
     /// Screen 1: the player presses Start (the immersive space is opening).
     func begin() {
         guard step == .start else { return }
@@ -28,7 +34,8 @@ final class StoryViewModel {
         case .gratitude: .safety
         case .safety: .ride
         case .secondChapter: .feast
-        case .epilogue: .ended
+        case .epilogue: .toBeContinued
+        case .toBeContinued: .ended
         case .start, .adventure, .ride, .feast, .finale, .ended: nil
         }
         if let next { step = next }
@@ -93,13 +100,15 @@ final class StoryViewModel {
     static var startsAtRide: Bool { ProcessInfo.processInfo.arguments.contains("-StoryStartsAtRide") }
     /// With `-StorySkipsChapterTitle` too, the fruit appear without waiting for a tap on chapter II's title.
     static var skipsChapterTitle: Bool { ProcessInfo.processInfo.arguments.contains("-StorySkipsChapterTitle") }
+    /// With `-StoryShowsEnd` the launch window opens on the story's last pages, then the rating, to try them.
+    static var showsEnd: Bool { ProcessInfo.processInfo.arguments.contains("-StoryShowsEnd") }
 
     func skipToRide() {
         step = .ride
     }
     #endif
 
-    /// The immersive space closed: back to the Start button.
+    /// The immersive space closed, or the story ended: back to the Start button.
     func reset() {
         if step != .start { step = .start }
         if feast != FeastProgress() { feast = FeastProgress() }
