@@ -4,6 +4,8 @@ import Observation
 /// The story's scroll (`StoryStep.scroll`), as the player handles it: it appears closed in front of them; they
 /// pull it open (or tap it), drag the paper up to read the story down to its painting, then go on (or skip it):
 /// it rolls up, fades away, and the story moves on (`isDone`).
+/// Opened, the narrator tells the story in English (`StoryNarration`, with its subtitles) and the paper moves with
+/// the voice, the painting coming into the window as the narrator gets to it, until the player drags it.
 /// Its shape is a `ScrollRoll`, set once the page is loaded (its proportions come from the page's image).
 @MainActor
 @Observable
@@ -32,6 +34,14 @@ final class StoryScroll {
     private(set) var hasReachedEnd = false
     /// The player holds it (the scroll does not glide back in front of them meanwhile).
     var isDragged: Bool { dragStart != nil }
+    /// The narration is playing: from the scroll's opening until it ends or the scroll rolls up.
+    private(set) var isNarrating = false
+    /// What the narrator is saying (nil: nothing).
+    private(set) var subtitle: String?
+    /// Seconds into the narration (nil: not started). Not observed: it changes every frame, `subtitle` with it.
+    @ObservationIgnored private var narrationTime: TimeInterval?
+    /// The paper moves with the voice until the player drags it.
+    @ObservationIgnored private var followsNarration = true
 
     /// The scroll's shape (nil until the page is loaded: it cannot be opened yet).
     var roll: ScrollRoll?
@@ -68,6 +78,10 @@ final class StoryScroll {
         hasReachedEnd = false
         dragStart = nil
         openTarget = nil
+        isNarrating = false
+        subtitle = nil
+        narrationTime = nil
+        followsNarration = true
     }
 
     /// The story left it (the space closed): gone at once.
@@ -94,10 +108,15 @@ final class StoryScroll {
             openTarget = nil
             open = min(max(start.open - moved / max(roll.openWindow - roll.closedWindow, 0.01), 0), 1)
         } else {
+            followsNarration = false
             let travel = roll.travel(window: roll.openWindow)
-            scroll = min(max(start.scroll + moved / max(travel, 0.01), 0), 1)
-            if scroll >= Self.endThreshold { hasReachedEnd = true }
+            scrollPaper(to: start.scroll + moved / max(travel, 0.01))
         }
+    }
+
+    private func scrollPaper(to position: Float) {
+        scroll = min(max(position, 0), 1)
+        if scroll >= Self.endThreshold { hasReachedEnd = true }
     }
 
     /// The hand lets go: half open, it opens all the way (or closes again).
@@ -119,6 +138,8 @@ final class StoryScroll {
         phase = .closing
         dragStart = nil
         openTarget = 0
+        isNarrating = false
+        subtitle = nil
     }
 
     /// Opens, closes and fades, a frame at a time.
@@ -126,8 +147,11 @@ final class StoryScroll {
         switch phase {
         case .hidden, .done:
             return
-        case .closed, .reading:
+        case .closed:
             fade = min(1, fade + deltaTime / Self.fadeDuration)
+        case .reading:
+            fade = min(1, fade + deltaTime / Self.fadeDuration)
+            narrate(deltaTime: deltaTime)
         case .closing:
             // Rolled up, it fades away.
             if open < 0.02 { fade = max(0, fade - deltaTime / Self.fadeDuration) }
@@ -140,5 +164,19 @@ final class StoryScroll {
             open = target
             openTarget = nil
         }
+    }
+
+    /// The narration goes on (it starts with the scroll's opening): its subtitle, and the paper following the voice
+    /// once the scroll is open, only ever forwards.
+    private func narrate(deltaTime: Float) {
+        let time = narrationTime.map { $0 + TimeInterval(deltaTime) } ?? 0
+        if narrationTime == nil { isNarrating = true }
+        narrationTime = time
+        let said = StoryNarration.subtitle(at: time)
+        if said != subtitle { subtitle = said }
+        if isNarrating && time >= StoryNarration.duration { isNarrating = false }
+        guard followsNarration, open == 1, dragStart == nil else { return }
+        let progress = StoryNarration.pageProgress(at: time)
+        if progress > scroll { scrollPaper(to: progress) }
     }
 }

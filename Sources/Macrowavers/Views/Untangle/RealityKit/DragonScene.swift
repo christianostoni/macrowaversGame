@@ -45,6 +45,7 @@ struct DragonBodySystem: System {
         StoryPanelComponent.registerComponent()
         StoryPanelSystem.registerSystem()
         ScrollSystem.registerAll()
+        StorySubtitleSystem.registerAll()
         registerSystem()
     }
 

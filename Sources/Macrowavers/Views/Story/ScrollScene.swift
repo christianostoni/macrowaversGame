@@ -27,8 +27,9 @@ struct ScrollComponent: Component {
 
     /// The scroll this far in front of the eyes (m).
     static let distance: Float = 0.95
-    /// Its window's top edge this far above the eyes: the open page sits a little below them (m).
-    static let rise: Float = 0.15
+    /// Its window's top edge this far above the eyes: the open page sits a little below them, the subtitles under
+    /// it still in comfortable sight (m).
+    static let rise: Float = 0.19
     /// Looking further away than this brings it back in front of the eyes; so do moving this far (m) or standing up.
     static let lookAwayAngle: Float = 40 * .pi / 180
     static let driftTolerance: Float = 0.3
@@ -37,8 +38,8 @@ struct ScrollComponent: Component {
     /// It appears once the eyes are tracked (when the space opens, head tracking takes a moment to start), or
     /// after this long without them (s): in front of a seated player at the space's origin.
     static let eyesWait: Float = 3
-    /// The words this far under the bottom roll (m).
-    static let hintDrop: Float = 0.09
+    /// The words' top this far under the bottom roll (m).
+    static let hintGap: Float = 0.02
 }
 
 /// The paper's mesh, rewritten in place for each pose (~700 vertices), and the rods it rolls around.
@@ -344,8 +345,10 @@ struct ScrollSystem: System {
             state.hint?.components.set(OpacityComponent(opacity: isPlaced ? 1 : 0))
             if isPlaced, let hint = state.hint {
                 let rod = state.roll.rods(pose).bottom
+                // Placed by its centre: half its height lower.
+                let halfHeight = hint.visualBounds(relativeTo: hint).extents.y / 2
                 let below = SIMD3(0, rod.x - state.roll.radius(rolled: state.roll.rolled(pose).bottom)
-                                    - ScrollComponent.hintDrop, rod.y)
+                                    - ScrollComponent.hintGap - halfHeight, rod.y)
                 hint.setPosition(entity.convert(position: below, to: nil), relativeTo: nil)
                 hint.setOrientation(entity.orientation(relativeTo: nil), relativeTo: nil)
             }
