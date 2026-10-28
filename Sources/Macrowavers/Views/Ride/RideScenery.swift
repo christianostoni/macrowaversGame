@@ -26,6 +26,9 @@ struct RideScenery {
     static let glitterRadii: [Float] = [1.7, 2.15]
     static let sparksPerStrand = 4
     static let glitterFlow: Float = 0.5
+    /// Glitter shed by each spark at its strand's middle (1/s): ~2,300 specks alive at once around the dragon (it
+    /// was 480, ~3,400, all blended over each other in front of the player).
+    static let sparkRate: Float = 320
 
     /// Colour gradients, no outlines. Lanterns: the flowers' gold glowing, through the pomegranate's pink to the
     /// petals' violet at the rims. Mountains: the island's teal grass, lighter to the rims.
@@ -84,9 +87,11 @@ struct RideScenery {
 
         // A few mountains, cloned (they share their meshes).
         var random = SystemRandomNumberGenerator()
+        // Seen from outside only (back faces culled: the mesh faces outwards, `RideShapesTests`): translucent and
+        // big in view, their far sides drawn behind the near ones doubled the GPU's work on them.
         var mountainMaterial = airbrush.material(Self.mountainRamp, grainScale: 4,
                                                  translucency: Self.mountainTranslucency)
-        mountainMaterial.faceCulling = .none
+        mountainMaterial.faceCulling = .back
         let shapes = (0..<4).map { index in
             Self.resource(RideShapes.mountain(height: 100, using: &random), name: "Mountain\(index)")
         }
@@ -163,9 +168,10 @@ struct RideScenery {
             let radius = Self.glitterRadii[spark.strand]
             spark.entity.position = Self.glitterAxis
                 + SIMD3(radius * cos(angle), radius * sin(angle), Self.glitterLength * place)
-            // Fading in and out at the strand's ends; none while the sky is still dark.
+            // Fading in and out at the strand's ends; none while the sky is still dark. The emitter is written only
+            // when its rate has changed enough (`ElixirRig.emit`), not 8 times every frame.
             let ends = sin(.pi * place)
-            spark.entity.components[ParticleEmitterComponent.self]?.mainEmitter.birthRate = 480 * ends * daylight
+            ElixirRig.emit(spark.entity, rate: Self.sparkRate * ends * daylight, direction: nil)
         }
     }
 

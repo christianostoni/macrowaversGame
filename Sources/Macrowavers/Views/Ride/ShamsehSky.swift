@@ -221,19 +221,25 @@ struct ShamsehSky {
         guard glass != nil else { return }
         let warmth = min((completedFor ?? 0) / Self.celebration, 1)
         let sickness = poisonLeft / Self.poisonTime
+        // Each tile's glaze (the kites keep theirs), then the light: one material written a tile a frame (each
+        // write copies the material and replaces the tile's model, ~20 of them every frame of the feast).
+        var colours: [ObjectIdentifier: SIMD3<Float>] = [:]
         for (index, fruit) in zip(petals.indices, glazes) {
             guard let fruit else { continue }
-            let colour = Self.shown(Self.glaze(petal: index, of: fruit, folds: shamseh.folds),
-                                    sickness: index == poisonedPetal ? sickness : 0, warmth: warmth)
-            Self.setGlaze(colour, of: petals[index])
+            colours[ObjectIdentifier(petals[index])] = Self.shown(
+                Self.glaze(petal: index, of: fruit, folds: shamseh.folds),
+                sickness: index == poisonedPetal ? sickness : 0, warmth: warmth)
         }
-        Self.setGlaze(Self.shown(RidePalette.dragonBlue, sickness: 0, warmth: warmth), of: star)
+        colours[ObjectIdentifier(star)] = Self.shown(RidePalette.dragonBlue, sickness: 0, warmth: warmth)
         let spot = RideGlass.lightSpot(time: lightTime)
         let light = medallion.convert(position: SIMD3(spot, -RideGlass.depth), to: nil)
         // From the unit disc to metres in the world: the medallion swells and comes at the player.
         let scale = medallion.scale(relativeTo: nil).x
         for tile in [star] + petals + kites {
             guard var material = tile.model?.materials.first as? ShaderGraphMaterial else { continue }
+            if let colour = colours[ObjectIdentifier(tile)], let glaze = Self.linearColour(colour) {
+                try? material.setParameter(name: "GlazeColor", value: .color(glaze))
+            }
             try? material.setParameter(name: "LightPosition", value: .simd3Float(light))
             try? material.setParameter(name: "HaloRadius", value: .float(RideGlass.haloRadius * scale))
             try? material.setParameter(name: "CoreRadius", value: .float(RideGlass.coreRadius * scale))
@@ -241,15 +247,10 @@ struct ShamsehSky {
         }
     }
 
-    /// Sets a glass tile's colour.
-    @MainActor
-    private static func setGlaze(_ colour: SIMD3<Float>, of tile: ModelEntity) {
-        guard var material = tile.model?.materials.first as? ShaderGraphMaterial,
-              let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB),
-              let glaze = CGColor(colorSpace: space, components: [CGFloat(colour.x), CGFloat(colour.y),
-                                                                   CGFloat(colour.z), 1]) else { return }
-        try? material.setParameter(name: "GlazeColor", value: .color(glaze))
-        tile.model?.materials = [material]
+    /// A glass tile's colour, in the glaze's linear space.
+    private static func linearColour(_ colour: SIMD3<Float>) -> CGColor? {
+        guard let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB) else { return nil }
+        return CGColor(colorSpace: space, components: [CGFloat(colour.x), CGFloat(colour.y), CGFloat(colour.z), 1])
     }
 
     /// Its size (m, unit disc to the sky).

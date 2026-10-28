@@ -3,7 +3,14 @@ import RealityKit
 import simd
 import UIKit
 
-/// A fruit drawn in the sky: its entity and the look it shows (re-cloned when the plant changes kind or poison).
+/// What a fruit in the sky looks like: its kind, poisoned or not.
+struct FruitLook: Hashable {
+    let kind: FruitKind
+    let isPoisoned: Bool
+}
+
+/// A fruit drawn in the sky: its entity and the look it shows (swapped for a spare one when the plant comes back
+/// with another kind or poison).
 struct DrawnFruit {
     let entity: Entity
     let kind: FruitKind
@@ -107,10 +114,9 @@ extension DragonRideSystem {
         for plant in feast.plants {
             var drawn = state.fruit[plant.id]
             if drawn?.kind != plant.kind || drawn?.isPoisoned != plant.isPoisoned {
-                drawn?.entity.removeFromParent()
-                let models = plant.isPoisoned ? state.poisonedModels : state.fruitModels
-                guard let model = models[plant.kind]?.clone(recursive: true) else { continue }
-                state.sky.addChild(model)
+                if let old = drawn { stow(old, in: &state) }
+                let look = FruitLook(kind: plant.kind, isPoisoned: plant.isPoisoned)
+                guard let model = takeFruit(look, from: &state) else { continue }
                 drawn = DrawnFruit(entity: model, kind: plant.kind, isPoisoned: plant.isPoisoned)
             }
             guard var fruit = drawn else { continue }
@@ -131,6 +137,24 @@ extension DragonRideSystem {
             }
             state.fruit[plant.id] = fruit
         }
+    }
+
+    /// A fruit with `look`: a spare one when there is one, a new clone (added to the sky) otherwise. Cloning a fruit
+    /// (up to 45 parts, the poisoned ones' haze) and adding it to the scene mid-flight made the frame stutter.
+    @MainActor
+    private static func takeFruit(_ look: FruitLook, from state: inout DragonRideComponent) -> Entity? {
+        if let spare = state.spareFruit[look]?.popLast() { return spare }
+        let models = look.isPoisoned ? state.poisonedModels : state.fruitModels
+        guard let model = models[look.kind]?.clone(recursive: true) else { return nil }
+        state.sky.addChild(model)
+        return model
+    }
+
+    /// A fruit no longer shown: disabled in the sky, kept for the next one with its look.
+    @MainActor
+    private static func stow(_ fruit: DrawnFruit, in state: inout DragonRideComponent) {
+        fruit.entity.isEnabled = false
+        state.spareFruit[FruitLook(kind: fruit.kind, isPoisoned: fruit.isPoisoned), default: []].append(fruit.entity)
     }
 
     /// A fruit's size and opacity: swallowed (shrinking), spat out or fading (fading), burnt (both).
@@ -193,15 +217,38 @@ extension DragonRideSceneBuilder {
     }
 
     /// The long breath of fire: the dragon's fire (`DragonEffects.fireEmitter`, its roar's on the island), fast
-    /// enough to reach the fruit ~10 m ahead.
+    /// enough to reach the fruit ~10 m ahead. Its flames grow less (×5, not ×7): close to the eyes, the biggest
+    /// ones covered much of the view in blended light, the GPU's heaviest moment of the ride.
     @MainActor
     static func makeFireBreath() -> Entity {
         let entity = Entity()
         entity.name = "RideFireBreath"
         var emitter = DragonEffects.fireEmitter(size: 0.12, speed: 15, followsMouth: false)
+        emitter.mainEmitter.sizeMultiplierAtEndOfLifespan = 5
         emitter.isEmitting = false
         entity.components.set(emitter)
         return entity
+    }
+
+    /// Fruit cloned ahead, while the ride loads, for each look (`spareCount` each), disabled in the sky: the fruit
+    /// that come back take them instead of cloning mid-flight.
+    static let spareCount = 4
+
+    @MainActor
+    static func makeSpareFruit(models: [FruitKind: Entity], poisoned: [FruitKind: Entity],
+                               sky: Entity) -> [FruitLook: [Entity]] {
+        var spares: [FruitLook: [Entity]] = [:]
+        for (isPoisoned, looks) in [(false, models), (true, poisoned)] {
+            for (kind, model) in looks {
+                spares[FruitLook(kind: kind, isPoisoned: isPoisoned)] = (0..<spareCount).map { _ in
+                    let copy = model.clone(recursive: true)
+                    copy.isEnabled = false
+                    sky.addChild(copy)
+                    return copy
+                }
+            }
+        }
+        return spares
     }
 
     /// A puff of embers and soot where a fruit burns.
