@@ -12,13 +12,6 @@ import SwiftUI
 struct DragonImmersiveView: View {
     static let spaceID = "DragonSpace"
 
-    /// Side panel: 0.9 m from the player, 50° to the left, a little below a seated player's eyes.
-    /// Outside everything that moves: the island (±20°), the dragon's approach (~1 m straight ahead), the knot
-    /// and the fruit in front of the player.
-    private static let panelDistance: Float = 0.9
-    private static let panelAngle: Float = 50 * .pi / 180
-    private static let panelHeight: Float = 1.0
-
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(StoryViewModel.self) private var story
@@ -35,7 +28,7 @@ struct DragonImmersiveView: View {
     @State private var viewer = ViewerTracker()
     /// The player's hands: chopping the pineapple, snapping the fingers to brew the elixir.
     @State private var hands = HandTracker()
-    /// The island, the dragon and the island panel: built at once, added to the scene when the story reveals them.
+    /// The island, the dragon and the fruit: built at once, added to the scene when the story reveals them.
     @State private var world = HiddenWorld()
     /// The story's music, in the player's ears.
     @State private var music = GameMusic()
@@ -80,10 +73,6 @@ struct DragonImmersiveView: View {
                 viewModel: orchard, player: .init(viewer: viewer, hands: hands), island: island,
                 deliveryTarget: dragonHead, background: background)
             world.entities.append(orchardRoot)
-            // Island panel on the left.
-            if let islandPanel = attachments.entity(for: IslandControlsView.attachmentID) {
-                world.entities.append(Self.placeSidePanel(islandPanel, angle: -Self.panelAngle))
-            }
             // The story's words: in front of the player, or above the dragon when it speaks.
             if let storyPanel = attachments.entity(for: StoryPanelView.attachmentID) {
                 storyPanel.components.set(StoryPanelComponent(story: story, untangle: viewModel, viewer: viewer,
@@ -142,12 +131,6 @@ struct DragonImmersiveView: View {
                 ElixirPanelView()
                     .environment(orchard)
             }
-            Attachment(id: IslandControlsView.attachmentID) {
-                IslandControlsView()
-                    .environment(viewModel)
-                    .environment(orchard)
-                    .environment(story)
-            }
         }
         .gesture(tapDragonGesture)
         .orchardInteractions()
@@ -201,7 +184,7 @@ struct DragonImmersiveView: View {
             hands.stop()
             // Handed over to the ride: the story goes on there.
             guard !story.step.isFullyImmersed else { return }
-            // Closed from the island panel or by the system (Digital Crown): start over from the launch window.
+            // Closed by the system (Digital Crown): start over from the launch window.
             viewModel.resetGame()
             orchard.reset()
             story.reset()
@@ -271,13 +254,6 @@ struct DragonImmersiveView: View {
 
     private static func descendants(of entity: Entity) -> [Entity] {
         entity.children.flatMap { [$0] + descendants(of: $0) }
-    }
-
-    /// Puts a panel to the side of the player, turned towards them (it keeps facing them as they move).
-    private static func placeSidePanel(_ panel: Entity, angle: Float) -> Entity {
-        panel.position = SIMD3(panelDistance * sin(angle), panelHeight, -panelDistance * cos(angle))
-        panel.components.set(BillboardComponent())
-        return panel
     }
 
     // MARK: - Island
@@ -363,7 +339,7 @@ struct DragonImmersiveView: View {
 }
 
 /// What the story keeps out of the room until the chapter's title has been read: the island, its fruit, the
-/// dragon and the side panels. Added to the scene once (never disabled: attachments must not be).
+/// dragon and the fruit's panels. Added to the scene once (never disabled: attachments must not be).
 @MainActor
 final class HiddenWorld {
     var entities: [Entity] = []

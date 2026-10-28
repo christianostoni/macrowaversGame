@@ -17,9 +17,9 @@ placeholder is used when it is not in the bundle.
 2. Press **Start** (the launch window): an `ImmersiveSpace` in `.mixed` style opens and the launch window closes;
    the room darkens and the narrator speaks (two pages, tap to go on; see [Storytelling](../storytelling/README.md)).
    Then the floating island (real size, ~2.5 m wide) fades in ~2.8 m in front of you, its grass at table height
-   (0.6 m), with the dragon circling its tree; the island panel is on your left.
-3. Spin the island by dragging its rock (or with both hands, or with the buttons in the island panel): the
-   dragon turns with it. The side of the island facing you follows your hand, wherever you look on the rock.
+   (0.6 m), with the dragon circling its tree.
+3. Spin the island by dragging its rock (or with both hands): the dragon turns with it. The side of the island
+   facing you follows your hand, wherever you look on the rock.
 4. Look at the dragon and pinch (tap): it gets angry for ~3 s. It won't come near you until it is soothed.
 5. Pick fruit on the tree and open them: each frees an **ingredient** that joins a small orbit on your right (see
    [The tree's fruit](../apple-artifact/README.md)). With three in orbit, snap your fingers (or tap one): they
@@ -36,14 +36,14 @@ uses a seated eye height of 1.15 m.
 
 | Moment | Behaviour |
 |---|---|
-| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock, two-handed rotate or the island panel's buttons): its side facing you follows your hand, and the dragon turns with it |
+| Start | Floating island with the dragon coiled around its tree, circling slowly; island and floating rocks bob gently. The island is at its real size (~2.5 m wide, tree top ~2.45 m), the grass at 0.6 m; the rock's roots sink into the real floor (the part below it is hidden). Looking at the dragon highlights it. The island turns like a turntable (drag the rock or two-handed rotate): its side facing you follows your hand, and the dragon turns with it |
 | Tap the dragon | For ~3 s it gets angry (`DragonPhase.alerted`): circles faster, glares at you, growls and snorts smoke, then calms down and keeps circling |
 | The elixir flies to it | It stops (`DragonPhase.receivingElixir`, `DragonFlight.Maneuver.hold`): it slows down along its path around the tree to a standstill in ~1.5 s (speed `e^(−2.5 t)` of the orbit's, the body still on the path), lifting its snout (~60° up at a standstill) and opening its mouth a little, wings spread and beating slowly. Calm again if it was angry, and it cannot be tapped. The flask arrives above its head and pours the elixir over it ([The tree's fruit](../apple-artifact/README.md)) |
 | The elixir is poured (`callDragon()`) | It flies to ~1 m from your eyes and hovers looking at you then settles in the air in front of you (no visible platform), tracing the knot with its body |
-| Puzzle | Dragon tied in a trefoil knot (3 crossings), blue pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
+| Puzzle | Dragon tied in a trefoil knot (3 crossings), blue pulsing spheres on every crossing. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
 | Grab | The stone (or the head) you look at glows; pinch to grab, one per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly, without snapping after it, and slides through the knot instead of sticking to the hand; pulled taut, it stops stretching but the other hand can still move its part. Two held parts push each other away instead of passing through. The dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard. The head can be held too: it follows the hand and stays where it is let go, settling onto the plane |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils (the placeholder's eyes turn red). Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, lifts its head (the placeholder also spreads its wings and turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). It stays in the play area, celebrating, for as long as you need. When you answer **I'm Ready** the room goes dark, the island fades and the ride's full immersive space takes over: you fly on its back (see [Storytelling](../storytelling/README.md)). **Restart Game** in the island panel starts over |
+| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, lifts its head (the placeholder also spreads its wings and turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). It stays in the play area, celebrating, for as long as you need. When you answer **I'm Ready** the room goes dark, the island fades and the ride's full immersive space takes over: you fly on its back (see [Storytelling](../storytelling/README.md)). The Digital Crown starts over |
 | Play area | Invisible: the knot floats at knee/table height in front of the player, placed for a seated player (`PlayAreaPlacement.seated`). There are no controls to move it: the dragon panel that rotated and tilted it was removed |
 
 Everything is in English: user-facing text, code comments and tooling.
@@ -53,7 +53,6 @@ Everything is in English: user-facing text, code comments and tooling.
 ```
 Sources/Macrowavers/
 ├── App/MacrowaversApp.swift          Scenes: launch window, ImmersiveSpace (.mixed)
-├── Views/IslandControlsView.swift    Island panel (attachment): status, rotation, Restart Game
 ├── Views/ContentView.swift           Launch window: the story's Start button
 ├── Model/Story/, Views/Story/        Storytelling screens (see ../storytelling/README.md)
 ├── Model/SceneFocus.swift            Focus mode: what fades back (none / fruit / dragon)
@@ -69,9 +68,9 @@ Sources/Macrowavers/
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
 │   ├── StoneDragonLayout.swift         Where each stone sits on the body, which node holds it
-│   └── UntangleViewModel.swift         @Observable @MainActor view model shared by the island panel and the space
+│   └── UntangleViewModel.swift         @Observable @MainActor view model shared by the launch window and the space
 └── Views/Untangle/
-    ├── DragonImmersiveView.swift       RealityView, HiddenWorld reveal, island panel, story panel, music, island spin, grab events, dragon tap
+    ├── DragonImmersiveView.swift       RealityView, HiddenWorld reveal, story panel, music, island spin, grab events, dragon tap
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers
         ├── DragonJourney.swift           Story ECS: OrbitComponent, DetanglingStateComponent, DragonTapTargetComponent
@@ -117,15 +116,13 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   the window, which became hard to grab. Now:
   - the **launch window** (`ContentView`, plain, the story's **Start** button) only opens the island and then
     dismisses itself;
-  - inside the space the controls are **RealityView attachments**, placed where nothing moves: the **island
-    panel** (`IslandControlsView`: status, island rotation, **Restart Game**) 50° to the left, 0.9 m away,
-    turned towards the player (`BillboardComponent`). The island spans ±20°, the dragon's approach and the knot
-    are straight ahead. There is no dragon panel and
-    no debug panel: the game shows only what the player needs;
+  - inside the space the words are **RealityView attachments** (the story's pages, the fruit's and the
+    elixir's panels). There is no island panel (its Restart Game is gone: the Digital Crown closes the space),
+    no dragon panel and no debug panel: the game shows only what the player needs;
   - panels hide themselves in SwiftUI; their attachment entities are **never disabled** (`isEnabled = false`):
     deactivating an entity that hosts SwiftUI while its content changes makes RealityKit abort with "the new
     parent is currently being removed" (it crashed the app when the elixir reached the dragon);
-  - closing the space in any way (Restart Game or Digital Crown) resets the game and reopens the launch window,
+  - closing the space in any way (Digital Crown or the story's end) resets the game and reopens the launch window,
     so there is never more than one window and never a window over the game;
   - handing over to the ride (one space closes, then the other opens) the app has no scene open for a moment and
     visionOS brings the launch window back on its own, with its loading animation: it steps aside again as soon as a space is

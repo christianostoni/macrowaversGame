@@ -27,43 +27,23 @@ struct StoryPanelView: View {
     }
 }
 
-/// One page, after the design team's Lotus UI kit ("clear glass, no tint"): clear glass in their tile frame.
-/// A chapter's page names it in spaced gold capitals over its proverb; the others have a serif title over their
-/// lines, in italic. Every page, 720 × 200 pt in `ChapterPanelFrame`, is one big button (look at it and pinch
-/// to go on); a question's answer is its hint, where the others say "Tap to continue".
+/// One page, tapped to go on (look at it and pinch): a question's answer is its hint, where the others say "Tap to
+/// continue".
 private struct StoryPageView: View {
     let page: StoryStep.Page
     let isChapter: Bool
     let advance: () -> Void
 
-    private static let size = CGSize(width: 720, height: 200)
-    private static let cornerRadius: CGFloat = 60
-    /// The kit's gold for the chapter's name over clear glass (#f2cf86).
-    private static let gold = Color(red: 0.95, green: 0.81, blue: 0.53)
-
     var body: some View {
         Button(action: advance) {
-            VStack(spacing: 8) {
-                words
+            StoryPageCard(page: page, isChapter: isChapter) {
                 Label(hint, systemImage: "hand.tap")
                     .font(.callout)
                     .foregroundStyle(.white.opacity(0.7))
-                    .padding(.top, 2)
             }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 48)
-            .frame(width: Self.size.width, height: Self.size.height)
-            .contentShape(.rect(cornerRadius: Self.cornerRadius))
         }
         .buttonStyle(.plain)
-        .glassBackgroundEffect(in: .rect(cornerRadius: Self.cornerRadius))
-        .overlay {
-            Image("ChapterPanelFrame")
-                .resizable()
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-        .contentShape(.hoverEffect, .rect(cornerRadius: Self.cornerRadius))
+        .contentShape(.hoverEffect, .rect(cornerRadius: StoryPageCardStyle.cornerRadius))
         .hoverEffect(.highlight)
         .accessibilityHint("Continues the story")
     }
@@ -75,18 +55,50 @@ private struct StoryPageView: View {
         case .answer(let answer): answer
         }
     }
+}
+
+/// A page's look, after the design team's Lotus UI kit ("clear glass, no tint"): clear glass in their tile frame,
+/// 720 × 200 pt in `ChapterPanelFrame`. A chapter's page names it in spaced gold capitals over its proverb; the
+/// others have a serif title over their lines, in italic. Under the words, `footer`: the page's hint, or the ride's
+/// loading animation under chapter II's name (`DragonRideView`).
+struct StoryPageCard<Footer: View>: View {
+    let page: StoryStep.Page
+    let isChapter: Bool
+    @ViewBuilder let footer: Footer
+
+    var body: some View {
+        VStack(spacing: 8) {
+            words
+            footer
+                .padding(.top, 2)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 48)
+        .frame(width: StoryPageCardStyle.size.width, height: StoryPageCardStyle.size.height)
+        .contentShape(.rect(cornerRadius: StoryPageCardStyle.cornerRadius))
+        .glassBackgroundEffect(in: .rect(cornerRadius: StoryPageCardStyle.cornerRadius))
+        .overlay {
+            Image("ChapterPanelFrame")
+                .resizable()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
 
     private var words: some View {
         VStack(spacing: 8) {
-            if isChapter {
-                Text(page.title.uppercased())
-                    .font(.system(size: 13, design: .serif))
-                    .tracking(4.4)
-                    .foregroundStyle(Self.gold)
-            } else {
-                Text(page.title)
-                    .font(.system(size: 30, design: .serif))
-                    .foregroundStyle(.white)
+            // A page without a title is its lines alone.
+            if !page.title.isEmpty {
+                if isChapter {
+                    Text(page.title.uppercased())
+                        .font(.system(size: 13, design: .serif))
+                        .tracking(4.4)
+                        .foregroundStyle(StoryPageCardStyle.gold)
+                } else {
+                    Text(page.title)
+                        .font(.system(size: 30, design: .serif))
+                        .foregroundStyle(.white)
+                }
             }
             VStack(spacing: 2) {
                 ForEach(page.lines, id: \.self) { line in
@@ -104,6 +116,14 @@ private struct StoryPageView: View {
         .shadow(color: .black.opacity(0.45), radius: 5, y: 2)
         .accessibilityElement(children: .combine)
     }
+}
+
+/// `StoryPageCard`'s measures and colour (a generic type cannot store its own).
+enum StoryPageCardStyle {
+    static let size = CGSize(width: 720, height: 200)
+    static let cornerRadius: CGFloat = 60
+    /// The kit's gold for the chapter's name over clear glass (#f2cf86).
+    static let gold = Color(red: 0.95, green: 0.81, blue: 0.53)
 }
 
 #Preview {

@@ -3,12 +3,12 @@ import SwiftUI
 /// Scene hierarchy: one launch window and two immersive spaces, never visible together.
 /// - launch window (plain, the story's Start button): opens the island, then closes so it never overlaps the
 ///   3D content;
-/// - immersive space (.mixed) with the island, its fruit and the dragon. Its controls are panels inside the
-///   space (the island panel on the left), placed outside the play area;
+/// - immersive space (.mixed) with the island, its fruit and the dragon. Its words are panels inside the space
+///   (RealityView attachments), no window;
 /// - immersive space (.full) for the story's last part, the ride on the dragon's back: the room disappears. The
 ///   game's space hands over to it (a space cannot switch from mixed to full while open: its content would
 ///   stop being drawn).
-/// Closing the space (Restart Game or Digital Crown) brings the launch window back.
+/// Closing the space (Digital Crown) brings the launch window back.
 @main
 struct MacrowaversApp: App {
     @State private var appModel = AppModel()

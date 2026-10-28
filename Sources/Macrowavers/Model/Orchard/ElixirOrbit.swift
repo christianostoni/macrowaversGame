@@ -24,7 +24,7 @@ import simd
 struct ElixirOrbit: Equatable {
     struct Settings: Equatable {
         /// Direction of the orbit's centre from the line of sight, to the right (radians): clear of the fruit in front
-        /// of the player (within ~±17°) and of the island panel on the left.
+        /// of the player (within ~±17°).
         var bearing: Float = 30 * .pi / 180
         /// Half-width of the ellipse, side to side (m): ±12° at `distance`, so the whole orbit stays between ~18°
         /// and ~42° to the right, inside the field of view. The flask (~15 cm wide) still fits between the sides.
