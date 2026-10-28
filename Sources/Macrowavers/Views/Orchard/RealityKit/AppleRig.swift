@@ -79,6 +79,9 @@ final class AppleRig {
     private let paramsBuffer: MTLBuffer?
     private let profileBuffer: MTLBuffer?
     private var worms: [Entity] = []
+    /// The worms are the design team's `Worm.usdz`, whose material wriggles them; the stand-in spheres are wriggled
+    /// here.
+    private var wormsWriggleThemselves = false
     private var appliedOpening: Float = -1
     /// Opening currently drawn: it eases towards the requested one, so the apple never snaps shut.
     private(set) var displayedOpening: Float = 0
@@ -114,7 +117,7 @@ final class AppleRig {
         core.position = SIMD3(0, shape.height / 2, 0)
         body.addChild(core)
         buildStem(asset?.stemAndLeaf ?? [])
-        buildWorms(count: wormCount)
+        buildWorms(count: wormCount, template: await Self.loadWorm())
         apply(opening: 0)
     }
 
@@ -168,7 +171,7 @@ final class AppleRig {
             worm.scale = SIMD3(repeating: max(state.visibility, 0.01))
             worm.setInputTargetEnabled(swarm.isCatchable(index))
             // Wriggle: the segments sway as it crawls.
-            for (segment, part) in worm.children.enumerated() {
+            for (segment, part) in worm.children.enumerated() where !wormsWriggleThemselves {
                 part.position.z = 0.002 * sin(time * 12 + Float(segment) * 1.8)
             }
         }
@@ -350,13 +353,20 @@ final class AppleRig {
         body.addChild(stem)
     }
 
-    private func buildWorms(count: Int) {
+    /// The worms crawl along +x (their heading turns it), their centre 7 mm above the slice (`WormSwarm.position`).
+    /// Each is a copy of `template` (the design team's worm) or, without it, three green spheres.
+    private func buildWorms(count: Int, template: Entity?) {
+        wormsWriggleThemselves = template != nil
         for index in 0..<count {
             let worm = Entity()
-            for segment in 0..<3 {
-                let part = ModelEntity(mesh: .generateSphere(radius: 0.007), materials: [Self.wormMaterial])
-                part.position = SIMD3(Float(segment - 1) * 0.009, 0, 0)
-                worm.addChild(part)
+            if let template {
+                worm.addChild(template.clone(recursive: true))
+            } else {
+                for segment in 0..<3 {
+                    let part = ModelEntity(mesh: .generateSphere(radius: 0.007), materials: [Self.wormMaterial])
+                    part.position = SIMD3(Float(segment - 1) * 0.009, 0, 0)
+                    worm.addChild(part)
+                }
             }
             worm.components.set(WormComponent(index: index))
             // Larger than the worm: easier to look at and tap while it crawls.
@@ -428,6 +438,20 @@ extension AppleRig {
         }
         top.removeFromParent()
         return Asset(apple: apple, stemAndLeaf: stemAndLeaf, skin: skinMaterial, flesh: fleshMaterial)
+    }
+
+    /// `Worm.usdz` (head along +x), its belly on the slice: the worm's centre is 7 mm above it. Nil without the file.
+    private static func loadWorm() async -> Entity? {
+        guard let worm = try? await Entity(named: "Worm", in: .main) else {
+            print("⚠️ Worm.usdz not found: the worms are green spheres")
+            return nil
+        }
+        let bounds = worm.visualBounds(relativeTo: worm)
+        worm.position = SIMD3(-bounds.center.x, -bounds.min.y - 0.007, -bounds.center.z)
+        let template = Entity()
+        template.name = "Worm"
+        template.addChild(worm)
+        return template
     }
 
     /// The airbrush material of an asset part, drawn from both sides (the spiral's faces turn every way).

@@ -465,7 +465,7 @@ enum DragonRideSceneBuilder {
     }
 
     /// The fruit floating in the sky, centred and one metre tall (`DragonRideSystem.fruitSize` scales them): the
-    /// design team's fruit, whole, without their ingredient gems; the orange is the orchard's own.
+    /// design team's fruit, whole, without their ingredient gems; the orange comes through the orchard's `OrangeRig`.
     @MainActor
     private static func makeFruitModels() async -> [FruitKind: Entity] {
         var models: [FruitKind: Entity] = [:]
@@ -475,7 +475,7 @@ enum DragonRideSceneBuilder {
             asset.findEntity(named: "gem")?.removeFromParent()
             models[kind] = normalised(asset)
         }
-        if let orange = OrangeRig() {
+        if let orange = await OrangeRig() {
             models[.orange] = normalised(orange.root)
         }
         return models
