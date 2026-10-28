@@ -62,6 +62,8 @@ struct DragonRideComponent: Component {
     let beacon: Entity
     /// The dragon's mouth (in the dragon's holder): where the fruit go and its sounds come from.
     let mouth: Entity
+    /// Sounds in the player's ears wherever they look, like the music: the poison's hit, never lost in the wind.
+    let ears: Entity
     /// One model per fruit kind, cloned for the fruit in the sky, and its poisoned look (dark, in a sickly haze).
     let fruitModels: [FruitKind: Entity]
     let poisonedModels: [FruitKind: Entity]
@@ -128,9 +130,11 @@ struct DragonRideSystem: System {
         case pineappleChop = "PineappleChop"
         case pomegranateBurst = "PomegranateBurst"
         case growl = "DragonGrowl"
-        /// The breath of fire (and the finale), a poisoned fruit, the dragon exhausted, a harder sky.
+        /// The breath of fire, and the finale.
         case roar = "DragonRoar"
-        case squish = "WormSquish"
+        /// A poisoned fruit eaten: the dragon's sick growl from its mouth, and a sour hit of poison in the ears.
+        case sick = "DragonSick"
+        case poison = "PoisonSting"
         case rumble = "DragonRumble"
         case chime = "ElixirBrewed"
 
@@ -383,6 +387,8 @@ enum DragonRideSceneBuilder {
         mouth.components.set(SpatialAudioComponent(gain: -4))
         dragon.addChild(mouth)
         root.addChild(dragon)
+        let ears = makeEars()
+        root.addChild(ears)
 
         let sky = Entity()
         sky.name = "RideSky"
@@ -419,11 +425,20 @@ enum DragonRideSceneBuilder {
                                                 scenery: scenery, rush: rush, flash: flash, story: story,
                                                 viewer: viewer, hands: hands, rig: rig, config: config,
                                                 dragon: dragon, sky: sky, specks: specks, clouds: clouds, dome: dome,
-                                                beacon: beacon, mouth: mouth, fruitModels: fruitModels,
+                                                beacon: beacon, mouth: mouth, ears: ears,
+                                                fruitModels: fruitModels,
                                                 poisonedModels: poisoned(fruitModels), fireBreath: fireBreath,
                                                 embers: embers, sounds: sounds,
                                                 wind: await GameAudio.load("RideWind", loops: true)))
         return root
+    }
+
+    /// Where sounds play in the player's ears wherever they look, like the music (channel audio).
+    private static func makeEars() -> Entity {
+        let ears = Entity()
+        ears.name = "RideEars"
+        ears.components.set(ChannelAudioComponent())
+        return ears
     }
 
     /// The airbrushed sky (`RideSky.jpg`, painted by `Assets/Blender/ride-sky/make_ride_sky.py`) on the inside of a

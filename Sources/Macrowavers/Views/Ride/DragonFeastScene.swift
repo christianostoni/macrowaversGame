@@ -87,7 +87,9 @@ extension DragonRideSystem {
                 state.shamseh.colour(with: fruit)
                 play(.eating(fruit), from: state.mouth, sounds: state.sounds)
             case .refused: play(.growl, from: state.mouth, sounds: state.sounds)
-            case .poisoned: play(.squish, from: state.mouth, sounds: state.sounds)
+            case .poisoned:
+                play(.sick, from: state.mouth, sounds: state.sounds)
+                play(.poison, from: state.ears, sounds: state.sounds)
             case .burned: break
             case .stageReached: play(.chime, from: state.mouth, sounds: state.sounds)
             case .exhausted(let lost):
