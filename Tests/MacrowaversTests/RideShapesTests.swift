@@ -22,6 +22,33 @@ struct RideShapesTests {
         }
     }
 
+    @Test func aSpeckIsALowPolyBallFacingOutwards() {
+        let speck = RideShapes.speck()
+        expectWellFormed(speck)
+        #expect(speck.indices.count / 3 == 20)
+        #expect(speck.positions.allSatisfy { abs(simd_length($0) - 1) < 0.001 })
+        // Counter-clockwise seen from outside: RealityKit draws its front faces.
+        for face in stride(from: 0, to: speck.indices.count, by: 3) {
+            let corners = (0..<3).map { speck.positions[Int(speck.indices[face + $0])] }
+            let normal = simd_cross(corners[1] - corners[0], corners[2] - corners[0])
+            #expect(simd_dot(normal, corners.reduce(.zero, +)) > 0)
+        }
+    }
+
+    @Test func aMountainFacesOutwards() {
+        // Its material culls the back faces: every face that is not a sliver at a peak is counter-clockwise seen
+        // from outside.
+        var random = SeededRandom(seed: 2)
+        let mountain = RideShapes.mountain(height: 100, using: &random)
+        for face in stride(from: 0, to: mountain.indices.count, by: 3) {
+            let corners = (0..<3).map { Int(mountain.indices[face + $0]) }
+            let normal = simd_cross(mountain.positions[corners[1]] - mountain.positions[corners[0]],
+                                    mountain.positions[corners[2]] - mountain.positions[corners[0]])
+            guard simd_length(normal) > 1e-3 else { continue }
+            #expect(simd_dot(normal, corners.map { mountain.normals[$0] }.reduce(.zero, +)) > 0)
+        }
+    }
+
     @Test func aMountainRisesFromItsBaseToARoundTop() {
         var random = SeededRandom(seed: 2)
         let mountain = RideShapes.mountain(height: 100, using: &random)

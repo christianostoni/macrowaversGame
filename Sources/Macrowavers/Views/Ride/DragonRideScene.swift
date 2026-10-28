@@ -69,6 +69,8 @@ struct DragonRideComponent: Component {
     let poisonedModels: [FruitKind: Entity]
     /// The fruit drawn in the sky, by `DragonFeast.Plant.id`, with the look each one shows.
     var fruit: [Int: DrawnFruit] = [:]
+    /// Fruit waiting in the sky, disabled, for a fruit that comes back with their look (`DragonFeastScene.swift`).
+    var spareFruit: [FruitLook: [Entity]]
     /// The long breath of fire, in ride space at the dragon's mouth, and the puffs of embers where a fruit burns
     /// (in sky space, used in turn).
     let fireBreath: Entity
@@ -374,18 +376,7 @@ enum DragonRideSceneBuilder {
         let dome = await makeDome()
         root.addChild(dome)
 
-        let dragon = Entity()
-        dragon.name = "RideDragon"
-        dragon.scale = SIMD3(repeating: DragonRideSystem.dragonScale)
-        dragon.components.set(OpacityComponent(opacity: 0))
-        // Lit up in the night sky: its faces no longer darkened.
-        let glow = DragonRideSystem.dragonGlow
-        RideAirbrush.brighten(rig.entity, boost: glow.boost, base: glow.base)
-        dragon.addChild(rig.entity)
-        let mouth = Entity()
-        mouth.name = "RideMouth"
-        mouth.components.set(SpatialAudioComponent(gain: -4))
-        dragon.addChild(mouth)
+        let (dragon, mouth) = makeDragon(rig)
         root.addChild(dragon)
         let ears = makeEars()
         root.addChild(ears)
@@ -421,13 +412,16 @@ enum DragonRideSceneBuilder {
         }
         let (fireBreath, embers) = addFire(root: root, sky: sky)
         let fruitModels = await makeFruitModels()
+        let poisonedModels = poisoned(fruitModels)
+        let spareFruit = makeSpareFruit(models: fruitModels, poisoned: poisonedModels, sky: sky)
         root.components.set(DragonRideComponent(status: status, shamseh: shamseh, shamsehSky: shamsehSky,
                                                 scenery: scenery, rush: rush, flash: flash, story: story,
                                                 viewer: viewer, hands: hands, rig: rig, config: config,
                                                 dragon: dragon, sky: sky, specks: specks, clouds: clouds, dome: dome,
                                                 beacon: beacon, mouth: mouth, ears: ears,
                                                 fruitModels: fruitModels,
-                                                poisonedModels: poisoned(fruitModels), fireBreath: fireBreath,
+                                                poisonedModels: poisonedModels, spareFruit: spareFruit,
+                                                fireBreath: fireBreath,
                                                 embers: embers, sounds: sounds,
                                                 wind: await GameAudio.load("RideWind", loops: true)))
         return root
@@ -480,13 +474,21 @@ enum DragonRideSceneBuilder {
     }
 
     /// The fruit floating in the sky, centred and one metre tall (`DragonRideSystem.fruitSize` scales them): the
-    /// design team's fruit, whole, without their ingredient gems; the orange comes through the orchard's `OrangeRig`.
+    /// design team's fruit, whole, in their light copies for the sky (`Sky<Name>.usdz`, made by
+    /// `Assets/Blender/sky-fruit/make_sky_fruit.py`: no parts hidden inside, one mesh a material, ~3,000 triangles
+    /// instead of up to 43,000), else the orchard's own without their ingredient gems; the orange comes through the
+    /// orchard's `OrangeRig`.
     @MainActor
     private static func makeFruitModels() async -> [FruitKind: Entity] {
         var models: [FruitKind: Entity] = [:]
         for (kind, name) in [(FruitKind.apple, "Apple"), (.pineapple, "Pineapple"), (.pomegranate, "Pomegranate"),
                              (.banana, "Banana")] {
-            guard let asset = try? await Entity(named: name, in: .main) else { continue }
+            var asset = try? await Entity(named: "Sky\(name)", in: .main)
+            if asset == nil {
+                print("⚠️ Sky\(name).usdz not found: the orchard's \(name) floats in the sky")
+                asset = try? await Entity(named: name, in: .main)
+            }
+            guard let asset else { continue }
             asset.findEntity(named: "gem")?.removeFromParent()
             models[kind] = normalised(asset)
         }
@@ -494,6 +496,34 @@ enum DragonRideSceneBuilder {
             models[.orange] = normalised(orange.root)
         }
         return models
+    }
+
+    /// The dragon to ride (hidden until it comes out of the dark) and its mouth, where the fruit go and its sounds
+    /// come from.
+    @MainActor
+    private static func makeDragon(_ rig: StoneDragonRig) -> (dragon: Entity, mouth: Entity) {
+        let dragon = Entity()
+        dragon.name = "RideDragon"
+        dragon.scale = SIMD3(repeating: DragonRideSystem.dragonScale)
+        dragon.components.set(OpacityComponent(opacity: 0))
+        // No grounding shadow in the sky (nothing to fall on): one less pass for the GPU every frame.
+        removeShadows(rig.entity)
+        // Lit up in the night sky: its faces no longer darkened.
+        let glow = DragonRideSystem.dragonGlow
+        RideAirbrush.brighten(rig.entity, boost: glow.boost, base: glow.base)
+        dragon.addChild(rig.entity)
+        let mouth = Entity()
+        mouth.name = "RideMouth"
+        mouth.components.set(SpatialAudioComponent(gain: -4))
+        dragon.addChild(mouth)
+        return (dragon, mouth)
+    }
+
+    /// Takes the grounding shadows off `entity` and everything under it.
+    @MainActor
+    private static func removeShadows(_ entity: Entity) {
+        entity.components.remove(GroundingShadowComponent.self)
+        entity.children.forEach { removeShadows($0) }
     }
 
     /// `model` centred in a holder, one metre tall.
@@ -509,9 +539,10 @@ enum DragonRideSceneBuilder {
     }
 
     /// Specks of air scattered all around the player: they show the speed (stars in the dark, motes in the sky).
+    /// Low-poly (`RideShapes.speck`, 20 faces): a few centimetres across, they read as dots.
     @MainActor
     private static func makeSpecks() -> [Entity] {
-        let mesh = MeshResource.generateSphere(radius: 1)
+        let mesh = RideScenery.resource(RideShapes.speck(), name: "Speck")
         // Stars, and golden lights like sparks from the lanterns.
         let tints: [UIColor] = [
             UIColor(white: 1, alpha: 1),
