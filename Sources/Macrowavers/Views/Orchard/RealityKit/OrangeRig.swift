@@ -2,10 +2,12 @@ import RealityKit
 import simd
 import UIKit
 
-/// The orange drawn in RealityKit, generated in code: eight wedges, each a full slice from the axis to the skin, with
-/// juicy flesh, a white core and a white rind line on its cut faces. Pulled apart with two hands it first splits into
-/// two halves that turn their cut faces to the player, like the pomegranate, then falls open into its eight wedges,
-/// a ring around the orb. The opening comes from `OrchardViewModel`. Origin at the centre of the fruit.
+/// The orange drawn in RealityKit: eight wedges, each a full slice from the axis to the skin, with juicy flesh, a white
+/// core and a white rind line on its cut faces. They come from the design team's `Orange.usdz` (`RightHalf` and
+/// `LeftHalf`, each `Wedge_0` … `Wedge_3`, airbrush materials, a stem and two leaves); without it they are generated
+/// in code. Pulled apart with two hands it first splits into two halves that turn their cut faces to the player, like
+/// the pomegranate, then falls open into its eight wedges, a ring around the orb. The opening comes from
+/// `OrchardViewModel`. Origin at the centre of the fruit.
 @MainActor
 final class OrangeRig {
     let root = Entity()
@@ -50,21 +52,20 @@ final class OrangeRig {
     private static let wedgeOut: Float = 0.03
     private static let wedgeTilt: Float = 0.7
 
-    init?() {
-        let skin = Self.material(red: 0.98, green: 0.45, blue: 0.04, roughness: 0.55, clearcoat: 0.3)
-        let flesh = Self.material(red: 1, green: 0.52, blue: 0.06, roughness: 0.25, clearcoat: 0.6)
-        let pith = Self.material(red: 1, green: 0.93, blue: 0.82, roughness: 0.9)
-        let stem = Self.material(red: 0.3, green: 0.4, blue: 0.12, roughness: 0.7)
+    init?() async {
+        let asset = await Self.loadAsset()
         size = 2 * radius * Self.squash
-        heightAboveAnchor = radius * Self.squash
+        // The asset's leaves stand above the skin.
+        heightAboveAnchor = max(asset?.visualBounds(relativeTo: asset).max.y ?? 0, radius * Self.squash)
 
         let span = Float.pi / Float(Self.wedgesPerHalf)
-        for (pivot, halfCentre) in [(rightPivot, Float(0)), (leftPivot, Float.pi)] {
+        for (pivot, half, halfCentre) in [(rightPivot, "RightHalf", Float(0)), (leftPivot, "LeftHalf", Float.pi)] {
             for index in 0..<Self.wedgesPerHalf {
                 let start = halfCentre - .pi / 2 + span * Float(index)
-                let azimuth = (start + Self.seam)...(start + span - Self.seam)
-                guard let mesh = try? Self.makeWedgeMesh(azimuth: azimuth, radius: radius) else { return nil }
-                let wedge = ModelEntity(mesh: mesh, materials: [skin, flesh, pith])
+                let part = asset?.findEntity(named: half)?.findEntity(named: "Wedge_\(index)")
+                guard let wedge = part.map(Self.detached) ?? Self.makeWedge(start: start, span: span, radius: radius,
+                                                                           withStem: half == "RightHalf" && index == 0)
+                else { return nil }
                 pivot.addChild(wedge)
                 let centre = start + span / 2
                 wedges.append(Wedge(entity: wedge, outward: Self.radialDirection(azimuth: centre),
@@ -72,10 +73,6 @@ final class OrangeRig {
             }
             body.addChild(pivot)
         }
-        // The stem stays on one wedge.
-        let nub = ModelEntity(mesh: .generateCylinder(height: 0.004, radius: 0.0035), materials: [stem])
-        nub.position = SIMD3(0, radius * Self.squash + 0.0015, 0)
-        wedges.first?.entity.addChild(nub)
 
         // Target of the two-handed gesture that pulls it apart. Covers the wedges even fully open, so pulling
         // them apart or pushing them back together always lands on the fruit.
@@ -125,6 +122,55 @@ final class OrangeRig {
     }
 
     // MARK: - Building
+
+    /// `Orange.usdz`, the design team's orange (nil without it: the wedges are then generated in code).
+    private static func loadAsset() async -> Entity? {
+        guard let asset = try? await Entity(named: "Orange", in: .main) else {
+            print("⚠️ Orange.usdz not found: the orange is generated in code")
+            return nil
+        }
+        // Drawn from both sides, like the generated wedges.
+        for entity in [asset] + asset.allDescendants {
+            guard var model = entity.components[ModelComponent.self] else { continue }
+            model.materials = model.materials.map { material in
+                guard var airbrush = material as? ShaderGraphMaterial else { return material }
+                airbrush.faceCulling = .none
+                return airbrush
+            }
+            entity.components.set(model)
+        }
+        return asset
+    }
+
+    /// An asset wedge in a holder at the fruit's centre: `apply(opening:)` moves the holder, the wedge keeps its own
+    /// placement inside it.
+    private static func detached(_ part: Entity) -> Entity {
+        let placement = part.transformMatrix(relativeTo: nil)
+        part.removeFromParent()
+        part.transform = Transform(matrix: placement)
+        let wedge = Entity()
+        wedge.name = part.name
+        wedge.addChild(part)
+        return wedge
+    }
+
+    /// A wedge generated in code (without the asset); the first one carries the stem.
+    private static func makeWedge(start: Float, span: Float, radius: Float, withStem: Bool) -> Entity? {
+        let azimuth = (start + seam)...(start + span - seam)
+        guard let mesh = try? makeWedgeMesh(azimuth: azimuth, radius: radius) else { return nil }
+        let wedge = ModelEntity(mesh: mesh, materials: [
+            material(red: 0.98, green: 0.45, blue: 0.04, roughness: 0.55, clearcoat: 0.3),
+            material(red: 1, green: 0.52, blue: 0.06, roughness: 0.25, clearcoat: 0.6),
+            material(red: 1, green: 0.93, blue: 0.82, roughness: 0.9),
+        ])
+        if withStem {
+            let stem = material(red: 0.3, green: 0.4, blue: 0.12, roughness: 0.7)
+            let nub = ModelEntity(mesh: .generateCylinder(height: 0.004, radius: 0.0035), materials: [stem])
+            nub.position = SIMD3(0, radius * squash + 0.0015, 0)
+            wedge.addChild(nub)
+        }
+        return wedge
+    }
 
     /// Triangles of one material, built up quad by quad.
     private struct MeshPart {
