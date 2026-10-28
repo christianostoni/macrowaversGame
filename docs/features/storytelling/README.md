@@ -184,6 +184,11 @@ dragon is full!" while the medallion celebrates, then the finale.
 the feast begins, its strapwork faint. Every fruit the dragon eats glazes one of its petals in that fruit's colour;
 there is a petal for every fruit to eat (`DragonFeast.Settings.totalGoal`: a ten-pointed shamseh). Out of hearts,
 the petals of the fruit the dragon loses lose their colour (`Shamseh.uncolour(last:)`).
+Each petal plays a note as it lights up, in the player's ears (`DragonRideSystem.petalNotes`, `PetalNote01`…`10`): a
+santur climbing in C minor (C5 D5 E♭5 G5 B♭5 C6 D6 E♭6 G6, 14 cents sharp), the tenth a rolled chord, the medallion
+complete; petals lost, the melody steps back with them. Chosen by ear over the ride music: versions on C D G only, in
+tune with the track (about 3 cents sharp, its E and B Persian quarter tones), in four timbres, fitted it less. The notes are synthesized by `Assets/Audio/petal-notes/make_petal_notes.py` (a plucked-string model, four
+slightly detuned strings per note; usage in its header).
 Complete, its star lights up in the dragon's blue, the lines and kites turn gold and it swells for 2.5 s; then the
 dragon flies into its heart (`DragonRide.destination`) and the story's last page shows in the light there (the
 light widens to 2.4 m around the player, past the page).

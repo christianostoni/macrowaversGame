@@ -84,8 +84,13 @@ extension DragonRideSystem {
         for event in events {
             switch event {
             case .ate(let fruit):
+                let lit = state.shamseh.colours.count
                 state.shamseh.colour(with: fruit)
                 play(.eating(fruit), from: state.mouth, sounds: state.sounds)
+                // The petal it lights plays its note: the melody climbs as the medallion fills.
+                if state.shamseh.colours.count > lit, lit < state.notes.count, let note = state.notes[lit] {
+                    state.ears.playAudio(note)
+                }
             case .refused: play(.growl, from: state.mouth, sounds: state.sounds)
             case .poisoned:
                 play(.sick, from: state.mouth, sounds: state.sounds)

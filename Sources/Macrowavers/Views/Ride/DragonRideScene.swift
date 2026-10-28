@@ -78,6 +78,8 @@ struct DragonRideComponent: Component {
     var snap = SnapDetector(settings: .whileSteering)
     var steeringHold = SteeringHold()
     let sounds: [DragonRideSystem.Sound: AudioFileResource]
+    /// A note for each petal of the medallion, in the ears as it lights up (`DragonRideSystem.petalNotes`).
+    let notes: [AudioFileResource?]
     let wind: AudioFileResource?
     var windController: AudioPlaybackController?
     /// The ride space has been set at the player's eyes.
@@ -146,6 +148,10 @@ struct DragonRideSystem: System {
             }
         }
     }
+
+    /// A santur note for each petal of the medallion (`PetalNote01` …), climbing in the ride music's key as it
+    /// fills, the last a chord: eating plays the melody (`Assets/Audio/petal-notes/make_petal_notes.py`).
+    static let petalNotes = (1...DragonFeast.Settings.totalGoal).map { String(format: "PetalNote%02d", $0) }
 
     init(scene: RealityKit.Scene) {}
 
@@ -415,10 +421,7 @@ enum DragonRideSceneBuilder {
         let shamsehSky = addShamseh(shamseh, root: root, airbrush: airbrush)
         let (rush, flash) = addFinaleLight(root: root)
 
-        var sounds: [DragonRideSystem.Sound: AudioFileResource] = [:]
-        for sound in DragonRideSystem.Sound.allCases {
-            sounds[sound] = await GameAudio.load(sound.rawValue)
-        }
+        let sounds = await loadSounds()
         let (fireBreath, embers) = addFire(root: root, sky: sky)
         let fruitModels = await makeFruitModels()
         root.components.set(DragonRideComponent(status: status, shamseh: shamseh, shamsehSky: shamsehSky,
@@ -428,9 +431,28 @@ enum DragonRideSceneBuilder {
                                                 beacon: beacon, mouth: mouth, ears: ears,
                                                 fruitModels: fruitModels,
                                                 poisonedModels: poisoned(fruitModels), fireBreath: fireBreath,
-                                                embers: embers, sounds: sounds,
+                                                embers: embers, sounds: sounds, notes: await loadNotes(),
                                                 wind: await GameAudio.load("RideWind", loops: true)))
         return root
+    }
+
+    @MainActor
+    private static func loadSounds() async -> [DragonRideSystem.Sound: AudioFileResource] {
+        var sounds: [DragonRideSystem.Sound: AudioFileResource] = [:]
+        for sound in DragonRideSystem.Sound.allCases {
+            sounds[sound] = await GameAudio.load(sound.rawValue)
+        }
+        return sounds
+    }
+
+    /// The petals' notes, in order (nil: a missing file, that petal is silent).
+    @MainActor
+    private static func loadNotes() async -> [AudioFileResource?] {
+        var notes: [AudioFileResource?] = []
+        for name in DragonRideSystem.petalNotes {
+            notes.append(await GameAudio.load(name))
+        }
+        return notes
     }
 
     /// Where sounds play in the player's ears wherever they look, like the music (channel audio).
