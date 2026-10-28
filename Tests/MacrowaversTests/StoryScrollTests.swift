@@ -83,6 +83,40 @@ struct StoryScrollTests {
         #expect(scroll.isDone)
     }
 
+    @Test func openedTheNarratorTellsTheStoryAndThePaperFollows() {
+        let scroll = makeScroll()
+        play(scroll, seconds: 1)
+        #expect(!scroll.isNarrating && scroll.subtitle == nil)
+        scroll.tap()
+        play(scroll, seconds: 0.1)
+        #expect(scroll.isNarrating && scroll.subtitle == StoryNarration.cues.first?.text)
+        play(scroll, seconds: Float(StoryNarration.paintingTime))
+        #expect(scroll.scroll == 1 && scroll.hasReachedEnd)
+        play(scroll, seconds: 6)
+        #expect(!scroll.isNarrating && scroll.subtitle == nil)
+    }
+
+    @Test func draggedThePaperStopsFollowingTheVoice() {
+        let scroll = makeScroll()
+        scroll.tap()
+        play(scroll, seconds: 2)
+        scroll.drag(height: 1)
+        scroll.drag(height: 1.02)
+        scroll.endDrag()
+        let dragged = scroll.scroll
+        play(scroll, seconds: 30)
+        #expect(scroll.scroll == dragged && scroll.isNarrating)
+    }
+
+    @Test func finishedTheNarratorStops() {
+        let scroll = makeScroll()
+        scroll.tap()
+        play(scroll, seconds: 10)
+        #expect(scroll.isNarrating)
+        scroll.finish()
+        #expect(!scroll.isNarrating && scroll.subtitle == nil)
+    }
+
     @Test func withoutItsPageItCanStillBeSkipped() {
         let scroll = StoryScroll()
         scroll.present()

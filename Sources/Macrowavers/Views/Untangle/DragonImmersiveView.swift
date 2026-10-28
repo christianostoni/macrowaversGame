@@ -39,15 +39,23 @@ struct DragonImmersiveView: View {
     @State private var world = HiddenWorld()
     /// The story's music, in the player's ears.
     @State private var music = GameMusic()
-    /// The story's scroll, opened and read before the island appears.
+    /// The story's scroll, opened and read before the island appears, and its narrator.
     @State private var storyScroll = StoryScroll()
+    @State private var narrator = StoryNarrator()
 
     var body: some View {
         RealityView { content, attachments in
             content.add(music.entity)
-            // The story's scroll, in front of the player until they have read it, and the words under it.
+            content.add(narrator.entity)
+            // The story's scroll, in front of the player until they have read it, the words under it, and the
+            // narrator's subtitles, a little below the gaze.
             let scrollHint = attachments.entity(for: ScrollHintView.attachmentID)
             if let scrollHint { content.add(scrollHint) }
+            if let subtitles = attachments.entity(for: StorySubtitleView.attachmentID) {
+                subtitles.components.set(StorySubtitleComponent(viewer: viewer))
+                subtitles.components.set(BillboardComponent())
+                content.add(subtitles)
+            }
             if let scroll = await ScrollSceneBuilder.makeScroll(scroll: storyScroll, viewer: viewer, hint: scrollHint) {
                 content.add(scroll)
             }
@@ -123,6 +131,9 @@ struct DragonImmersiveView: View {
             Attachment(id: ScrollHintView.attachmentID) {
                 ScrollHintView(scroll: storyScroll)
             }
+            Attachment(id: StorySubtitleView.attachmentID) {
+                StorySubtitleView(scroll: storyScroll)
+            }
             Attachment(id: FruitPanelView.attachmentID) {
                 FruitPanelView()
                     .environment(orchard)
@@ -163,6 +174,11 @@ struct DragonImmersiveView: View {
         .onChange(of: storyScroll.isDone) { _, isDone in
             if isDone, story.step == .scroll { story.advance() }
         }
+        // The narrator tells the story while the scroll is open; the music steps back under the voice.
+        .onChange(of: storyScroll.isNarrating) { _, isNarrating in
+            if isNarrating { narrator.play() } else { narrator.stop() }
+            music.duck(isNarrating)
+        }
         .onChange(of: viewModel.isSolved) { _, isSolved in
             // Free, the dragon speaks; back around the tree (Restart Scene), its words are still to come.
             if isSolved { story.dragonFreed() } else { story.dragonRecaptured() }
@@ -173,6 +189,7 @@ struct DragonImmersiveView: View {
         }
         .onChange(of: viewModel.action == .rearUp) { _, roars in music.duck(roars) }
         .task { await music.load() }
+        .task { await narrator.load() }
         .task { await viewer.start() }
         .task {
             orchard.isHandTrackingAvailable = await hands.start()
