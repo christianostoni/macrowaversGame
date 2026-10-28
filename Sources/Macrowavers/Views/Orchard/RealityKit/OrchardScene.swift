@@ -468,7 +468,7 @@ enum OrchardSceneBuilder {
                             tapShape: .generateSphere(radius: banana.size * 0.6),
                             treeSize: bananaSizeOnTree, focusedSize: bananaSizeFocused)
         case .orange:
-            guard let orange = OrangeRig() else { return nil }
+            guard let orange = await OrangeRig() else { return nil }
             return RigBuild(rig: .orange(orange), root: orange.root, size: orange.size,
                             tapShape: .generateSphere(radius: orange.radius * 1.8),
                             treeSize: orangeSizeOnTree, focusedSize: orangeSizeFocused)

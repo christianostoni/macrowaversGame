@@ -29,14 +29,13 @@ The game plays in mixed reality, in the player's room:
    is left. Stop making progress and the dragon warns you, then has a fit: it rears up, roars fire, lashes its
    tail and adds new crossings.
 6. **The ride.** Free, the dragon thanks you and takes you on its back through the night sky (full immersion).
-   Pinch its horns with both hands and lead it with your arms; feed it wave after wave of fruit (it spits out
-   bananas, poisoned fruit cost it a heart, a snap of the fingers breathes fire). Every fruit lights a petal of a
+   Pinch its horns with both hands and lead it with your arms; feed it 10 fruit in a sky that grows harder as you
+   do well (it spits out bananas, poisoned fruit cost it a heart, a snap of the fingers breathes fire). Every fruit lights a petal of a
    star medallion in the sky; once the dragon is full, it flies into the medallion's heart and the story ends.
 
 No window covers the game: the launch window steps aside when the immersive space opens. Inside the space,
-panels are attached to the scene: the island panel (left) rotates the island and restarts the game, a small panel
-under the picked fruit says what to do, and a hologram hand beside the flask shows the snap that brews the
-elixir.
+panels are attached to the scene: a small panel under the picked fruit says what to do, and a hologram hand
+beside the flask shows the snap that brews the elixir.
 
 The dragon, the fruit and the elixir play spatial sound effects. Music follows the story: a setar under the
 narrator's pages and the fruit, the puzzle theme from the dragon's flight to the knot, and the farewell theme once

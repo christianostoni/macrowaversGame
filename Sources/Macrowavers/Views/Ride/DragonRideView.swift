@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The story's last part, in its own full immersive space (the game's space hands over to it): the player rides on
 /// the dragon's back out of the dark into the sky, steering it with both hands (`DragonRideSystem`), the air rushing
-/// past; then chapter II, feeding the dragon wave after wave of fruit floating in the sky (not the bananas, not the
+/// past; then chapter II, feeding the dragon fruit floating in the sky, a sky harder as they do well (not the bananas, not the
 /// poisoned ones: a snap of the fingers breathes fire on them), until it is full and flies into the star medallion
 /// they lit up, where the story ends. "The End" (or the Digital Crown) closes it: the story starts over from the
 /// launch window.
@@ -13,7 +13,7 @@ struct DragonRideView: View {
     private static let tallyID = "FeastTally"
     private static let hintID = "HornsHint"
     private static let loadingID = "RideLoading"
-    /// The spinner's distance in front of the eyes (m).
+    /// Chapter II's name and the loading animation: their distance in front of the eyes (m).
     private static let loadingDistance: Float = 1.2
 
     @Environment(UntangleViewModel.self) private var untangle
@@ -27,12 +27,15 @@ struct DragonRideView: View {
     @State private var hands = HandTracker()
     /// Whether the hands hold the horns, for the hint.
     @State private var status = RideStatus()
-    /// The ride's world is built (the dragon, the sky, the fruit): the spinner goes.
+    /// The ride's world is built (the dragon, the sky, the fruit): the loading animation goes.
     @State private var isLoaded = false
+    /// The ride's music, in the player's ears (the island's closed with its space).
+    @State private var music = GameMusic()
 
     var body: some View {
         RealityView { content, attachments in
-            // A spinner in the dark while the ride's assets load, placed once in front of the eyes.
+            content.add(music.entity)
+            // Chapter II's name in the dark while the ride's assets load, placed once in front of the eyes.
             if let loading = attachments.entity(for: Self.loadingID) {
                 let anchor = AnchorEntity(.head, trackingMode: .once)
                 loading.position = SIMD3(0, 0, -Self.loadingDistance)
@@ -68,6 +71,11 @@ struct DragonRideView: View {
                 RideLoadingView(isLoaded: isLoaded)
             }
         }
+        // The music fades in out of the dark, follows the story and fades out as the space closes.
+        .onChange(of: MusicTrack.riding(story: story.step), initial: true) { _, track in
+            music.play(track)
+        }
+        .task { await music.load(MusicTrack.ridingTracks) }
         .task { await viewer.start() }
         .task {
             guard await hands.start() else { return }
@@ -91,28 +99,39 @@ struct DragonRideView: View {
     }
 }
 
-/// The spinner shown while the ride's world loads. Hidden in SwiftUI once it is built (its attachment entity is
-/// never disabled).
+/// Chapter II's name (`StoryStep.rideTitle`) in the dark while the ride's world loads, the dragon tangling and
+/// untangling under it (`DragonLoadingView`): the wait opens the chapter, as chapter I's title does. It stays at
+/// least `readingTime`, so it is read even when the sky is built at once; the loading animation goes as soon as it is
+/// built. Hidden in SwiftUI (its attachment entity is never disabled).
 private struct RideLoadingView: View {
+    /// The least time chapter II's name stays in front of the eyes.
+    private static let readingTime: Duration = .seconds(3)
+
     let isLoaded: Bool
+    @State private var isRead = false
 
     var body: some View {
         ZStack {
-            if !isLoaded {
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .controlSize(.large)
-                    Text("Loading…")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+            if !isLoaded || !isRead {
+                StoryPageCard(page: StoryStep.rideTitle, isChapter: true) {
+                    HStack(spacing: 10) {
+                        DragonLoadingView(size: 52)
+                        Text("Loading…")
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .opacity(isLoaded ? 0 : 1)
                 }
-                .padding(24)
-                .glassBackgroundEffect()
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: isLoaded)
+        .animation(.easeInOut(duration: 0.6), value: isLoaded)
+        .animation(.easeInOut(duration: 0.6), value: isRead)
+        .task {
+            try? await Task.sleep(for: Self.readingTime)
+            isRead = true
+        }
     }
 }
 
@@ -172,15 +191,15 @@ private struct HornsHintView: View {
     }
 }
 
-/// Chapter II's tally while the player feeds the dragon: its hearts and whether its fire is ready, the wave and the
-/// fruit eaten in it, a hint at the start of each wave, and a word when something happens (a banana spat out, a
-/// poisoned fruit eaten, the dragon exhausted, a wave cleared). Hidden in SwiftUI outside the feast (its attachment
-/// entity is never disabled).
+/// Chapter II's tally while the player feeds the dragon: its hearts and whether its fire is ready, the fruit eaten,
+/// a hint when the sky reaches a harder stage, and a word when something happens (a banana spat out, a poisoned
+/// fruit eaten, the dragon exhausted). Hidden in SwiftUI outside the feast (its attachment entity is never
+/// disabled).
 private struct FeastTallyView: View {
     @Environment(StoryViewModel.self) private var story
     /// A word for a moment after something happens.
     @State private var flash: String?
-    /// The current wave's hint, for its first seconds.
+    /// The current stage's hint, for its first seconds.
     @State private var hint: String?
 
     private var feast: FeastProgress { story.feast }
@@ -209,7 +228,7 @@ private struct FeastTallyView: View {
                     .disabled(!feast.isFireReady)
                     .accessibilityLabel(feast.isFireReady ? "Breathe fire" : "Fire recharging")
                     Label {
-                        Text("Wave \(feast.wave + 1)/\(feast.waveCount) · \(feast.eaten)/\(feast.goal)")
+                        Text("\(feast.eaten)/\(feast.goal)")
                             .monospacedDigit()
                     } icon: {
                         Image(systemName: "leaf.fill")
@@ -241,10 +260,10 @@ private struct FeastTallyView: View {
         .task(id: feast.poisoned) {
             await show(feast.poisoned > 0 ? "Poisoned! The dragon lost a heart." : nil)
         }
-        // Each wave's hint, the first one too (when the feast begins).
-        .task(id: WaveHintKey(isFeeding: story.step == .feast, wave: feast.wave)) {
+        // Each stage's hint, the first one too (when the feast begins).
+        .task(id: StageHintKey(isFeeding: story.step == .feast, stage: feast.stage)) {
             guard story.step == .feast else { return }
-            hint = Self.hint(wave: feast.wave)
+            hint = Self.hint(stage: feast.stage)
             try? await Task.sleep(for: .seconds(6))
             hint = nil
         }
@@ -255,25 +274,24 @@ private struct FeastTallyView: View {
     private var phaseMessage: String? {
         switch feast.phase {
         case .playing: nil
-        case .waveCleared: "Wave cleared! Get ready…"
-        case .exhausted: "The dragon is exhausted. It rests, then tries again."
+        case .exhausted: "The dragon is exhausted: it lost some fruit. It rests, then flies on."
         case .finished: "The dragon is full!"
         }
     }
 
-    /// What each wave brings.
-    private static func hint(wave: Int) -> String {
-        switch wave {
+    /// What each stage of the sky brings.
+    private static func hint(stage: Int) -> String {
+        switch stage {
         case 0: "Fly into the fruit to feed the dragon. Push the horns forward to fly faster."
         case 1: "Bananas! The dragon spits them out: don't waste your time."
         case 2: "Poisoned fruit! Avoid them, or let go of a horn and snap your fingers to breathe fire."
-        default: "The last stretch: less help aiming. Keep the poison away!"
+        default: "The last stretch: the fruit dodge and less help aiming. Keep the poison away!"
         }
     }
 
-    private struct WaveHintKey: Hashable {
+    private struct StageHintKey: Hashable {
         let isFeeding: Bool
-        let wave: Int
+        let stage: Int
     }
 
     private func show(_ message: String?) async {

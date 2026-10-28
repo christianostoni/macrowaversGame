@@ -13,7 +13,8 @@ Origins:
 - The banana and pineapple were first shaped in the fruit lab prototype (`fruit_test_2`, a separate project that
   is not in this repo); the design team then gave them the same airbrush materials as the island, the dragon and
   the pomegranate (`Banana.usdz`, `Pineapple.usdz`).
-- The orange is generated in code (`OrangeRig`): no asset.
+- The orange and the worm are the design team's (`Orange.usdz`, `Worm.usdz`), with the same airbrush materials.
+  The orange keeps the layout of the one first generated in code (`OrangeRig`), which still stands in without the file.
 
 Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in three colours) and flask
 (`ElixirFlask.usdz`).
@@ -49,7 +50,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | On the tree | 3 apples, 1 pomegranate, 1 banana, 1 orange and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
 | Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close |
 | Turn it | With hand tracking, cup a hand next to the close fruit (all four fingers curled like a bowl, the thumb off the index, the palm within ~16 cm) and turn the hand: the fruit turns with it, in every direction, about its centre. Open the hand and it stays as it is; back on the tree it eases to its home pose, and it comes close upright again. The panel says so under the hint. Not in the simulator |
-| Open it | Apple: the design team's apple gives way to its spiral-cut copy, whose slices lift (Metal compute shader) while the stem and the leaf rise with the top one, and 3 worms guard the orb. Pomegranate: the halves open like a book and its 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Orange: the halves move apart and turn their cut faces to the player, then the 8 wedges fall open into a ring around the orb, showing their flesh and white rind. Pineapple: the halves fall open towards the player and the crown tips away |
+| Open it | Apple: the design team's apple gives way to its spiral-cut copy, whose slices lift (Metal compute shader) while the stem and the leaf rise with the top one, and 3 worms (the design team's, wriggling) guard the orb. Pomegranate: the halves open like a book and its 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Orange: the halves move apart and turn their cut faces to the player, then the 8 wedges fall open into a ring around the orb, showing their flesh and white rind. Pineapple: the halves fall open towards the player and the crown tips away |
 | Ingredient found | The orb rises out of the fruit (1.2 s), glowing and pulsing, and floats there for 0.6 s (or until tapped) |
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
 | In orbit | The ingredients go round a small ellipse (26 × 28 cm) 60 cm away, 30° to the player's right and a little below their eyes, facing them, its far side tilted up so they see it whole: always between ~18° and ~42° to the right, never in the middle of the view where the fruit comes close; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). A small label under the orbit counts them |
@@ -90,7 +91,7 @@ P       = O + across · a sin φ + depth · b cos φ
 
 | Symbol | Value | Why |
 |---|---|---|
-| `α` (`bearing`) | 30° to the right | clear of the fruit in front of the player and of the island panel (50° to the left) |
+| `α` (`bearing`) | 30° to the right | clear of the fruit in front of the player |
 | `distance` | 0.60 m | within the comfortable focus range (0.5–1 m), beyond the hands snapping in front of the chest |
 | `drop` | 0.18 m | centre ~17° below the line of sight: the comfortable band for looking down without bending the neck |
 | `a` | 0.13 m | ±12° around `α`: the whole orbit between ~18° and ~42° to the right, inside the field of view with no head turn; the flask (~15 cm wide, in the middle) still fits between the two sides |
@@ -256,11 +257,11 @@ Sources/Macrowavers/
         │                                    depth pre-pass sort group, sparks
         ├── LiquidLevels.swift               One liquid mesh per level step (48), built once when the flask loads
         ├── HandTracker.swift                ARKit hand tracking → HandSample
-        ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, worms
+        ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, Worm.usdz
         ├── AppleSpiral.metal                `deformApple` kernel (one thread per vertex)
         ├── PomegranateRig.swift             The design team's pomegranate: halves, seed burst
         ├── BananaRig.swift                  Banana.usdz, peel strips on hinges
-        ├── OrangeRig.swift                  Procedural orange: two halves, then 8 wedges
+        ├── OrangeRig.swift                  Orange.usdz (or generated): two halves, then 8 wedges
         ├── OrchardSounds.swift              Spatial sound effects on state changes (peel, worms, burst, chop, brew)
         └── PineappleRig.swift               Pineapple.usdz, halves and crown opening
 ```
@@ -436,6 +437,8 @@ elixir's flight (`OrchardComponent.flight`).
 |---|---|
 | `Banana.usdz` | The design team's `banana_RCP.usdz` as it is (no pipeline: its layout is the one the code reads). The fruit lab's banana (Poly Haven `bananas`, CC0, cut into four peel strips) with Reality Composer Pro airbrush materials. Prims: `peelPivot_N/peel_N` (each strip a `skin` and a `pith`), `peelBase`, `flesh` (the orb rises from its centre); its golden `gem` is removed at load (the orchard has its own orb) |
 | `Pineapple.usdz` | The design team's `pineaple_RCP.usdz` as it is. Prims: `pineapple_1`, `pineapple_2` (each a `rind` and a `flesh`), `leaves` (the crown that tips away); its golden `gem` is removed at load |
+| `Orange.usdz` | The design team's `Orange_RCP.usdz` as it is, built on the code's orange so the rig opens it unchanged. Prims: `RightHalf` (+x) and `LeftHalf` (−x), each `Wedge_0` … `Wedge_3` (a `Skin`, a `Flesh` and a `Pith`, the white core and rind line on the cut faces), `Stem`, `Leaf_0` and `Leaf_1` on `RightHalf/Wedge_0`; real size, 8 cm wide, origin at the centre. `OrangeRig` takes each wedge into its own holder and draws the materials from both sides. Without it the wedges are generated in code |
+| `Worm.usdz` | The design team's `Worm_RCP.usdz` as it is: `Body_0` … `Body_6` (skin and bands) and `Eye_0`, `Eye_1`, head along +x, 5.3 cm long, its belly on y = 0. Its airbrush materials wriggle it themselves (a geometry modifier: `WiggleAmplitude`, `WiggleSpeed`, `WiggleWavenumber`). `AppleRig` copies it for each worm, its belly on the slice; without it the worms are three green spheres wriggled in code |
 | `IngredientGem.usdz` | The design team's gem, `Assets/Blender/ingredient-gem/ingredient_gem.usdc`, prepared headless by `make_gem_asset.py` (below). Prim: `Gem` (26 flat faces, 6 cm tall, ~3.5 cm wide, origin at its centre, long axis up). The code colours it |
 | `Pomegranate.usdz` | The design team's pomegranate, `Assets/Blender/pomegranate/pomegranate_rcp.usdz`, prepared headless by `make_pomegranate_asset.py` (below). Prims: `RightHalf` (skin, flesh, crown), `LeftHalf` (skin, flesh), `Seed_00` … `Seed_39` (origin at each seed's centre); real size, 16 cm wide, centred, cut along x = 0. Without it there is no pomegranate on the tree |
 | `ElixirFlask.usdz` | The design team's flask, `Assets/Blender/elixir-flask/elixir_flask.usdc`, prepared headless by `make_flask_asset.py` (below). Prims: `Glass`, `Liquid` (origin at its bottom), `Cork` (origin at its centre), `neck_top`, `neck_base`. Without it a glowing blue orb stands in and the brew still plays |

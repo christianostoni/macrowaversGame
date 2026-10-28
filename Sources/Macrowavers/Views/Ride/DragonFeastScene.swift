@@ -92,9 +92,9 @@ extension DragonRideSystem {
                 state.shamsehSky.poison(state.shamseh)
                 play(.squish, from: state.mouth, sounds: state.sounds)
             case .burned: break
-            case .waveCleared: play(.chime, from: state.mouth, sounds: state.sounds)
-            case .exhausted:
-                state.shamseh.uncolour(last: feast.eaten)
+            case .stageReached: play(.chime, from: state.mouth, sounds: state.sounds)
+            case .exhausted(let lost):
+                state.shamseh.uncolour(last: lost)
                 play(.rumble, from: state.mouth, sounds: state.sounds)
             case .finished: play(.chime, from: state.mouth, sounds: state.sounds)
             }

@@ -26,4 +26,21 @@ struct MusicTrackTests {
         }
         #expect(!MusicTrack.farewell.loops)
     }
+
+    @Test func theRideTrackFromTheArrivalToTheMedallion() {
+        for step in [StoryStep.ride, .secondChapter, .feast, .finale] {
+            #expect(MusicTrack.riding(story: step) == .ride)
+        }
+        #expect(MusicTrack.ride.loops)
+    }
+
+    @Test func theFarewellUnderTheLastPageThenSilence() {
+        #expect(MusicTrack.riding(story: .epilogue) == .farewell)
+        #expect(MusicTrack.riding(story: .ended) == nil)
+        // The ride's space only plays what it loads.
+        for step in StoryStep.allCases {
+            guard let track = MusicTrack.riding(story: step) else { continue }
+            #expect(MusicTrack.ridingTracks.contains(track))
+        }
+    }
 }
