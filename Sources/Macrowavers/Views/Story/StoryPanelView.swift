@@ -9,81 +9,99 @@ struct StoryPanelView: View {
     static let attachmentID = "StoryPanel"
 
     @Environment(StoryViewModel.self) private var story
-    /// Pages on a glass panel, legible over a bright sky (the ride); without it, white words over the darkened room.
+    /// Asked for by the ride, over its bright sky. Every page now has its own framed glass (`StoryPageView`),
+    /// in the room as in the sky, so it changes nothing; it stays until `DragonRideView` stops passing it.
     var hasBackdrop = false
 
     var body: some View {
         ZStack {
             if let page = story.step.page {
-                StoryPageView(page: page) { story.advance() }
-                    .glassBackgroundEffect(displayMode: hasBackdrop ? .always : .never)
-                    .id(story.step)
-                    .transition(.opacity)
+                StoryPageView(page: page, isChapter: story.step == .chapter || story.step == .secondChapter) {
+                    story.advance()
+                }
+                .id(story.step)
+                .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.6), value: story.step)
     }
 }
 
-/// One page: a bold title and its lines, white over the darkened room, as in the wireframes.
-/// A narrator's page is one big button (look at it and pinch to go on); a question has its own answer button.
+/// One page, after the design team's Lotus UI kit ("clear glass, no tint"): clear glass in their tile frame.
+/// A chapter's page names it in spaced gold capitals over its proverb; the others have a serif title over their
+/// lines, in italic. Every page, 720 × 200 pt in `ChapterPanelFrame`, is one big button (look at it and pinch
+/// to go on); a question's answer is its hint, where the others say "Tap to continue".
 private struct StoryPageView: View {
     let page: StoryStep.Page
+    let isChapter: Bool
     let advance: () -> Void
 
-    private static let cornerRadius: CGFloat = 32
+    private static let size = CGSize(width: 720, height: 200)
+    private static let cornerRadius: CGFloat = 60
+    /// The kit's gold for the chapter's name over clear glass (#f2cf86).
+    private static let gold = Color(red: 0.95, green: 0.81, blue: 0.53)
 
     var body: some View {
-        switch page.advance {
-        case .tap:
-            Button(action: advance) {
-                VStack(spacing: 24) {
-                    words
-                    Label("Tap to continue", systemImage: "hand.tap")
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .padding(32)
-                .contentShape(.rect(cornerRadius: Self.cornerRadius))
-            }
-            .buttonStyle(.plain)
-            .contentShape(.hoverEffect, .rect(cornerRadius: Self.cornerRadius))
-            .hoverEffect(.highlight)
-            .accessibilityHint("Continues the story")
-        case .answer(let answer):
-            VStack(spacing: 24) {
+        Button(action: advance) {
+            VStack(spacing: 8) {
                 words
-                Button(answer, action: advance)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                Label(hint, systemImage: "hand.tap")
+                    .font(.callout)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.top, 2)
             }
-            .padding(32)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 48)
+            .frame(width: Self.size.width, height: Self.size.height)
+            .contentShape(.rect(cornerRadius: Self.cornerRadius))
+        }
+        .buttonStyle(.plain)
+        .glassBackgroundEffect(in: .rect(cornerRadius: Self.cornerRadius))
+        .overlay {
+            Image("ChapterPanelFrame")
+                .resizable()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .contentShape(.hoverEffect, .rect(cornerRadius: Self.cornerRadius))
+        .hoverEffect(.highlight)
+        .accessibilityHint("Continues the story")
+    }
+
+    /// What tapping the page does: go on, or the page's own answer to its question.
+    private var hint: String {
+        switch page.advance {
+        case .tap: "Tap to continue"
+        case .answer(let answer): answer
         }
     }
 
     private var words: some View {
-        VStack(spacing: 12) {
-            Text(page.title)
-                .font(.title.bold())
-                .foregroundStyle(.white)
-            ForEach(page.lines, id: \.self) { line in
-                Text(line)
-                    .font(.title2)
-                    .foregroundStyle(.white.opacity(0.85))
+        VStack(spacing: 8) {
+            if isChapter {
+                Text(page.title.uppercased())
+                    .font(.system(size: 13, design: .serif))
+                    .tracking(4.4)
+                    .foregroundStyle(Self.gold)
+            } else {
+                Text(page.title)
+                    .font(.system(size: 30, design: .serif))
+                    .foregroundStyle(.white)
             }
-            // The dragon's words end with a thin rule, as in the wireframes.
-            if page.anchor == .dragon {
-                Rectangle()
-                    .fill(.white.opacity(0.3))
-                    .frame(width: 420, height: 1)
-                    .padding(.top, 8)
+            VStack(spacing: 2) {
+                ForEach(page.lines, id: \.self) { line in
+                    Text(line)
+                        // One line, a proverb, is bigger than a page of two.
+                        .font(.system(size: page.lines.count > 1 ? 26 : 30, weight: .semibold, design: .serif)
+                            .italic())
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
+                }
             }
         }
-        .multilineTextAlignment(.center)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: 640)
         // Legible over any room, however bright.
-        .shadow(color: .black.opacity(0.6), radius: 8)
+        .shadow(color: .black.opacity(0.45), radius: 5, y: 2)
         .accessibilityElement(children: .combine)
     }
 }
