@@ -91,8 +91,8 @@ struct DragonRideView: View {
     }
 }
 
-/// The spinner shown while the ride's world loads. Hidden in SwiftUI once it is built (its attachment entity is
-/// never disabled).
+/// The dragon tangling and untangling (`DragonLoadingView`) while the ride's world loads. Hidden in SwiftUI once it
+/// is built (its attachment entity is never disabled).
 private struct RideLoadingView: View {
     let isLoaded: Bool
 
@@ -100,8 +100,7 @@ private struct RideLoadingView: View {
         ZStack {
             if !isLoaded {
                 VStack(spacing: 12) {
-                    ProgressView()
-                        .controlSize(.large)
+                    DragonLoadingView()
                     Text("Loading…")
                         .font(.callout)
                         .foregroundStyle(.secondary)

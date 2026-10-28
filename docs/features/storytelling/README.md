@@ -10,13 +10,13 @@ dragon is full it flies into the medallion's heart, where the story ends.
 
 | # | Step (`StoryStep`) | Where | Text | Moves on |
 |---|---|---|---|---|
-| 1 | `start` | Launch window (plain, no glass) | **Start**, and under it a small **App Icon** menu (see below) | Start opens the immersive space; until it has built its world (island, dragon, fruit: a few seconds) a spinner with "Loading…" turns in place of Start, then the window steps aside (`UntangleViewModel.isWorldLoaded`) |
+| 1 | `start` | Launch window (plain, no glass) | **Start**, and under it a small **App Icon** menu (see below) | Start opens the immersive space; until it has built its world (island, dragon, fruit: a few seconds) the dragon tangles and untangles with "Loading…" in place of Start (see [The loading animation](#the-loading-animation)), then the window steps aside (`UntangleViewModel.isWorldLoaded`) |
 | 2 | `scroll` | In front of the player's eyes | The story's scroll: the chapter's story in Persian Nastaliq, down to its painting of the tree and the dragon (see [The story's scroll](#the-storys-scroll)) | Pull it open (or pinch it), drag the paper up to the painting, **Continue** (or **Skip the story**): it rolls up and fades away |
 | 3 | `chapter` | Same spot | **Chapter I** / Patience is bitter, but its fruit is sweet. | Tap the text: the island fades in |
 | – | `adventure` | – | No story text: the island, its fruit, the dragon and its puzzle | The dragon is freed |
 | 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the curse of the Black Div. / You don't need to be afraid. | Tap the text |
 | 5 | `safety` | Above the dragon | **Thank you** / Child of the Shah, I will take you to safety. / Are you ready? | **I'm Ready** button: the room goes dark, the ride's space takes over |
-| – | `ride` | Full immersion | A spinner ("Loading…", placed once 1.2 m in front of the eyes) while the ride's world loads; then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
+| – | `ride` | Full immersion | The loading animation ("Loading…", placed once 1.2 m in front of the eyes) while the ride's world loads; then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
 | 6 | `secondChapter` | In front of the eyes, above the dragon's head | **Chapter II** / Feed the dragon the right plants. / It doesn't like bananas! | Tap the text |
 | – | `feast` | Above the dragon's head | No page: fruit in the sky, harder as the player does well, and a tally (hearts, fire, fruit eaten); see [Chapter II: the feast](#chapter-ii-the-feast) | The 10th fruit eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s |
 | – | `finale` | Full immersion | No page: the dragon roars, turns to the medallion on its own and flies into its heart through a rush of light (`ShamsehFinale.swift`); the light fills the view | 6 s at most turning, 7 s of flight, 1.2 s of light |
@@ -228,6 +228,7 @@ Sources/Macrowavers/
 ├── Resources/StoryNarration.m4a         The narration (source Assets/Audio/story_narration.mp3)
 ├── Resources/ScrollPage.jpg             The page, made by Assets/Scroll/make_scroll_page.swift
 ├── Views/ContentView.swift              Screen 1: the Start button (launch window, plain style)
+├── Views/DragonLoadingView.swift        The loading animation (sprite sheet DragonLoading.png, Assets/Blender/loading-dragon/)
 ├── Views/AppIconMenu.swift              Screen 1: the app icon picker under Start
 ├── Model/AppIconChoice.swift            The app icons (asset catalog names, titles)
 ├── Model/Story/MusicTrack.swift         Which track plays at each step (intro, puzzle, farewell)
@@ -238,6 +239,29 @@ Tests/MacrowaversTests/StoryTests.swift, ScrollRollTests.swift, StoryScrollTests
                                          GazeFollowTests.swift
 Assets/Scroll/                           paper.png, painting.png, make_scroll_page.swift, the Blender scroll
 ```
+
+## The loading animation
+
+Wherever the game loads (the launch window while the island is built, the ride's space while the sky is built) the
+stone dragon tangles and untangles in place of the system spinner (`DragonLoadingView`): it ties itself into the
+puzzle's knot (`TangleShape.trefoil`), loosens into a triangle and opens into a ring, turning once around, then
+ties itself again, 3 s a loop. It is flat, like a 2D drawing: Blender renders the game's own dragon
+(`StoneDragon.usdz`, its head and 19 stones at their own distances along the body) from straight above with
+Workbench's flat light, one colour a part (the stones from the head's orange through magenta to violet, the
+materials' body ramp, the horns blue) and a navy outline, on a transparent background, into one sprite sheet:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+    -P Assets/Blender/loading-dragon/make_loading_animation.py -- \
+    Sources/Macrowavers/Resources/StoneDragon.usdz Sources/Macrowavers/Resources/DragonLoading.png
+```
+
+`DragonLoading.png` (~2 MB, Git LFS): 72 frames of 192 px, 9 a row, played at 24 fps; the script's `FRAMES`,
+`COLUMNS` and `FPS` must match `DragonLoadingView`'s `frameCount`, `columns` and `framesPerSecond`. The camera comes
+closer to the knot (60% of the difference: the bunched-up body is far smaller than the ring), so the dragon seems to
+breathe. The view decodes the sheet once, off the main thread, into frames that share its pixels (~10 MB, kept for
+the next loading screen); until then, or without the file, the system spinner turns. With Reduce Motion on, the
+dragon rests in its ring.
 
 ## The music
 
