@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Small label under the ingredients' orbit, at the player's side (a RealityView attachment): how many
-/// ingredients orbit, and how to brew the elixir.
+/// ingredients orbit. With all of them in orbit it gives way to the hologram hand that shows the snap
+/// (`SnapHintRig`); only without hand tracking it stays, to say the tap brews the elixir.
 struct ElixirPanelView: View {
     static let attachmentID = "ElixirPanel"
 
@@ -43,13 +44,10 @@ struct ElixirPanelView: View {
                 ? nil
                 : "Every fruit hides an ingredient. Find \(missing) more."
         case .ready:
-            guard orchard.isHandTrackingAvailable else { return "Tap an ingredient to brew the elixir." }
-            return orchard.isSnapLoaded
-                ? "Now snap!"
-                : "Press your thumb on your middle finger and snap to brew the elixir."
-        case .fusing, .brewed:
-            return "The elixir is brewing…"
-        case .flying, .delivered, .poured:
+            // The hologram hand shows the snap: no words.
+            return orchard.isHandTrackingAvailable ? nil : "Tap an ingredient to brew the elixir."
+        case .fusing, .brewed, .flying, .delivered, .poured:
+            // The snap is done: the brew speaks for itself.
             return nil
         }
     }

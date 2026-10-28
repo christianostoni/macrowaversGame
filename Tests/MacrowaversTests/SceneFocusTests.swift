@@ -3,8 +3,7 @@ import Testing
 @testable import Macrowavers
 
 struct SceneFocusTests {
-    private let phases: [DragonPhase] = [.captive, .alerted, .receivingElixir, .approaching, .landing, .untangling, .free,
-                                         .gone]
+    private let phases: [DragonPhase] = [.captive, .alerted, .receivingElixir, .approaching, .landing, .untangling, .free]
 
     @Test func aFruitCloseFadesTheIslandAndTheDragon() {
         let focus = SceneFocus(isFruitFocused: true, isElixirFlying: false, phase: .captive)

@@ -36,6 +36,10 @@ struct FlightFrame {
     var bite: Float = 0
     /// 0...1: just spat out a banana: shakes its head and snorts (`DragonFeast.disgust`).
     var disgust: Float = 0
+    /// 0...1: ate a poisoned fruit: coughs smoke from its nostrils, its head heavy (`DragonFeast.sickness`).
+    var sickness: Float = 0
+    /// 0...1: breathing fire, jaws wide (`DragonFeast.fire`).
+    var fire: Float = 0
 }
 
 /// The dragon's "skin": how it is drawn. Collisions and physics are separate,
@@ -50,11 +54,15 @@ protocol DragonRig: AnyObject {
     /// The nodes the player can grab in the mini-game, with the radius of their grab sphere (m). nil: every node,
     /// the head included, with the default sphere.
     var grabTargets: [Int: Float]? { get }
+    /// The middle of the mouth, its +Z the way fire leaves (the ride's long breath of fire starts there). nil: the
+    /// rig does not know it.
+    var mouth: Entity? { get }
 }
 
 extension DragonRig {
     func attach(to colliders: [Entity]) {}
     var grabTargets: [Int: Float]? { nil }
+    var mouth: Entity? { nil }
 }
 
 enum DragonRigLoader {
@@ -275,7 +283,6 @@ struct DragonLifeAnimator {
     private func animateFlight(_ flight: FlightFrame, frame: DragonFrame, target: inout DragonPose,
                                look: inout SIMD3<Float>, toward: (SIMD3<Float>) -> SIMD3<Float>) {
         let time = frame.time
-        let progress = flight.progress
         let speed = simd_length(flight.velocity)
         if speed > 0.05 { look = flight.velocity / speed }
         // In flight the body is already in 3D: no raised neck nor extra wave.
@@ -285,35 +292,18 @@ struct DragonLifeAnimator {
         let climb = speed > 0.05 ? flight.velocity.y / speed : 0
 
         switch flight.maneuver {
-        case .takeoff:
-            target.wingFlap = 0.75 * sin(time * 10)
-            target.jawOpen = 0.6 * sin(min(progress * 3, 1) * .pi)
         case .cruise:
             // Beats when climbing, glides when descending.
             let effort = max(0.15, min(1, 0.4 + climb * 1.5))
             target.wingFlap = 0.5 * effort * sin(time * 6)
-            // Fed on the wing: jaws open for the fruit ahead; a banana makes it shake its head, snorting.
-            target.jawOpen = max(0.8 * flight.bite, 0.35 * flight.disgust)
-            target.smoke = flight.disgust
-            if flight.disgust > 0 {
-                look = rotate(look, by: 0.45 * flight.disgust * sin(time * 14))
-            }
-        case .swoop:
-            // Wings tucked in the dive, open again when climbing.
-            target.wingFlare = progress < 0.5 ? 0.35 : 1
-            target.wingFlap = progress < 0.5 ? 0 : 0.6 * sin(time * 9)
-        case .hover:
-            // Hovering in front of the knight: looks at them and roars with a burst of fire upwards.
-            look = toward(frame.viewer)
-            let roar = smoothstep(0.35, 0.45, progress) * (1 - smoothstep(0.75, 0.85, progress))
-            target.wingFlap = 0.6 * sin(time * 8)
-            target.jawOpen = roar
-            target.fire = roar
-            target.smoke = roar * 0.5
-            // Roars with its snout up, so it does not breathe fire on the player.
-            look = simd_normalize(look + SIMD3(0, 1.2 * roar, 0))
-        case .loop:
-            target.wingFlap = 0.4 * sin(time * 7)
+            // Fed on the wing: jaws open for the fruit ahead; a banana makes it shake its head, snorting; a
+            // poisoned fruit makes it cough smoke, its head drooping and swaying; fire opens its jaws wide.
+            target.jawOpen = max(0.8 * flight.bite, 0.35 * flight.disgust, 0.3 * flight.sickness, flight.fire)
+            target.smoke = max(flight.disgust, flight.sickness)
+            target.fire = flight.fire
+            let shake = 0.45 * flight.disgust * sin(time * 14) + 0.3 * flight.sickness * sin(time * 5)
+            if shake != 0 { look = rotate(look, by: shake) }
+            if flight.sickness > 0 { look = simd_normalize(look - SIMD3(0, 0.35 * flight.sickness, 0)) }
         case .hold:
             // Stopped for the elixir: as it slows down it lifts its snout (about 60° up at a standstill) and opens
             // its mouth a little, wings spread and beating slowly, no smoke: the elixir pours over its head.
@@ -324,12 +314,12 @@ struct DragonLifeAnimator {
             look = simd_normalize(flat + SIMD3(0, 1.7 * lift, 0))
             target.wingFlap = 0.3 * sin(time * 3)
             target.jawOpen = 0.25 * lift
-        case .orbit, .approach, .land, .depart:
+        case .orbit, .approach, .land:
             animateJourney(flight, frame: frame, target: &target, look: &look, toward: toward)
         }
     }
 
-    /// Pose from the island to the play area and in the farewell: captive, called, settling, leaving.
+    /// Pose from the island to the play area: captive, called, settling.
     private func animateJourney(_ flight: FlightFrame, frame: DragonFrame, target: inout DragonPose,
                                 look: inout SIMD3<Float>, toward: (SIMD3<Float>) -> SIMD3<Float>) {
         let time = frame.time
@@ -360,11 +350,6 @@ struct DragonLifeAnimator {
             let settle = smoothstep(0.2, 1, progress)
             target.wingFlare = 1 - 0.85 * settle
             target.wingFlap = 0.5 * (1 - settle) * sin(time * 6)
-        case .depart:
-            // Farewell roar, then strong wing beats towards the sky.
-            let roar = smoothstep(0, 0.08, progress) * (1 - smoothstep(0.2, 0.3, progress))
-            target.jawOpen = roar
-            target.wingFlap = 0.8 * sin(time * 9)
         default:
             break
         }

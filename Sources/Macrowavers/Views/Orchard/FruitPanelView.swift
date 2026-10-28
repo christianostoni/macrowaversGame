@@ -83,7 +83,7 @@ struct FruitPanelView: View {
     private var openHint: String {
         switch orchard.focusedFruit?.kind {
         case .apple:
-            if orchard.appleOpening < orchard.wormSettings.minimumOpening { return "Pull the stem up to open the apple." }
+            if !orchard.isAppleOpen { return "Pull the stem up to open the apple." }
             return orchard.focusedOrb == .sealed
                 ? "Catch the worms! They burrow now and then, and get faster after each catch."
                 : "Only worms in this one. Put it back on the tree."

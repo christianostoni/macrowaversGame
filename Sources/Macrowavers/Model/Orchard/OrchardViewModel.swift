@@ -52,8 +52,16 @@ final class OrchardViewModel {
     let fruits: [Fruit]
     /// Fruit brought close to the player (nil = all on the tree).
     private(set) var focusedFruitID: Int?
-    /// 0 = closed, 1 = fully open (pulled up by the stem).
-    private(set) var appleOpening: Float = 0
+    /// 0 = closed, 1 = fully open (pulled up by the stem). Changes every frame while the stem is pulled: not
+    /// observed (the fruit panel would be redrawn every frame); views read `isAppleOpen`.
+    @ObservationIgnored private(set) var appleOpening: Float = 0 {
+        didSet {
+            let isOpen = appleOpening >= wormSettings.minimumOpening
+            if isOpen != isAppleOpen { isAppleOpen = isOpen }
+        }
+    }
+    /// The apple is open enough to see (and catch) its worms.
+    private(set) var isAppleOpen = false
     private(set) var caughtWorms = 0
     /// 0 = closed, 1 = fully open (pulled apart with two hands).
     private(set) var pomegranateOpening: Float = 0
@@ -84,9 +92,6 @@ final class OrchardViewModel {
     var isDragonOnIsland = true
     /// The player's hands are tracked: the snap can brew the elixir (a tap on an ingredient always can).
     var isHandTrackingAvailable = false
-    /// A hand holds the thumb on the middle finger, ready to snap: the elixir's label says "Now snap!".
-    /// Set by the `OrchardSystem`.
-    var isSnapLoaded = false
 
     // MARK: - Model
 
@@ -135,7 +140,7 @@ final class OrchardViewModel {
     /// The player has looked inside the focused fruit.
     var isFocusedFruitExplored: Bool {
         switch focusedFruit?.kind {
-        case .apple: appleOpening >= wormSettings.minimumOpening
+        case .apple: isAppleOpen
         case .pomegranate: pomegranateBurst
         case .banana: isBananaPeeled
         case .orange: orangeOpened
@@ -198,8 +203,7 @@ final class OrchardViewModel {
     /// Taps a worm; returns whether it was caught (it may be underground).
     @discardableResult
     func catchWorm(_ index: Int) -> Bool {
-        guard focusedFruit?.kind == .apple, appleOpening >= wormSettings.minimumOpening,
-              worms.catchWorm(index) else { return false }
+        guard focusedFruit?.kind == .apple, isAppleOpen, worms.catchWorm(index) else { return false }
         caughtWorms = worms.caughtCount
         if worms.isCleared { revealFocusedOrb() }
         return true

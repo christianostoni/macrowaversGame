@@ -65,7 +65,6 @@ struct IslandControlsView: View {
         case .approaching, .landing: "The dragon is coming to you."
         case .untangling: "Untangle the dragon: \(viewModel.crossingCount) crossings left."
         case .free: "The dragon is free!"
-        case .gone: "The dragon flew back to the sky."
         }
     }
 

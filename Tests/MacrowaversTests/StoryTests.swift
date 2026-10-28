@@ -72,7 +72,7 @@ struct StoryTests {
 }
 
 @MainActor
-struct FarewellCueTests {
+struct FreeDragonTests {
     private func play(_ viewModel: UntangleViewModel, seconds: Float) {
         let orbit = AnchoredOrbit(path: .aroundTree, worldFromAnchor: IslandPlacement.standard.transform)
         for _ in 0..<Int(seconds * 60) {
@@ -82,8 +82,8 @@ struct FarewellCueTests {
     }
 
     /// Calls the dragon into a knot with no crossings: it is free as soon as it settles.
-    private func freeDragon(waitsForPlayer: Bool) -> UntangleViewModel {
-        let viewModel = UntangleViewModel(shape: .loop, farewellWaitsForPlayer: waitsForPlayer)
+    private func freeDragon() -> UntangleViewModel {
+        let viewModel = UntangleViewModel(shape: .loop)
         play(viewModel, seconds: 1.0 / 60.0)
         viewModel.callDragon()
         var elapsed: Float = 0
@@ -94,26 +94,18 @@ struct FarewellCueTests {
         return viewModel
     }
 
-    @Test func theFreeDragonWaitsUntilThePlayerIsReady() {
-        let viewModel = freeDragon(waitsForPlayer: true)
+    @Test func theFreeDragonStaysWhileItSpeaksToThePlayer() {
+        let viewModel = freeDragon()
         #expect(viewModel.phase == .free)
-        // It speaks to the player for as long as they need.
+        let before = viewModel.displayPositions
+        // It speaks for as long as the player needs: it never flies off on its own (the ride takes over).
         play(viewModel, seconds: 10)
-        #expect(viewModel.phase == .free && !viewModel.isFlying)
+        #expect(viewModel.phase == .free && viewModel.isSolved)
+        #expect(viewModel.dragonOpacity == 1)
+        #expect(zip(before, viewModel.displayPositions).allSatisfy { simd_distance($0, $1) < 0.05 })
 
-        viewModel.beginFarewell()
-        play(viewModel, seconds: 0.1)
-        #expect(viewModel.isFlying)
-
-        // Restarting the scene forgets the answer: next time it waits again.
+        // Restarting the scene puts it back around the tree.
         viewModel.restartScene()
-        #expect(!viewModel.isFlying)
-    }
-
-    @Test func withoutTheStoryItTakesOffOnItsOwn() {
-        let viewModel = freeDragon(waitsForPlayer: false)
-        #expect(viewModel.phase == .free)
-        play(viewModel, seconds: 2)
-        #expect(viewModel.isFlying)
+        #expect(viewModel.phase == .captive && !viewModel.isSolved)
     }
 }

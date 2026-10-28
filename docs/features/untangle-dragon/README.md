@@ -3,7 +3,8 @@
 A mixed-reality chapter of the Persian fairy tale: a floating island with a tree at its centre appears in the
 room, and a dragon is coiled around the tree. The player taps the dragon, which flies to them and settles in
 the air in front of them, tangled in a knot. The player grabs the body with their hands and untangles it.
-Once free, the dragon thanks the player and flies away into the sky.
+Once free, the dragon thanks the player and, when they are ready, carries them away on its back (the ride,
+chapter II: see [Storytelling](../storytelling/README.md)).
 
 Status: on `main`, playable with the design team's **stone dragon** (see [The stone dragon](#the-stone-dragon)):
 a head and a chain of separate stones, each of which the player grabs to untangle it. The code-generated
@@ -42,7 +43,7 @@ uses a seated eye height of 1.15 m.
 | Puzzle | Dragon tied in a trefoil knot (3 crossings), blue pulsing spheres on every crossing, crossings left in the island panel. **Focus mode**: from the landing until it is free the island, the tree and the fruit fade to 25% and only the dragon stays at full strength |
 | Grab | The stone (or the head) you look at glows; pinch to grab, one per hand: left and right hand hold and drag two parts independently; a part can pass from one hand to the other without being dropped. The body follows the hand smoothly, without snapping after it, and slides through the knot instead of sticking to the hand; pulled taut, it stops stretching but the other hand can still move its part. Two held parts push each other away instead of passing through. The dragon turns to your hand, bares its teeth and tugs its head slowly if pulled hard. The head can be held too: it follows the hand and stays where it is let go, settling onto the plane |
 | No progress (8 s, shorter each time, min 5 s) | 2 s warning: it stares at you, smoke from the nostrils (the placeholder's eyes turn red). Then a fit: it **turns around**, rears up and roars with a burst of fire, lashes its tail and coils, **always adding at least one new crossing** |
-| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, lifts its head (the placeholder also spreads its wings and turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). When you answer **I'm Ready** (at least 1.5 s after the win) it **takes off** away from you, sweeps once from side to side **in front of you** (1.2–1.6 m away, 1.0–1.8 m high, never behind you), **hovers 1.35 m straight in front of your eyes** (wherever you look) roaring its thanks with its snout up, and **flies away**, fading out within ~2 m, before the room's walls or ceiling. **Restart Game** in the island panel starts over |
+| Solved (0 crossings, body released for 0.6 s) | Raises its head towards you, lifts its head (the placeholder also spreads its wings and turns gold) and **speaks**: the room darkens, the island fades back and its words float above it (two "Thank you" pages, the second ending "Are you ready?"). It stays in the play area, celebrating, for as long as you need. When you answer **I'm Ready** the room goes dark, the island fades and the ride's full immersive space takes over: you fly on its back (see [Storytelling](../storytelling/README.md)). **Restart Game** in the island panel starts over |
 | Play area | Invisible: the knot floats at knee/table height in front of the player, placed for a seated player (`PlayAreaPlacement.seated`). There are no controls to move it: the dragon panel that rotated and tilted it was removed |
 
 Everything is in English: user-facing text, code comments and tooling.
@@ -61,9 +62,9 @@ Sources/Macrowavers/
 │   │                                     tension, friction, flatten, crossing count (drawn and simulated)
 │   ├── TangleShapes.swift              Initial knots from parametric curves (trefoil, figure-eight, loop)
 │   ├── DragonBehavior.swift            Difficulty: idle timer → fit (choreography of DragonAction), DragonMood
-│   ├── DragonFlight.swift              Flights (orbit, hold, approach, landing, farewell) with a "follow the leader" body
-│   ├── DragonFlightSettings.swift      Manoeuvres and flight tuning (default and `.farewell`)
-│   ├── DragonPhase.swift               Story chapters (captive ⇄ alerted → receivingElixir → approaching → landing → untangling → free → gone)
+│   ├── DragonFlight.swift              Flights (orbit, hold, approach, landing) with a "follow the leader" body
+│   ├── DragonFlightSettings.swift      Manoeuvres and flight tuning
+│   ├── DragonPhase.swift               Story chapters (captive ⇄ alerted → receivingElixir → approaching → landing → untangling → free)
 │   ├── HandGrabs.swift                 Which hand holds which node, from the manipulation events
 │   ├── IslandPlacement.swift           Island position + OrbitPath (the curve around the tree)
 │   ├── PlayAreaPlacement.swift         Play area position, rotation, tilt
@@ -118,7 +119,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   - inside the space the controls are **RealityView attachments**, placed where nothing moves: the **island
     panel** (`IslandControlsView`: status, island rotation, **Restart Game**) 50° to the left, 0.9 m away,
     turned towards the player (`BillboardComponent`). The island spans ±20°, the dragon's approach and the knot
-    are straight ahead, the farewell stays beyond 0.9 m and within ±55° of the gaze. There is no dragon panel and
+    are straight ahead. There is no dragon panel and
     no debug panel: the game shows only what the player needs;
   - panels hide themselves in SwiftUI; their attachment entities are **never disabled** (`isEnabled = false`):
     deactivating an entity that hosts SwiftUI while its content changes makes RealityKit abort with "the new
@@ -235,12 +236,9 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   4 cm-radius body) and the dragon's own moves skip the hand filter, so they land exactly where they aim.
 - **Flight uses "follow the leader".** The head flies to a target that depends on the manoeuvre; each vertebra
   sits on the head's trail at a fixed distance, so the body snakes exactly along the path like an eastern
-  dragon. Comfort: never closer than 0.7 m to the player's head, 0.9–2.1 m altitude, within ~2 m horizontally.
-- **The free dragon stays in front of the player** (`DragonFlight.Settings.farewell`). Circling the player sent
-  it behind them and towards the walls, and the old departure travelled ~8 m before fading. Now the farewell
-  cruises in a ±55° arc around where the player looks, a hard-but-eased flight volume keeps it 0.9–1.75 m
-  from the eyes and 0.85–1.95 m high, it hovers 1.35 m in front of the gaze (`ViewerTracker.viewerPose()`,
-  eased so it does not chase every head turn), and the departure fades by distance (0.4–1.8 m), then ends.
+  dragon. Comfort: never closer than 0.7 m to the player's head. It flies only on paths (around the tree, the
+  landing) or to the spot 1 m in front of the player: the free-flight manoeuvres (take-off, cruise, swoop, hover,
+  loop, departure) went with the farewell flight when the ride replaced it. `.cruise` is left as the ride's pose.
 - **Focus mode** (`SceneFocus`, applied by `FocusDimmingComponent`). A small state machine in the Model:
   - **fruit** (a fruit is close): the island root (rock, terrain, tree, floating rocks and every fruit still
     hanging on it) **and the dragon** (the play area, body, head, wings and effects) fade to 25%;
@@ -334,7 +332,8 @@ animation. The script:
   `Jaw` bone (68 of 398 vertices, weight 1; 22 of 185 faces) become the lower jaw, `Jaw`, under `JawHinge` at the
   head of that bone, and every other face stays on the head (163). An earlier version split the face by vertices
   and so dropped, from both parts, the 11 faces bridging them: holes in the head. The upper teeth stay on the
-  head; `mouth` and `nostrils` mark where fire and smoke come out. Fitted against the source's jaw animation, the
+  head; `mouth` and `nostrils` mark where fire and smoke come out (at x = 0, off the snout's centre: the rig
+  measures the snout on the meshes instead, `DragonSnout`). Fitted against the source's jaw animation, the
   jaw turns around exactly that point and the head's sideways axis (within 4 mm), at most 0.489 rad: the rig opens
   it as far (`StoneDragonRig.Asset.jawAngle` 0.49);
 - keeps the design team's materials: `AirbrushGrain_00` (head, horns, teeth, jaw) and `AirbrushGrain_01` …
@@ -390,7 +389,9 @@ What the rig expects:
   their rest distances from the head set where they sit on the body. No animation: the code places them.
 - **`Head`**: origin at the head's centre, snout towards **+Z**, +Y up, with `JawHinge` (the lower jaw hangs from
   it; the code turns it around its +X to open the mouth) and two empty children, `nostrils` (smoke) and `mouth`
-  (fire, pointing +Z).
+  (fire, pointing +Z). The rig prefers `DragonSnout`, measured on the `Face` and `Jaw` meshes: two nostrils either
+  side of the snout's centre line and the mouth in the middle of the opening, moved with the jaw (the markers are
+  the fallback).
 - Materials: anything RealityKit renders (the design team's are Reality Composer Pro shader graphs). The code
   does not replace them.
 - Sounds: `DragonGrowl`, `DragonRoar`, `DragonRumble`, `DragonWhoosh` (m4a in `Resources/`, Git LFS; `GameAudio` also
@@ -418,10 +419,8 @@ The source is a Sketchfab model ("Cartoon Dragon"): check its licence and credit
 | `TangleConfig` | `nodeCount`, `segmentLength`, `radius` | spline control points, body length (keep ~2.35 m), body thickness (rigs follow it) |
 | `TangleConfig` | `grabSmoothing` | higher = calmer but laggier grab |
 | `TangleShape` | `.trefoil` / `.figureEight` / `.loop` | starting knot (3 / 4 / 0 crossings) |
-| `UntangleViewModel(farewellWaitsForPlayer:)` | `true` in the app | the free dragon waits for `beginFarewell()` (the story's "I'm Ready") instead of taking off after 1.5 s |
 | `DifficultySettings` | delays, `maxExtraTangles` | how often and how hard the dragon fights back |
-| `DragonFlight.Settings` | `speed`, `orbitRadius`, `altitude`, `personalSpace` | flight feel and room size |
-| `DragonFlight.Settings.farewell` | `frontArc`, `hoverDistance`, `boundsMargin`, `departFade` | where the free dragon flies, where it thanks the player, how far it goes before vanishing |
+| `DragonFlight.Settings` | `speed`, `steering`, `personalSpace`, `approachDistance`, `landingSpeed` | flight feel, comfort, where it stops in front of the player |
 | `SceneFocus` / `FocusDimmingComponent` | `dimmedOpacity` / `responsiveness` | how much the faded parts fade in focus mode, how fast |
 | `PlayAreaPlacement.seated` | default placement | comfort for a seated player |
 | `IslandPlacement.standard` | island position, scale, yaw | island distance and size |
@@ -441,10 +440,9 @@ grabs, one hand pulling taut not locking the other (the knot slides first, so th
 parts independently through the view model, the fit starting with a turn after the delay, the dragon waiting while
 held, a shaky hand not shaking the body, a taut pull not flickering (each hand pulled 1.5 m out, so it ends up
 taut), flight keeping its distance from the player, the orbit never crossing itself, the captive dragon turning
-rigidly with the island, the landing matching the knot, the farewell ending, the free dragon staying in front of
-the player and hovering where they look (two gaze directions), the story flow (captive, a tap only makes it angry
-for `alertDuration`, `receiveElixir()` braking to a standstill with no jump and staying still past the anger's
-time, `callDragon()` → puzzle), tilt clamping, restart and play again.
+rigidly with the island, the landing matching the knot, the story flow (captive, a tap only makes it angry for `alertDuration`,
+`receiveElixir()` braking to a standstill with no jump and staying still past the anger's time, `callDragon()` →
+puzzle), tilt clamping, restart and play again.
 `TangleInterpolationTests.swift` covers the body drawn between two 60 Hz ticks (it moves on every 90 Hz frame and
 turns with the body).
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
@@ -481,5 +479,3 @@ story).
 - Two-handed grabbing can only be checked on a device (the simulator has one pointer); the event handling is
   covered headless, with the hands' chirality as `ManipulationEvents` reports it.
 - Tapping a moving dragon 2 m away needs testing on device (raise `DetanglingStateComponent.tapRadius` if hard).
-- Flight does not know the real walls: in small rooms reduce `DragonFlight.Settings.orbitRadius` (the farewell
-  is already kept within ~1.75 m of the player and in front of them) or use `SceneReconstructionProvider` later.

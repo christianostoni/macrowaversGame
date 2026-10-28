@@ -27,11 +27,15 @@ The game plays in mixed reality, in the player's room:
    and drag any part of it, even two at once (one per hand), and lift it over or under the rest until no crossing
    is left. Stop making progress and the dragon warns you, then has a fit: it rears up, roars fire, lashes its
    tail and adds new crossings.
-6. **Farewell.** Free, the dragon thanks you, offers to take you to safety and flies away into the sky.
+6. **The ride.** Free, the dragon thanks you and takes you on its back through the night sky (full immersion).
+   Pinch its horns with both hands and lead it with your arms; feed it wave after wave of fruit (it spits out
+   bananas, poisoned fruit cost it a heart, a snap of the fingers breathes fire). Every fruit lights a petal of a
+   star medallion in the sky; once the dragon is full, it flies into the medallion's heart and the story ends.
 
 No window covers the game: the launch window steps aside when the immersive space opens. Inside the space,
 panels are attached to the scene: the island panel (left) rotates the island and restarts the game, a small panel
-under the picked fruit says what to do, and a label under the ingredients' orbit says how to brew the elixir.
+under the picked fruit says what to do, and a hologram hand beside the flask shows the snap that brews the
+elixir.
 
 The dragon, the fruit and the elixir play spatial sound effects. Music follows the story: a setar under the
 narrator's pages and the fruit, the puzzle theme from the dragon's flight to the knot, and the farewell theme once
@@ -41,9 +45,9 @@ Full documentation, one README per feature:
 
 | Feature | Docs |
 |---|---|
-| The floating island and the dragon: orbit, flight, untangling puzzle, farewell | [docs/features/untangle-dragon](docs/features/untangle-dragon/README.md) |
+| The floating island and the dragon: orbit, flight, untangling puzzle | [docs/features/untangle-dragon](docs/features/untangle-dragon/README.md) |
 | The tree's fruit, the ingredients' orbit, the flask and the elixir | [docs/features/apple-artifact](docs/features/apple-artifact/README.md) |
-| The story screens: Start and the app icon menu, the narrator, the dragon's words, the music | [docs/features/storytelling](docs/features/storytelling/README.md) |
+| The story screens: Start and the app icon menu, the narrator, the dragon's words, the music; the ride and chapter II | [docs/features/storytelling](docs/features/storytelling/README.md) |
 
 ## Requirements
 

@@ -23,7 +23,8 @@ struct DragonRideTests {
     private let rest = SIMD3<Float>(0, -0.3, -0.35)
 
     @Test func theStoryEndsOnTheDragonsBackInFullImmersion() {
-        #expect(StoryStep.allCases.filter(\.isFullyImmersed) == [.ride, .secondChapter, .feast])
+        #expect(StoryStep.allCases.filter(\.isFullyImmersed)
+                    == [.ride, .secondChapter, .feast, .finale, .epilogue, .ended])
         #expect(StoryStep.ride.page == nil && StoryStep.ride.revealsWorld)
         let focus = SceneFocus(isFruitFocused: false, isElixirFlying: false, phase: .free, isDragonSpeaking: false,
                                isRiding: true)
@@ -44,14 +45,14 @@ struct DragonRideTests {
         #expect(abs(-travelled.z - 3 * DragonRide.Settings.cruiseSpeed) < 0.3)
     }
 
-    @Test func theLowerHandTurnsTowardsItsSide() {
+    @Test func bothHandsMovedToASideTurnThatWay() {
         var right = riding(rest: rest)
-        fly(&right, seconds: 2, left: rest + SIMD3(-0.2, 0.12, 0), right: rest + SIMD3(0.2, -0.12, 0))
+        fly(&right, seconds: 2, left: rest + SIMD3(-0.05, 0, 0), right: rest + SIMD3(0.35, 0, 0))
         // Turning right: heading clockwise from above, flying towards +X, the dragon leaning right.
         #expect(right.yaw < -0.2 && right.forward.x > 0.2 && right.bank > 0.1)
 
         var left = riding(rest: rest)
-        fly(&left, seconds: 2, left: rest + SIMD3(-0.2, -0.12, 0), right: rest + SIMD3(0.2, 0.12, 0))
+        fly(&left, seconds: 2, left: rest + SIMD3(-0.35, 0, 0), right: rest + SIMD3(0.05, 0, 0))
         #expect(left.yaw > 0.2 && left.forward.x < -0.2 && left.bank < -0.1)
     }
 
@@ -74,6 +75,12 @@ struct DragonRideTests {
         fly(&ride, seconds: 2, left: rest + SIMD3(-0.2, 0.2, 0), right: rest + SIMD3(0.2, 0.2, 0))
         fly(&ride, seconds: 4, left: nil, right: rest)
         #expect(abs(ride.pitch) < 0.01 && abs(ride.turnRate) < 0.01)
+        #expect(!ride.isHolding)
+
+        // Taking hold again, wherever the hands are now, starts straight and level.
+        let higher = rest + SIMD3(0.1, 0.25, 0.05)
+        fly(&ride, seconds: 2, left: higher + SIMD3(-0.2, 0, 0), right: higher + SIMD3(0.2, 0, 0))
+        #expect(ride.isHolding && abs(ride.pitch) < 0.01 && abs(ride.turnRate) < 0.01)
 
         // Hands up during the dark arrival: nothing happens yet, and they don't count as the rest position.
         var arriving = DragonRide()
@@ -99,7 +106,7 @@ struct DragonRideTests {
         #expect(abs(body[seatIndex].x) < 0.05 && abs(body[seatIndex].y + 0.55) < 0.05)
 
         // In a right turn the body bends into it: head and tail both towards +X.
-        fly(&ride, seconds: 2, left: rest + SIMD3(-0.2, 0.12, 0), right: rest + SIMD3(0.2, -0.12, 0))
+        fly(&ride, seconds: 2, left: rest + SIMD3(-0.05, 0, 0), right: rest + SIMD3(0.35, 0, 0))
         let turning = ride.body(count: config.nodeCount, spacing: spacing, seat: 1.4, seatHeight: 0.55)
         #expect(turning[0].x > 0.05 && turning[turning.count - 1].x > 0.3)
     }
@@ -113,5 +120,29 @@ struct DragonRideTests {
         // Straight ahead, and closer.
         #expect(before.z < -9.9 && after.z > before.z + 2)
         #expect(abs(after.x) < 1e-3)
+    }
+
+    @Test func aPinchHoldsThroughSmallGapsAndLetsGoWhenOpened() {
+        var pinch = Pinch()
+        let thumb = SIMD3<Float>(0, 0, 0)
+        pinch.update(thumbTip: thumb, indexTip: SIMD3(0.03, 0, 0))
+        #expect(!pinch.isPinching)
+        pinch.update(thumbTip: thumb, indexTip: SIMD3(0.01, 0, 0))
+        #expect(pinch.isPinching)
+        // A tracking wobble that opens the fingers a little does not let go.
+        pinch.update(thumbTip: thumb, indexTip: SIMD3(0.035, 0, 0))
+        #expect(pinch.isPinching)
+        pinch.update(thumbTip: thumb, indexTip: SIMD3(0.06, 0, 0))
+        #expect(!pinch.isPinching)
+    }
+
+    @Test func withADestinationTheDragonFliesThereWhateverTheHands() {
+        var ride = riding(rest: rest)
+        // Up and to the right, behind the player's right shoulder.
+        let destination = simd_normalize(SIMD3<Float>(1, 0.3, 0.2))
+        ride.destination = destination
+        fly(&ride, seconds: 12, left: rest + SIMD3(-0.4, -0.2, 0), right: rest + SIMD3(0, -0.2, 0))
+        #expect(simd_dot(ride.forward, destination) > 0.97)
+        #expect(ride.speed > DragonRide.Settings.cruiseSpeed + 1)
     }
 }

@@ -8,15 +8,11 @@ import Observation
 @Observable
 final class StoryViewModel {
     private(set) var step = StoryStep.start
-    /// Chapter II: the fruit the dragon has eaten (bananas don't count: it spits them out).
-    private(set) var plantsEaten = 0
-    /// Bananas the player fed it anyway.
-    private(set) var bananasRefused = 0
-
-    /// Fruit to feed the dragon in chapter II.
-    static let plantsGoal = 8
-
-    var isFeastComplete: Bool { plantsEaten >= Self.plantsGoal }
+    /// Chapter II's tally: the wave, the fruit eaten in it, the dragon's hearts, the fire (`DragonFeast`).
+    private(set) var feast = FeastProgress()
+    /// The tally's fire button was pressed (the snap's alternative without hand tracking): the ride breathes fire
+    /// on its next frame and clears it.
+    private(set) var isFireRequested = false
 
     /// Screen 1: the player presses Start (the immersive space is opening).
     func begin() {
@@ -32,7 +28,8 @@ final class StoryViewModel {
         case .gratitude: .safety
         case .safety: .ride
         case .secondChapter: .feast
-        case .start, .adventure, .ride, .feast: nil
+        case .epilogue: .ended
+        case .start, .adventure, .ride, .feast, .finale, .ended: nil
         }
         if let next { step = next }
     }
@@ -52,22 +49,42 @@ final class StoryViewModel {
     /// The dragon has come out of the dark with the player on its back: chapter II begins.
     func rideArrived() {
         guard step == .ride else { return }
-        plantsEaten = 0
-        bananasRefused = 0
+        feast = FeastProgress()
         step = .secondChapter
         #if DEBUG
         if Self.skipsChapterTitle { step = .feast }
         #endif
     }
 
-    /// The dragon bit into a fruit in the sky (only while the player feeds it).
-    func dragonAte(_ fruit: FruitKind) {
+    /// The feast moved on (set every frame by the ride: assigned only when it changes, only while feeding).
+    func showFeast(_ progress: FeastProgress) {
+        guard step == .feast, progress != feast else { return }
+        feast = progress
+    }
+
+    /// The fire button: like a snap of the fingers (only while feeding).
+    func requestFire() {
         guard step == .feast else { return }
-        if fruit.isLikedByDragon {
-            plantsEaten += 1
-        } else {
-            bananasRefused += 1
-        }
+        isFireRequested = true
+    }
+
+    /// The ride took the fire request. Returns whether there was one.
+    func takeFireRequest() -> Bool {
+        guard isFireRequested else { return false }
+        isFireRequested = false
+        return true
+    }
+
+    /// The last wave is eaten (the dragon is full) and its medallion complete: it flies off into it.
+    func feastCelebrated() {
+        guard step == .feast, feast.phase == .finished else { return }
+        step = .finale
+    }
+
+    /// The dragon has flown into the heart of the medallion: the story's last page, in its light.
+    func rideEnded() {
+        guard step == .finale else { return }
+        step = .epilogue
     }
 
     #if DEBUG
@@ -85,7 +102,6 @@ final class StoryViewModel {
     /// The immersive space closed: back to the Start button.
     func reset() {
         if step != .start { step = .start }
-        plantsEaten = 0
-        bananasRefused = 0
+        if feast != FeastProgress() { feast = FeastProgress() }
     }
 }
