@@ -3,10 +3,11 @@ import SwiftUI
 /// Launch window, the story's first screen: a lone Start button floating in the room (plain window, no glass).
 /// Start opens the immersive space, where the story goes on (`StoryStep.scroll`); this window closes, so it
 /// can never overlap the island, the dragon or the fruit: from then on the controls are panels inside the space
-/// (`IslandControlsView`). It closes only once the space has built its world: meanwhile a spinner turns in place of
-/// Start. The window comes back when the space closes (Restart Game or Digital Crown). Handing over to the ride, the
-/// app has no scene open for a moment and visionOS brings this window back on its own: it steps aside again as soon
-/// as the ride's space is open, or its spinner would float in chapter II.
+/// (`IslandControlsView`). It closes only once the space has built its world: meanwhile the dragon tangles and
+/// untangles in place of Start (`DragonLoadingView`). The window comes back when the space closes (Restart Game or
+/// Digital Crown). Handing over to the ride, the app has no scene open for a moment and visionOS brings this window
+/// back on its own: it steps aside again as soon as the ride's space is open, or its loading animation would float in
+/// chapter II.
 /// Under Start, a small menu picks the app icon (`AppIconMenu`).
 struct ContentView: View {
     static let windowID = "IslandWindow"
@@ -31,8 +32,7 @@ struct ContentView: View {
                 }
             } else {
                 VStack(spacing: 12) {
-                    ProgressView()
-                        .controlSize(.large)
+                    DragonLoadingView()
                     Text("Loading…")
                         .font(.callout)
                         .foregroundStyle(.secondary)

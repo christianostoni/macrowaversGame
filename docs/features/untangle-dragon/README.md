@@ -128,7 +128,7 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   - closing the space in any way (Restart Game or Digital Crown) resets the game and reopens the launch window,
     so there is never more than one window and never a window over the game;
   - handing over to the ride (one space closes, then the other opens) the app has no scene open for a moment and
-    visionOS brings the launch window back on its own, with its spinner: it steps aside again as soon as a space is
+    visionOS brings the launch window back on its own, with its loading animation: it steps aside again as soon as a space is
     open and the game goes on there (`ContentView.isInTheWay`), or it floated in chapter II.
 - **The captive dragon flies in the tree's space (`AnchoredOrbit`).** `OrbitComponent` passes the tree anchor's
   full transform (position, rotation, scale, bobbing); while the dragon is on the island its flight runs in that
