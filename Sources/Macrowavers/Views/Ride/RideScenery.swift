@@ -68,6 +68,8 @@ struct RideScenery {
         lanternMaterial.faceCulling = .none
         lanterns = (0..<Self.lanternCount).map { _ in
             let lantern = ModelEntity(mesh: lanternMesh, materials: [lanternMaterial])
+            // Over the stained glass.
+            lantern.components.set(ModelSortGroupComponent(group: RideGlass.sortGroup, order: 1))
             lantern.scale = SIMD3(repeating: .random(in: Self.lanternSize) / 1.1)
             lantern.orientation = simd_quatf(angle: .random(in: 0..<(2 * .pi)), axis: SIMD3(0, 1, 0))
             return lantern
@@ -90,6 +92,7 @@ struct RideScenery {
         }
         mountains = (0..<Self.mountainCount).map { index in
             let mountain = ModelEntity(mesh: shapes[index % shapes.count], materials: [mountainMaterial])
+            mountain.components.set(ModelSortGroupComponent(group: RideGlass.sortGroup, order: 1))
             mountain.orientation = simd_quatf(angle: .random(in: 0..<(2 * .pi)), axis: SIMD3(0, 1, 0))
             mountain.scale = SIMD3(repeating: .random(in: Self.mountainHeight) / 100)
             let angle = Float.random(in: 0..<(2 * .pi))

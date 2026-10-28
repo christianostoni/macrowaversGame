@@ -185,6 +185,7 @@ struct DragonRideSystem: System {
             Self.flyIntoShamseh(&state, deltaTime: deltaTime)
             state.shamsehSky.draw(state.shamseh, ride: state.ride, isFeasting: Self.showsShamseh(state.story.step),
                                   deltaTime: deltaTime)
+            RideGlass.align(under: state.dome, heading: state.shamsehSky.heading, deltaTime: deltaTime)
             if let controller = state.windController {
                 controller.gain = Self.windGain(state.ride)
             }
@@ -405,7 +406,8 @@ enum DragonRideSceneBuilder {
 
         // A petal for every fruit of every wave.
         let shamseh = Shamseh(folds: DragonFeast.Settings.totalGoal)
-        let shamsehSky = addShamseh(shamseh, root: root, airbrush: airbrush)
+        let shamsehSky = addShamseh(shamseh, root: root, airbrush: airbrush,
+                                    glass: await RideGlass.loadShamsehGlass())
         let (rush, flash) = addFinaleLight(root: root)
 
         var sounds: [DragonRideSystem.Sound: AudioFileResource] = [:]
@@ -442,6 +444,8 @@ enum DragonRideSceneBuilder {
         material.color = .init(texture: .init(texture))
         material.faceCulling = .front
         dome.addChild(ModelEntity(mesh: .generateSphere(radius: DragonRideSystem.domeRadius), materials: [material]))
+        // The faint lace over its top.
+        if let pattern = await RideGlass.makePattern() { dome.addChild(pattern) }
         return dome
     }
 

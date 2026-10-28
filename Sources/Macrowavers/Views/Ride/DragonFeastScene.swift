@@ -73,7 +73,8 @@ extension DragonRideSystem {
     }
 
     /// The fruit and the waves: eaten, spat out, poisoning the dragon, burnt; the tally; the medallion's petals (one
-    /// per fruit eaten; out of hearts, the wave's petals fade with it).
+    /// per fruit eaten, a poisoned one darkening the last for a moment; out of hearts, the wave's petals fade with
+    /// it).
     @MainActor
     static func feed(_ state: inout DragonRideComponent, mouth: SIMD3<Float>, deltaTime: Float) {
         guard var feast = state.feast else { return }
@@ -87,7 +88,9 @@ extension DragonRideSystem {
                 state.shamseh.colour(with: fruit)
                 play(.eating(fruit), from: state.mouth, sounds: state.sounds)
             case .refused: play(.growl, from: state.mouth, sounds: state.sounds)
-            case .poisoned: play(.squish, from: state.mouth, sounds: state.sounds)
+            case .poisoned:
+                state.shamsehSky.poison(state.shamseh)
+                play(.squish, from: state.mouth, sounds: state.sounds)
             case .burned: break
             case .waveCleared: play(.chime, from: state.mouth, sounds: state.sounds)
             case .exhausted:
