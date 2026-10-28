@@ -23,8 +23,9 @@ final class GameMusic {
         entity.components.set(ChannelAudioComponent())
     }
 
-    func load() async {
-        for track in MusicTrack.allCases {
+    /// `tracks`: the ones this space plays.
+    func load(_ tracks: [MusicTrack] = MusicTrack.allCases) async {
+        for track in tracks {
             resources[track] = await GameAudio.load(track.rawValue, loops: track.loops, streams: true)
         }
         play(wanted)
