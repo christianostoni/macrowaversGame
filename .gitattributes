@@ -53,6 +53,9 @@
 *.mp4   filter=lfs diff=lfs merge=lfs -text
 *.mov   filter=lfs diff=lfs merge=lfs -text
 
+# Baked data (the hologram hand's meshes)
+*.bin   filter=lfs diff=lfs merge=lfs -text
+
 # Fonts and archives
 *.ttf   filter=lfs diff=lfs merge=lfs -text
 *.otf   filter=lfs diff=lfs merge=lfs -text
