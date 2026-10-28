@@ -29,9 +29,12 @@ struct DragonRideView: View {
     @State private var status = RideStatus()
     /// The ride's world is built (the dragon, the sky, the fruit): the spinner goes.
     @State private var isLoaded = false
+    /// The ride's music, in the player's ears (the island's closed with its space).
+    @State private var music = GameMusic()
 
     var body: some View {
         RealityView { content, attachments in
+            content.add(music.entity)
             // A spinner in the dark while the ride's assets load, placed once in front of the eyes.
             if let loading = attachments.entity(for: Self.loadingID) {
                 let anchor = AnchorEntity(.head, trackingMode: .once)
@@ -68,6 +71,11 @@ struct DragonRideView: View {
                 RideLoadingView(isLoaded: isLoaded)
             }
         }
+        // The music fades in out of the dark, follows the story and fades out as the space closes.
+        .onChange(of: MusicTrack.riding(story: story.step), initial: true) { _, track in
+            music.play(track)
+        }
+        .task { await music.load(MusicTrack.ridingTracks) }
         .task { await viewer.start() }
         .task {
             guard await hands.start() else { return }

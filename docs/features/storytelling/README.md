@@ -231,7 +231,7 @@ Sources/Macrowavers/
 ├── Views/DragonLoadingView.swift        The loading animation (sprite sheet DragonLoading.png, Assets/Blender/loading-dragon/)
 ├── Views/AppIconMenu.swift              Screen 1: the app icon picker under Start
 ├── Model/AppIconChoice.swift            The app icons (asset catalog names, titles)
-├── Model/Story/MusicTrack.swift         Which track plays at each step (intro, puzzle, farewell)
+├── Model/Story/MusicTrack.swift         Which track plays at each step (intro, puzzle, farewell, ride)
 ├── Views/GameMusic.swift                Plays it: channel audio, crossfades, ducks while the dragon roars
 ├── Views/Story/StoryPanelView.swift     The page (attachment): title, lines, tap / answer
 └── Views/Story/StoryPanelPlacement.swift StoryPanelComponent/System: in front of the player or above the dragon
@@ -269,7 +269,12 @@ dragon rests in its ring.
 narrator's pages and the fruit; `MusicPuzzle` (looped) from the soothed dragon's flight to the player until it is
 untangled; `MusicFarewell` (once) from the moment it is free through its words and its flight. `GameMusic` plays it
 as non-spatial channel audio (−14 dB), crossfades over 2 s when the track changes, and ducks to −26 dB while the
-dragon rears up. The tracks are streamed from their files (`GameAudio.load(streams:)`); the sound effects are
+dragon rears up. The island's music closes with its space; the ride's space has its own `GameMusic`, and
+`MusicTrack.riding(story:)` picks its track: `MusicRide` (looped) fades in out of the dark arrival and plays through
+chapter II and the finale, then `MusicFarewell` comes back under the story's last page. `MusicRide.caf` is 67 s of
+"Persian" by Echobrainz (Pixabay, `Assets/Audio/music_ride_persian.mp3`; see `CREDITS.md`), seven of its phrases cut
+to loop seamlessly by `Assets/Audio/ride-music/make_ride_music.swift` (usage in its header; Apple Lossless, since AAC
+would add a gap at the loop point). The tracks are streamed from their files (`GameAudio.load(streams:)`); the sound effects are
 preloaded (`DragonEffects`, `OrchardSounds`).
 
 ## Tuning
@@ -333,7 +338,8 @@ drawn once, rays, orbs and dots around the rim, petals coloured by every fruit b
 exhausted, loses fruit. `RideShapesTests.swift`: the lantern and the mountains well formed.
 
 `MusicTrackTests.swift`: silence before Start, the intro under the pages and the fruit, the puzzle from the flight
-to the knot, the farewell once the dragon is free (played once).
+to the knot, the farewell once the dragon is free (played once), the ride's track from the arrival to the medallion
+(looped), the farewell again under the last page, then silence.
 
 `ScrollRollTests.swift`: the paper keeps its length however it is rolled, the window goes from the page's top to
 its end, each roll is a spiral around its rod in front of the window, the closed rolls touch without crossing, the
