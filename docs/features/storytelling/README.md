@@ -15,12 +15,12 @@ dragon is full it flies into the medallion's heart, where the story ends.
 | 3 | `chapter` | Same spot | **Chapter I** / Patience is bitter, but its fruit is sweet. | Tap the text: the island fades in |
 | – | `adventure` | – | No story text: the island, its fruit, the dragon and its puzzle | The dragon is freed |
 | 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the curse of the Black Div. / You don't need to be afraid. | Tap the text |
-| 5 | `safety` | Above the dragon | **Thank you** / Child of the Shah, I will take you to safety. / Are you ready? | **I'm Ready** button: the room goes dark, the ride's space takes over |
+| 5 | `safety` | Above the dragon | **Thank you** / Child of the Shah, I will take you to safety. / Are you ready? | Tap the text (its hint says **I'm Ready**): the room goes dark, the ride's space takes over |
 | – | `ride` | Full immersion | The loading animation ("Loading…", placed once 1.2 m in front of the eyes) while the ride's world loads; then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | The dragon arrives (3.5 s) |
 | 6 | `secondChapter` | In front of the eyes, above the dragon's head | **Chapter II** / Feed the dragon the right plants. / It doesn't like bananas! | Tap the text |
 | – | `feast` | Above the dragon's head | No page: fruit in the sky, harder as the player does well, and a tally (hearts, fire, fruit eaten); see [Chapter II: the feast](#chapter-ii-the-feast) | The 10th fruit eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s |
 | – | `finale` | Full immersion | No page: the dragon roars, turns to the medallion on its own and flies into its heart through a rush of light (`ShamsehFinale.swift`); the light fills the view | 6 s at most turning, 7 s of flight, 1.2 s of light |
-| 7 | `epilogue` | In front of the player's eyes, in the light | **Home at last** / The dragon is full, and the curse is gone. / Thank you for flying with it. | **The End** button |
+| 7 | `epilogue` | In front of the player's eyes, in the light | **Home at last** / The dragon is full, and the curse is gone. / Thank you for flying with it. | Tap the text (its hint says **The End**) |
 | – | `ended` | – | No text: the ride's space closes and the launch window comes back | – |
 
 Text changes from the wireframes: "ti safety" → "to safety", "Dont need to be afraid" → "You don't need to be
@@ -60,9 +60,12 @@ pages' text lives in `StoryStep.page`; the scroll's, in `Assets/Scroll/make_scro
     never stuck to the head);
   - the dragon's pages 20 cm above the highest point of its body, over its middle, following it as it moves;
   - `BillboardComponent` keeps the text facing the player.
-- **Interaction**: a narrator's or thank-you page is one big plain button (look at it, it highlights; pinch to
-  go on), with a "Tap to continue" hint and an accessibility hint. The last question has its own prominent
-  **I'm Ready** button. Pages cross-fade (0.6 s).
+- **Look**: the design team's Lotus UI kit ("clear glass, no tint"): every page is 720 × 200 pt of clear glass
+  in their tile frame (`ChapterPanelFrame`, an image with a see-through middle). A chapter's page names it in
+  spaced gold capitals over its proverb; the others have a serif title over their lines, in white italic.
+- **Interaction**: every page is one big plain button (look at it, it highlights; pinch to go on), with a hint
+  under its words and an accessibility hint. The hint is "Tap to continue", or a question's answer
+  (**I'm Ready**, **The End**). Pages cross-fade (0.6 s).
 
 ## The story's scroll
 
