@@ -4,7 +4,9 @@ import SwiftUI
 /// Start opens the immersive space, where the story goes on (`StoryStep.scroll`); this window closes, so it
 /// can never overlap the island, the dragon or the fruit: from then on the controls are panels inside the space
 /// (`IslandControlsView`). It closes only once the space has built its world: meanwhile a spinner turns in place of
-/// Start. The window comes back when the space closes (Restart Game or Digital Crown).
+/// Start. The window comes back when the space closes (Restart Game or Digital Crown). Handing over to the ride, the
+/// app has no scene open for a moment and visionOS brings this window back on its own: it steps aside again as soon
+/// as the ride's space is open, or its spinner would float in chapter II.
 /// Under Start, a small menu picks the app icon (`AppIconMenu`).
 struct ContentView: View {
     static let windowID = "IslandWindow"
@@ -39,15 +41,21 @@ struct ContentView: View {
             }
         }
         .padding(24)
-        // The world is built (or the story already went on to the ride): the window steps aside.
-        .onChange(of: viewModel.isWorldLoaded || story.step.isFullyImmersed) { _, isReady in
-            if isReady && viewModel.immersiveSpaceState != .closed { dismissWindow(id: Self.windowID) }
+        // A space is open and its world built (or the story already went on to the ride): the window steps aside,
+        // also when it appears then (brought back by the system).
+        .onChange(of: isInTheWay, initial: true) { _, isInTheWay in
+            if isInTheWay { dismissWindow(id: Self.windowID) }
         }
         #if DEBUG
         .task {
             if StoryViewModel.startsAtRide && story.step == .start { await start() }
         }
         #endif
+    }
+
+    /// The game goes on in an open space: this window has nothing to show.
+    private var isInTheWay: Bool {
+        viewModel.immersiveSpaceState == .open && (viewModel.isWorldLoaded || story.step.isFullyImmersed)
     }
 
     /// Window and space actions exist only in the Environment: they live in the view.

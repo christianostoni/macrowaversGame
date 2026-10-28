@@ -38,6 +38,8 @@ struct DetanglingStateComponent: Component {
     static let fadeDuration: Float = 0.6
     /// Radius of the tappable colliders: larger than the body, the dragon moves and is far away.
     static let tapRadius: Float = 0.09
+    /// Grab colliders set up per frame while the dragon settles into the knot (`prepareGrab`).
+    static let preparedPerFrame = 4
 
     /// `grabTargets`: the rig's grabbable nodes and their sphere's radius (nil: every node).
     @MainActor
@@ -47,6 +49,31 @@ struct DetanglingStateComponent: Component {
             Self.configure(colliders, for: phase.interaction, config: config, grabTargets: grabTargets)
         }
         appliedPhase = phase
+    }
+
+    /// While the dragon settles into the knot, its grab colliders are set up a few per frame, their input off: the
+    /// puzzle's first frame only turns it on. Set up all at once there (a manipulation, a collision shape and a hover
+    /// effect for every grabbable node), they made the frame the dragon lands in stutter.
+    @MainActor
+    func prepareGrab(phase: DragonPhase, colliders: [Entity], config: TangleConfig, grabTargets: [Int: Float]?) {
+        guard phase == .landing else { return }
+        var budget = Self.preparedPerFrame
+        for (index, collider) in colliders.enumerated() where budget > 0 {
+            guard grabTargets.map({ $0[index] != nil }) ?? true, !Self.isPrepared(collider) else { continue }
+            DragonSceneBuilder.makeGrabbable(collider, config: config, radius: grabTargets?[index])
+            collider.components[InputTargetComponent.self]?.isEnabled = false
+            budget -= 1
+        }
+    }
+
+    /// Set up for the puzzle (by `prepareGrab`), its input still off.
+    @MainActor
+    private static func isPrepared(_ collider: Entity) -> Bool {
+        #if os(visionOS)
+        collider.components.has(ManipulationComponent.self) && collider.components.has(CollisionComponent.self)
+        #else
+        false
+        #endif
     }
 
     @MainActor
@@ -94,6 +121,8 @@ struct DetanglingStateComponent: Component {
                     collider.components.remove(HoverEffectComponent.self)
                     collider.components[InputTargetComponent.self]?.isEnabled = false
                     collider.components.remove(CollisionComponent.self)
+                } else if isPrepared(collider) {
+                    collider.components[InputTargetComponent.self]?.isEnabled = true
                 } else {
                     DragonSceneBuilder.makeGrabbable(collider, config: config, radius: grabTargets?[index])
                 }
