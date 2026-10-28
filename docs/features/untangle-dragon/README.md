@@ -126,7 +126,10 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
     deactivating an entity that hosts SwiftUI while its content changes makes RealityKit abort with "the new
     parent is currently being removed" (it crashed the app when the elixir reached the dragon);
   - closing the space in any way (Restart Game or Digital Crown) resets the game and reopens the launch window,
-    so there is never more than one window and never a window over the game.
+    so there is never more than one window and never a window over the game;
+  - handing over to the ride (one space closes, then the other opens) the app has no scene open for a moment and
+    visionOS brings the launch window back on its own, with its spinner: it steps aside again as soon as a space is
+    open and the game goes on there (`ContentView.isInTheWay`), or it floated in chapter II.
 - **The captive dragon flies in the tree's space (`AnchoredOrbit`).** `OrbitComponent` passes the tree anchor's
   full transform (position, rotation, scale, bobbing); while the dragon is on the island its flight runs in that
   space (body length divided by the island scale), so when the island turns the whole dragon turns rigidly with it,
@@ -147,7 +150,10 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   only on change: *tap* (no `ManipulationComponent`, larger 9 cm colliders tagged `DragonTapTargetComponent`,
   which is what the `SpatialTapGesture` targets, so it never steals the pinch from grabbing), *grab*
   (`ManipulationComponent` on the rig's `grabTargets`: the head and one node per stone, the nodes in between get no
-  shape; every node, head included, with the placeholder), *none* while it receives the elixir or flies.
+  shape; every node, head included, with the placeholder), *none* while it receives the elixir or flies. While the
+  dragon settles into the knot (`.landing`), `prepareGrab` sets up the grab colliders 4 per frame with their input
+  off, so the puzzle's first frame only turns it on: set up all at once there, they made the frame the dragon lands
+  in stutter.
 - **No visible platform.** The knot lies on an invisible plane (`y = 0` of the play area): a floor appearing
   in the room when the dragon arrives looked out of place. The play area cannot be dragged by hand, and since the
   dragon panel was removed it is not rotated or tilted from a panel either: it stays at `PlayAreaPlacement.seated`

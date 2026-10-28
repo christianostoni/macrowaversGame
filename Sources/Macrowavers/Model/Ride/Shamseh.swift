@@ -127,7 +127,7 @@ struct Shamseh {
         colours.append(fruit)
     }
 
-    /// The last `count` petals lose their colour (the dragon, exhausted, starts its wave over).
+    /// The last `count` petals lose their colour (the dragon, exhausted, loses the fruit they stood for).
     mutating func uncolour(last count: Int) {
         colours.removeLast(min(max(count, 0), colours.count))
     }

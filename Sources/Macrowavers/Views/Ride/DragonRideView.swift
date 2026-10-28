@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The story's last part, in its own full immersive space (the game's space hands over to it): the player rides on
 /// the dragon's back out of the dark into the sky, steering it with both hands (`DragonRideSystem`), the air rushing
-/// past; then chapter II, feeding the dragon wave after wave of fruit floating in the sky (not the bananas, not the
+/// past; then chapter II, feeding the dragon fruit floating in the sky, a sky harder as they do well (not the bananas, not the
 /// poisoned ones: a snap of the fingers breathes fire on them), until it is full and flies into the star medallion
 /// they lit up, where the story ends. "The End" (or the Digital Crown) closes it: the story starts over from the
 /// launch window.
@@ -172,15 +172,15 @@ private struct HornsHintView: View {
     }
 }
 
-/// Chapter II's tally while the player feeds the dragon: its hearts and whether its fire is ready, the wave and the
-/// fruit eaten in it, a hint at the start of each wave, and a word when something happens (a banana spat out, a
-/// poisoned fruit eaten, the dragon exhausted, a wave cleared). Hidden in SwiftUI outside the feast (its attachment
-/// entity is never disabled).
+/// Chapter II's tally while the player feeds the dragon: its hearts and whether its fire is ready, the fruit eaten,
+/// a hint when the sky reaches a harder stage, and a word when something happens (a banana spat out, a poisoned
+/// fruit eaten, the dragon exhausted). Hidden in SwiftUI outside the feast (its attachment entity is never
+/// disabled).
 private struct FeastTallyView: View {
     @Environment(StoryViewModel.self) private var story
     /// A word for a moment after something happens.
     @State private var flash: String?
-    /// The current wave's hint, for its first seconds.
+    /// The current stage's hint, for its first seconds.
     @State private var hint: String?
 
     private var feast: FeastProgress { story.feast }
@@ -209,7 +209,7 @@ private struct FeastTallyView: View {
                     .disabled(!feast.isFireReady)
                     .accessibilityLabel(feast.isFireReady ? "Breathe fire" : "Fire recharging")
                     Label {
-                        Text("Wave \(feast.wave + 1)/\(feast.waveCount) · \(feast.eaten)/\(feast.goal)")
+                        Text("\(feast.eaten)/\(feast.goal)")
                             .monospacedDigit()
                     } icon: {
                         Image(systemName: "leaf.fill")
@@ -241,10 +241,10 @@ private struct FeastTallyView: View {
         .task(id: feast.poisoned) {
             await show(feast.poisoned > 0 ? "Poisoned! The dragon lost a heart." : nil)
         }
-        // Each wave's hint, the first one too (when the feast begins).
-        .task(id: WaveHintKey(isFeeding: story.step == .feast, wave: feast.wave)) {
+        // Each stage's hint, the first one too (when the feast begins).
+        .task(id: StageHintKey(isFeeding: story.step == .feast, stage: feast.stage)) {
             guard story.step == .feast else { return }
-            hint = Self.hint(wave: feast.wave)
+            hint = Self.hint(stage: feast.stage)
             try? await Task.sleep(for: .seconds(6))
             hint = nil
         }
@@ -255,25 +255,24 @@ private struct FeastTallyView: View {
     private var phaseMessage: String? {
         switch feast.phase {
         case .playing: nil
-        case .waveCleared: "Wave cleared! Get ready…"
-        case .exhausted: "The dragon is exhausted. It rests, then tries again."
+        case .exhausted: "The dragon is exhausted: it lost some fruit. It rests, then flies on."
         case .finished: "The dragon is full!"
         }
     }
 
-    /// What each wave brings.
-    private static func hint(wave: Int) -> String {
-        switch wave {
+    /// What each stage of the sky brings.
+    private static func hint(stage: Int) -> String {
+        switch stage {
         case 0: "Fly into the fruit to feed the dragon. Push the horns forward to fly faster."
         case 1: "Bananas! The dragon spits them out: don't waste your time."
         case 2: "Poisoned fruit! Avoid them, or let go of a horn and snap your fingers to breathe fire."
-        default: "The last stretch: less help aiming. Keep the poison away!"
+        default: "The last stretch: the fruit dodge and less help aiming. Keep the poison away!"
         }
     }
 
-    private struct WaveHintKey: Hashable {
+    private struct StageHintKey: Hashable {
         let isFeeding: Bool
-        let wave: Int
+        let stage: Int
     }
 
     private func show(_ message: String?) async {

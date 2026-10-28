@@ -71,6 +71,8 @@ struct DragonBodySystem: System {
             if var state = entity.components[DetanglingStateComponent.self] {
                 state.apply(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config,
                             grabTargets: body.rig.grabTargets)
+                state.prepareGrab(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config,
+                                  grabTargets: body.rig.grabTargets)
                 state.fade(dragonOpacity: viewModel.dragonOpacity, dragon: entity, deltaTime: deltaTime)
                 entity.components.set(state)
             }

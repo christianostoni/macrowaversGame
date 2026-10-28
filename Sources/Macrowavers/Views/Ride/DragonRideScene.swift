@@ -20,7 +20,8 @@ final class RideStatus {
 /// The ride on the dragon's back (`DragonRide`), drawn around the player: the dragon under them, a glow that brings
 /// it out of the dark into the night sky (an airbrushed dome with Persian clouds, lanterns, mountains far below,
 /// glitter wound around the dragon (`RideScenery`), specks of air rushing past), the rush of air. Then chapter II
-/// (`DragonFeast`, drawn by `DragonFeastScene.swift`): waves of fruit float in the sky; the dragon eats the ones it
+/// (`DragonFeast`, drawn by `DragonFeastScene.swift`): fruit float in the sky, harder as the player does well; the
+/// dragon eats the ones it
 /// likes, spits out the bananas, falls sick on the poisoned ones, and breathes fire when the player snaps their
 /// fingers. Each fruit it eats colours a petal of a Persian star medallion in the sky (`ShamsehSky`); once it is
 /// full, the dragon flies into the medallion's heart, where the story ends.
@@ -127,7 +128,7 @@ struct DragonRideSystem: System {
         case pineappleChop = "PineappleChop"
         case pomegranateBurst = "PomegranateBurst"
         case growl = "DragonGrowl"
-        /// The breath of fire (and the finale), a poisoned fruit, the dragon exhausted, a wave cleared.
+        /// The breath of fire (and the finale), a poisoned fruit, the dragon exhausted, a harder sky.
         case roar = "DragonRoar"
         case squish = "WormSquish"
         case rumble = "DragonRumble"
@@ -403,7 +404,7 @@ enum DragonRideSceneBuilder {
         let beacon = makeBeacon()
         root.addChild(beacon)
 
-        // A petal for every fruit of every wave.
+        // A petal for every fruit to eat.
         let shamseh = Shamseh(folds: DragonFeast.Settings.totalGoal)
         let shamsehSky = addShamseh(shamseh, root: root, airbrush: airbrush)
         let (rush, flash) = addFinaleLight(root: root)

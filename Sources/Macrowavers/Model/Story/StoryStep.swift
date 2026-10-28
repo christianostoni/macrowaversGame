@@ -2,7 +2,7 @@ import Foundation
 
 /// The storytelling screens around the game, in order: the start, the story's scroll and the chapter's title
 /// before the island appears, the game itself, the dragon's words once it is free, then the ride on its back: chapter
-/// II, where the player feeds the dragon in the sky, wave after wave, until it is full and flies into the star
+/// II, where the player feeds the dragon in the sky, the sky harder as they do well, until it is full and flies into the star
 /// medallion its fruit lit up, and the story ends.
 enum StoryStep: Equatable, CaseIterable {
     /// Screen 1: a lone "Start" button in the room (the launch window).
@@ -23,7 +23,7 @@ enum StoryStep: Equatable, CaseIterable {
     case ride
     /// Over the clouds: chapter II's title and its goal.
     case secondChapter
-    /// Fruit float in the sky, wave after wave: the player steers the dragon into the ones it likes (not the
+    /// Fruit float in the sky, harder as the player does well: they steer the dragon into the ones it likes (not the
     /// bananas, not the poisoned ones: fire burns those away) (`DragonFeast`).
     case feast
     /// The dragon is full: it flies on its own into the heart of the shamseh, in a rush of light.

@@ -8,7 +8,7 @@ import Observation
 @Observable
 final class StoryViewModel {
     private(set) var step = StoryStep.start
-    /// Chapter II's tally: the wave, the fruit eaten in it, the dragon's hearts, the fire (`DragonFeast`).
+    /// Chapter II's tally: the fruit eaten, the sky's stage, the dragon's hearts, the fire (`DragonFeast`).
     private(set) var feast = FeastProgress()
     /// The tally's fire button was pressed (the snap's alternative without hand tracking): the ride breathes fire
     /// on its next frame and clears it.
@@ -75,7 +75,7 @@ final class StoryViewModel {
         return true
     }
 
-    /// The last wave is eaten (the dragon is full) and its medallion complete: it flies off into it.
+    /// The dragon is full and its medallion complete: it flies off into it.
     func feastCelebrated() {
         guard step == .feast, feast.phase == .finished else { return }
         step = .finale
