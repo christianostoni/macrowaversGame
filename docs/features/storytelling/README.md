@@ -10,7 +10,7 @@ dragon is full it flies into the medallion's heart, where the story ends.
 
 | # | Step (`StoryStep`) | Where | Text | Moves on |
 |---|---|---|---|---|
-| 1 | `start` | Launch window (plain, no glass) | **Start**, and under it a small **App Icon** menu (see below) | Start opens the immersive space; until it has built its world (island, dragon, fruit: a few seconds) the dragon tangles and untangles with "Loading…" in place of Start (see [The loading animation](#the-loading-animation)), then the window steps aside (`UntangleViewModel.isWorldLoaded`) |
+| 1 | `start` | Launch window (plain, no glass) | The game's name, **ترنج**, written on (see [The title](#the-title)); **Start**, as wide as the name, with a ring light; under it a small **App Icon** menu (see below) | Start opens the immersive space; until it has built its world (island, dragon, fruit: a few seconds) the dragon tangles and untangles with "Loading…" in place of Start (see [The loading animation](#the-loading-animation)), then the window steps aside (`UntangleViewModel.isWorldLoaded`) |
 | 2 | `scroll` | In front of the player's eyes | The story's scroll: the chapter's story in Persian Nastaliq, down to its painting of the tree and the dragon (see [The story's scroll](#the-storys-scroll)) | Pull it open (or pinch it), drag the paper up to the painting, **Continue** (or **Skip the story**): it rolls up and fades away |
 | 3 | `chapter` | Same spot | **Chapter I** / Patience is bitter, but its fruit is sweet. | Tap the text: the island fades in |
 | – | `adventure` | – | No story text: the island, its fruit, the dragon and its puzzle | The dragon is freed |
@@ -251,7 +251,8 @@ Sources/Macrowavers/
 ├── Views/Story/StoryNarrator.swift      Plays the narration in the player's ears
 ├── Resources/StoryNarration.m4a         The narration (source Assets/Audio/story_narration.mp3)
 ├── Resources/ScrollPage.jpg             The page, made by Assets/Scroll/make_scroll_page.swift
-├── Views/ContentView.swift              Screen 1: the Start button (launch window, plain style)
+├── Views/ContentView.swift              Screen 1: the Start button and its ring light (launch window, plain style)
+├── Views/ToranjTitleView.swift          Screen 1: the game's name, written on above Start (source Assets/Title/)
 ├── Views/DragonLoadingView.swift        The loading animation (sprite sheet DragonLoading.png, Assets/Blender/loading-dragon/)
 ├── Views/AppIconMenu.swift              Screen 1: the app icon picker under Start
 ├── Model/AppIconChoice.swift            The app icons (asset catalog names, titles)
@@ -263,6 +264,31 @@ Tests/MacrowaversTests/StoryTests.swift, ScrollRollTests.swift, StoryScrollTests
                                          GazeFollowTests.swift
 Assets/Scroll/                           paper.png, painting.png, make_scroll_page.swift, the Blender scroll
 ```
+
+## The title
+
+Above Start, the game's name, ترنج (toranj, the citron), in the design team's lettering (`Assets/Title/toranj.svg`,
+exported from Sketch). `ToranjTitleView` draws the SVG's filled shapes in a `Canvas` and writes them on as by a pen:
+each letter is revealed along a hand-traced pen line (`Stroke`), stroked thick enough to cover it and trimmed as the
+pen moves.
+
+| Time | What |
+|---|---|
+| 0–0.8 s | ت: down its right horn, round the bowl, up the left horn |
+| 0.8–1.2 s | ر: the tail, down to its drop |
+| 1.25–1.55 s | ن: down the stem into the fruit |
+| 1.55–2.45 s | ج: round the fruit |
+| 2.5–3.1 s | The dots pop in: ت's two, right to left, ن's, then ج's inside the fruit |
+| 3.2–3.8 s | The leaf unfurls from the fruit |
+
+The pen starts 1 s after the window is in view (visionOS fades it in) and writes the name again whenever the window
+comes back: from the Home View, or after the game. With Reduce Motion the name fades in. To change the lettering,
+replace the SVG's path data in `ToranjTitleView.Shapes`; the pen lines (`Stroke`) are in the SVG's units.
+
+**Start's ring light** (`RingLight` in `ContentView.swift`): a thin line round the standard capsule in the name's
+colours (mostly its oranges, a touch of rose and the leaf's green). Where the eyes are is private, so the system runs
+it as hover effects: while the player looks at Start the line brightens, a soft glow appears and the colours go round
+the edge (once in 8 s); with Reduce Motion it only lights up.
 
 ## The loading animation
 
