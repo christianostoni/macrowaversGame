@@ -153,6 +153,26 @@ floating Persian lanterns and mountain peaks far below (made in code, shaded wit
 material, recoloured from `RidePalette`), a twinkling glitter wound around the dragon, which glows. The
 canopy-shaped 3D clouds are off for now (`DragonRideSystem.cloudCount = 0`).
 
+**What the sky costs.** The ride draws all of it 90 times a second, for both eyes, and it used to drop frames
+while the player fed the dragon: ~1.6 M triangles and ~500 draws a frame, most of them never seen. Now:
+- **the specks** of air are icosahedra (`RideShapes.speck`, 20 faces): a generated sphere has ~8,000 triangles, and
+  160 specks a few centimetres across cost ~1.3 M a frame for dots;
+- **the fruit** are light copies of the orchard's (`Sky<Name>.usdz`, made by
+  `Assets/Blender/sky-fruit/make_sky_fruit.py`, usage in its header): the parts hidden inside a whole fruit (the
+  apple's flesh, the pomegranate's 40 seeds, the pineapple's flesh, the banana's flesh and pith) left out, one mesh
+  a material, ~3,000 triangles each instead of up to 43,000, the same materials. Twelve of them went from ~275,000
+  triangles and ~220 draws to ~45,000 and ~80 (the orange still comes from `OrangeRig`, 27 parts). The script checks from six
+  sides that the hidden parts never show and that the outline stays the original's;
+- **a fruit that comes back** with another look takes a spare one (`DragonRideSceneBuilder.spareCount` of each
+  look, cloned while the ride loads, disabled in the sky) instead of cloning up to 45 parts mid-flight, which
+  made the frame stutter;
+- **the glitter** sheds 320 specks a second a spark (it was 480), and its 8 emitters are written only when their
+  rate changes enough (`ElixirRig.emit`), not every frame;
+- **the mountains** draw their outer faces only (back faces culled): translucent and big in view, their far sides
+  drawn behind the near ones doubled their cost;
+- **the dragon** casts no grounding shadow in the sky (nothing to fall on), and **its fire's** flames grow ×5, not
+  ×7: close to the eyes, the biggest covered much of the view in blended light.
+
 **A sky that grows harder** (`DragonFeast.difficulty`, 0…1): **10 fruit** to eat, 12 in the sky at a time, new
 ones ahead as the old are passed, and no waves and no pauses. The ride makes some players dizzy (the sky turns
 around them in every turn), so the chapter is short and gets hard quickly instead of long:
@@ -300,6 +320,9 @@ preloaded (`DragonEffects`, `OrchardSounds`).
 | `DragonRideSystem` | `finaleTurn`, `finaleFlight`, `finaleHold`, `epilogueLight` | the finale's timing, the light around the last page |
 | `DragonRide.Settings` | `weakSlowdown`, `weakSway` | how a sick or exhausted dragon flies |
 | `SteeringHold` | `afterSnap`, `longestHold` | how long a snapping hand stops steering |
+| `RideScenery` | `sparkRate`, `lanternCount`, `mountainCount` | how much glitter and scenery the sky draws |
+| `DragonRideSceneBuilder` | `spareCount` | fruit cloned ahead for each look |
+| `make_sky_fruit.py` | `HIDDEN`, `TRIANGLES`, `KEPT` | which parts the sky's fruit leave out, how light they are |
 | `SnapDetector.Settings.whileSteering` | `maxWristTravel` | how still the wrist must stay for a snap on the ride |
 | `DragonRideSceneBuilder` | `poisonTint`, `poisonGlow` | the poisoned look |
 | `DragonEffects` | `fireRate`, `fireEmitter(size:speed:followsMouth:)` | the fire's density and look, shared with the island's roar |
@@ -340,7 +363,8 @@ preloaded (`DragonEffects`, `OrchardSounds`).
 new hold starting level, the pinch holding through small gaps, a destination flown to whatever the hands.
 `ShamsehTests.swift`: the medallion's tiles (8, 10 and 16 folds) convex and turning counter-clockwise, shared edges
 drawn once, rays, orbs and dots around the rim, petals coloured by every fruit but bananas and uncoloured when the dragon,
-exhausted, loses fruit. `RideShapesTests.swift`: the lantern and the mountains well formed.
+exhausted, loses fruit. `RideShapesTests.swift`: the lantern, the mountains and the specks well formed, the specks and the mountains facing
+outwards (their back faces are culled).
 
 `MusicTrackTests.swift`: silence before Start, the intro under the pages and the fruit, the puzzle from the flight
 to the knot, the farewell once the dragon is free (played once), the ride's track from the arrival to the medallion

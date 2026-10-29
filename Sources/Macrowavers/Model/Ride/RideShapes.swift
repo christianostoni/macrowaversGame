@@ -54,6 +54,25 @@ enum RideShapes {
         return mesh
     }
 
+    // MARK: - Specks
+
+    /// A speck of air: an icosahedron of radius 1, 20 faces. The specks are a few centimetres across, metres away:
+    /// round enough as dots, where a generated sphere costs ~8,000 triangles each (160 of them: ~1.3 M a frame).
+    /// Counter-clockwise seen from outside (RealityKit's front faces).
+    static func speck() -> Mesh {
+        let golden = (1 + Float(5).squareRoot()) / 2
+        let corners = [
+            SIMD3<Float>(-1, golden, 0), SIMD3(1, golden, 0), SIMD3(-1, -golden, 0), SIMD3(1, -golden, 0),
+            SIMD3(0, -1, golden), SIMD3(0, 1, golden), SIMD3(0, -1, -golden), SIMD3(0, 1, -golden),
+            SIMD3(golden, 0, -1), SIMD3(golden, 0, 1), SIMD3(-golden, 0, -1), SIMD3(-golden, 0, 1),
+        ].map(simd_normalize)
+        let faces: [UInt32] = [
+            0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+            3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1,
+        ]
+        return Mesh(positions: corners, normals: corners, indices: faces)
+    }
+
     // MARK: - Mountains
 
     /// A round-topped peak, `height` tall from its base at the origin, `radius` wide there: smooth, like the
