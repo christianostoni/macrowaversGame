@@ -153,6 +153,16 @@ floating Persian lanterns and mountain peaks far below (made in code, shaded wit
 material, recoloured from `RidePalette`), a twinkling glitter wound around the dragon, which glows. The
 canopy-shaped 3D clouds are off for now (`DragonRideSystem.cloudCount = 0`).
 
+**The lace and the stained glass** (`RideGlass`, `RideGlass.usdz`, made by `Assets/Blender/ride-sky/make_glass_sky.py`
+and `make_glass_material.py`): a faint lace cap of Persian geometry over the top of the sky (a rosette, rings of
+khatam stars and flowers, a net, a scalloped border well above the horizon), airbrushed in the night's dark colours
+and added to the painted sky, with glitter along its edges. Over the shamseh its border rises into a pointed arch,
+like a mihrab's: the lace turns to put it there (`RideGlass.align`), so lace and medallion never cross. The
+shamseh's tiles are stained glass (`ShamsehGlass`): a light wanders behind the medallion and the glass glows in its
+own colours where it passes; its colours run round the medallion like a wheel (each fruit pulls its petal a
+little), a poisoned fruit darkens the last petal for a moment, and once complete it all warms to gold. The painted
+sky (`RideSky.jpg`) no longer has its crescent moon.
+
 **What the sky costs.** The ride draws all of it 90 times a second, for both eyes, and it used to drop frames
 while the player fed the dragon: ~1.6 M triangles and ~500 draws a frame, most of them never seen. Now:
 - **the specks** of air are icosahedra (`RideShapes.speck`, 20 faces): a generated sphere has ~8,000 triangles, and
@@ -172,6 +182,9 @@ while the player fed the dragon: ~1.6 M triangles and ~500 draws a frame, most o
   drawn behind the near ones doubled their cost;
 - **the dragon** casts no grounding shadow in the sky (nothing to fall on), and **its fire's** flames grow ×5, not
   ×7: close to the eyes, the biggest covered much of the view in blended light.
+- **the shamseh's stained glass** (`ShamsehSky.shine`) writes each tile's material once a frame, its glaze and the
+  wandering light together (it wrote the lit petals' twice); **the lace** is one sphere (~8,000 triangles) drawn
+  first of the sky's see-through things (`RideGlass.sortGroup`).
 
 **A sky that grows harder** (`DragonFeast.difficulty`, 0…1): **10 fruit** to eat, 12 in the sky at a time, new
 ones ahead as the old are passed, and no waves and no pauses. The ride makes some players dizzy (the sky turns
@@ -390,7 +403,8 @@ new hold starting level, the pinch holding through small gaps, a destination flo
 `ShamsehTests.swift`: the medallion's tiles (8, 10 and 16 folds) convex and turning counter-clockwise, shared edges
 drawn once, rays, orbs and dots around the rim, petals coloured by every fruit but bananas and uncoloured when the dragon,
 exhausted, loses fruit. `RideShapesTests.swift`: the lantern, the mountains and the specks well formed, the specks and the mountains facing
-outwards (their back faces are culled).
+outwards (their back faces are culled). `RideGlassTests.swift`: the light's path behind the shamseh, the lace's arch over it, the lace
+between the shamseh and the painted sky. `ShamsehColourTests.swift`: the petals' colour wheel, poison and gold.
 
 `MusicTrackTests.swift`: silence before Start, the intro under the pages and the fruit, the puzzle from the flight
 to the knot, the farewell once the dragon is free (played once), the ride's track from the arrival to the medallion
