@@ -33,7 +33,7 @@ struct StorySubtitleView: View {
     }
 }
 
-/// The subtitles' place: `GazeFollow` from the tracked eyes.
+/// The subtitles' place, and the tree's hint's (`TreeHintView`): `GazeFollow` from the tracked eyes.
 struct StorySubtitleComponent: Component {
     let viewer: ViewerTracker
     var follow = GazeFollow()

@@ -47,7 +47,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 
 | Moment | Behaviour |
 |---|---|
-| On the tree | 3 apples, 1 pomegranate, 1 banana, 1 orange and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it |
+| On the tree | 3 apples, 1 pomegranate, 1 banana, 1 orange and 1 pineapple hang on the canopy, swaying gently, turning and bobbing with the island. Looking at a fruit highlights it. Until the first ingredient joins the orbit, a hint a little below the gaze (like the subtitles) says what to do: "Look at a fruit on the tree and pinch to pick it", and why (`TreeHintView`). It hides while a fruit is close |
 | Tap a fruit | It flies from its branch to ~50 cm in front of the player, a little below the eyes, and grows. A small panel under it says what to do. **Focus mode**: the island, the tree, the other fruit and the dragon fade to 25% while it is close |
 | Turn it | With hand tracking, cup a hand next to the close fruit (all four fingers curled like a bowl, the thumb off the index, the palm within ~16 cm) and turn the hand: the fruit turns with it, in every direction, about its centre. Open the hand and it stays as it is; back on the tree it eases to its home pose, and it comes close upright again. The panel says so under the hint. Not in the simulator |
 | Open it | Apple: the design team's apple gives way to its spiral-cut copy, whose slices lift (Metal compute shader) while the stem and the leaf rise with the top one, and 3 worms (the design team's, wriggling) guard the orb. Pomegranate: the halves open like a book and its 40 seeds burst out. Banana: each strip turns on its hinge and hangs down. Orange: the halves move apart and turn their cut faces to the player, then the 8 wedges fall open into a ring around the orb, showing their flesh and white rind. Pineapple: the halves fall open towards the player and the crown tips away |
@@ -245,6 +245,7 @@ Sources/Macrowavers/
 └── Views/Orchard/
     ├── FruitPanelView.swift               Panel under the focused fruit (RealityView attachment, not a window)
     ├── ElixirPanelView.swift              Label under the orbit: ingredients in orbit (the tap, without hand tracking)
+    ├── TreeHintView.swift                 What to do when the island appears, below the gaze (attachment)
     ├── OrchardInteractions.swift          Gestures (tap fruit/worm/pineapple/ingredient, pull stem, peel, open
     │                                      pomegranate, drag seeds) and the link elixir → dragon
     └── RealityKit/
