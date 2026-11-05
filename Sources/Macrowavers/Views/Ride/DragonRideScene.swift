@@ -337,22 +337,6 @@ struct DragonRideSystem: System {
     static func randomAhead() -> SIMD3<Float> {
         simd_normalize(SIMD3(Float.random(in: -1...1), Float.random(in: -0.8...0.8), -Float.random(in: 0.6...1.4)))
     }
-
-    /// Where a cloud appears (ride space), `distance` away: a sea of clouds below, a few at the dragon's height
-    /// off to the sides, now and then one high up.
-    static func randomCloudSpot(distance: Float) -> SIMD3<Float> {
-        let side: Float = Bool.random() ? 1 : -1
-        let height = Float.random(in: -14...12)
-        let angle = side * Float.random(in: cloudAngle)
-        let across = max(distance * distance - height * height, 1).squareRoot()
-        return SIMD3(across * sin(angle), height, -across * cos(angle))
-    }
-
-    /// A cloud upright, its flat face (+z) turned towards `target` (sky space), a little askew.
-    static func facing(from position: SIMD3<Float>, to target: SIMD3<Float>) -> simd_quatf {
-        let offset = target - position
-        return simd_quatf(angle: atan2(offset.x, offset.z) + .random(in: -0.35...0.35), axis: SIMD3(0, 1, 0))
-    }
 }
 
 private func smoothstep(_ edge0: Float, _ edge1: Float, _ x: Float) -> Float {
@@ -395,8 +379,7 @@ enum DragonRideSceneBuilder {
         // Where the hands take hold, lit.
         var hornGlow: HornGlow?
         if let horns = rig.hornMesh() {
-            hornGlow = HornGlow(head: horns.head, positions: horns.positions, normals: horns.normals,
-                                indices: horns.indices, base: horns.faceTop)
+            hornGlow = HornGlow(horns: horns)
         }
         let ears = makeEars()
         root.addChild(ears)
@@ -477,37 +460,6 @@ enum DragonRideSceneBuilder {
         // The faint lace over its top.
         if let pattern = await RideGlass.makePattern() { dome.addChild(pattern) }
         return dome
-    }
-
-    /// Clouds clean and smooth like the mountains (`RideShapes.cloud`: heaps and puffs), airbrushed like them, a few
-    /// shapes shared, scattered around the player, each its own size; they come back facing the way.
-    @MainActor
-    private static func makeClouds(_ airbrush: RideAirbrush) -> [Entity] {
-        var random = SystemRandomNumberGenerator()
-        var material = airbrush.material(RideScenery.cloudRamp, grainScale: RideScenery.cloudGrain,
-                                         translucency: RideScenery.cloudTranslucency)
-        material.faceCulling = .back
-        // Each shape three times over, each its own lobes, some mirrored.
-        let shapes = (0..<6).map { index in
-            let shape = RideShapes.CloudShape.allCases[index % 2]
-            return RideScenery.resource(RideShapes.cloud(shape, mirrored: index / 2 % 2 == 1, using: &random),
-                                        name: "Cloud\(index)")
-        }
-        return (0..<DragonRideSystem.cloudCount).map { index in
-            let cloud = ModelEntity(mesh: shapes[index % shapes.count], materials: [material])
-            cloud.name = "RideCloud"
-            cloud.components.set(ModelSortGroupComponent(group: RideGlass.sortGroup, order: 1))
-            cloud.scale = SIMD3(repeating: .random(in: DragonRideSystem.cloudSize))
-            let distance = Float.random(in: 30...DragonRideSystem.cloudRadius)
-            // All around the player at first, not only ahead, but never in the middle of the view.
-            var spot = DragonRideSystem.randomCloudSpot(distance: distance)
-            spot = simd_quatf(angle: .random(in: 0..<(2 * .pi)), axis: SIMD3(0, 1, 0)).act(spot)
-            if abs(atan2(spot.x, -spot.z)) < DragonRideSystem.cloudAngle.lowerBound { spot.z = -spot.z }
-            cloud.position = spot
-            cloud.orientation = DragonRideSystem.facing(from: spot, to: .zero)
-            cloud.components.set(OpacityComponent(opacity: 0))
-            return cloud
-        }
     }
 
     /// The fruit floating in the sky, centred and one metre tall (`DragonRideSystem.fruitSize` scales them): the

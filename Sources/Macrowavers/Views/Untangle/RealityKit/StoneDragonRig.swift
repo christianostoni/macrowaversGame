@@ -138,8 +138,7 @@ final class StoneDragonRig: DragonRig {
 
     /// The horns' mesh in head space (the head moves them with it): its vertices, their normals and its triangles,
     /// and the top of the face (where the horns leave the head). nil without the horns.
-    func hornMesh() -> (head: Entity, positions: [SIMD3<Float>], normals: [SIMD3<Float>], indices: [UInt32],
-                        faceTop: Float)? {
+    func hornMesh() -> HornMesh? {
         guard let head = headAnchor.findEntity(named: Asset.head),
               let horns = head.findEntity(named: Asset.horns) else { return nil }
         var positions: [SIMD3<Float>] = [], normals: [SIMD3<Float>] = [], indices: [UInt32] = []
@@ -157,8 +156,19 @@ final class StoneDragonRig: DragonRig {
         }
         gather(horns)
         let faceTop = head.findEntity(named: "Face").map { Self.points(of: $0, in: head) }?.map(\.y).max()
-        return indices.isEmpty ? nil
-            : (head, positions, normals, indices, faceTop ?? positions.map(\.y).min() ?? 0)
+        guard !indices.isEmpty else { return nil }
+        return HornMesh(head: head, positions: positions, normals: normals, indices: indices,
+                        faceTop: faceTop ?? positions.map(\.y).min() ?? 0)
+    }
+
+    /// The horns' mesh (`hornMesh()`), in head space.
+    struct HornMesh {
+        let head: Entity
+        let positions: [SIMD3<Float>]
+        let normals: [SIMD3<Float>]
+        let indices: [UInt32]
+        /// The top of the face: where the horns leave the head.
+        let faceTop: Float
     }
 
     /// Every vertex of the meshes under `entity`, in `space`.

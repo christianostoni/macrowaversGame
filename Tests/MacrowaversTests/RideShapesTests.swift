@@ -50,8 +50,8 @@ struct RideShapesTests {
         var edges: [SIMD2<UInt32>: Int] = [:]
         for face in stride(from: 0, to: cloud.indices.count, by: 3) {
             for corner in 0..<3 {
-                let (a, b) = (cloud.indices[face + corner], cloud.indices[face + (corner + 1) % 3])
-                edges[SIMD2(min(a, b), max(a, b)), default: 0] += 1
+                let (from, to) = (cloud.indices[face + corner], cloud.indices[face + (corner + 1) % 3])
+                edges[SIMD2(min(from, to), max(from, to)), default: 0] += 1
             }
         }
         #expect(edges.values.allSatisfy { $0 == 2 })

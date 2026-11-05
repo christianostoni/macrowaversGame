@@ -175,85 +175,121 @@ enum RideShapes {
         return mesh
     }
 
-    /// The smooth minimum of `a` and `b`: two shapes melted together over `width`.
-    private static func smoothMinimum(_ a: Float, _ b: Float, _ width: Float) -> Float {
-        guard a.isFinite else { return b }
-        let blend = max(width - abs(a - b), 0) / width
-        return min(a, b) - blend * blend * width / 4
+    /// The smooth minimum of `first` and `second`: two shapes melted together over `width`.
+    private static func smoothMinimum(_ first: Float, _ second: Float, _ width: Float) -> Float {
+        guard first.isFinite else { return second }
+        let blend = max(width - abs(first - second), 0) / width
+        return min(first, second) - blend * blend * width / 4
     }
 
-    /// The surface where `field` is 0 (negative inside) between `from` and `to`, sampled every `cell` (surface nets:
-    /// a vertex in each cell the surface crosses, at the middle of its crossings, faces between them). One closed
-    /// mesh, its normals the field's gradient, wound counter-clockwise seen from outside.
+    /// The surface where `field` is 0 (negative inside) between `start` and `end`, sampled every `cell` (surface
+    /// nets: a vertex in each cell the surface crosses, at the middle of its crossings, faces between them). One
+    /// closed mesh, its normals the field's gradient, wound counter-clockwise seen from outside.
     static func implicitSurface(from start: SIMD3<Float>, to end: SIMD3<Float>, cell: Float,
                                 field: (SIMD3<Float>) -> Float) -> Mesh {
-        let counts = SIMD3<Int>(((end - start) / cell).rounded(.up)) &+ 1
-        func index(_ x: Int, _ y: Int, _ z: Int) -> Int { (z * counts.y + y) * counts.x + x }
-        func point(_ x: Int, _ y: Int, _ z: Int) -> SIMD3<Float> {
-            start + SIMD3(Float(x), Float(y), Float(z)) * cell
-        }
-        var values = [Float](repeating: 0, count: counts.x * counts.y * counts.z)
+        var grid = SurfaceGrid(from: start, to: end, cell: cell, field: field)
+        grid.placeVertices(field: field)
+        grid.connectFaces()
+        return grid.mesh
+    }
+}
+
+/// The samples of a field on a grid and the surface nets mesh made from them (`RideShapes.implicitSurface`).
+private struct SurfaceGrid {
+    let start: SIMD3<Float>
+    let cell: Float
+    let counts: SIMD3<Int>
+    var values: [Float]
+    var mesh = RideShapes.Mesh()
+    /// The vertex in each cell the surface crosses, by the cell's index.
+    var vertexOfCell: [Int: UInt32] = [:]
+
+    static let corners = (0..<8).map { SIMD3($0 & 1, ($0 >> 1) & 1, ($0 >> 2) & 1) }
+    static let edges = [(0, 1), (2, 3), (4, 5), (6, 7), (0, 2), (1, 3), (4, 6), (5, 7), (0, 4), (1, 5), (2, 6), (3, 7)]
+
+    init(from start: SIMD3<Float>, to end: SIMD3<Float>, cell: Float, field: (SIMD3<Float>) -> Float) {
+        self.start = start
+        self.cell = cell
+        counts = SIMD3<Int>(((end - start) / cell).rounded(.up)) &+ 1
+        values = [Float](repeating: 0, count: counts.x * counts.y * counts.z)
         for z in 0..<counts.z {
             for y in 0..<counts.y {
-                for x in 0..<counts.x { values[index(x, y, z)] = field(point(x, y, z)) }
+                for x in 0..<counts.x { values[index(SIMD3(x, y, z))] = field(point(SIMD3(x, y, z))) }
             }
         }
+    }
 
-        var mesh = Mesh()
-        var vertexOfCell: [Int: UInt32] = [:]
-        let corners = (0..<8).map { SIMD3($0 & 1, ($0 >> 1) & 1, ($0 >> 2) & 1) }
-        let edges = [(0, 1), (2, 3), (4, 5), (6, 7), (0, 2), (1, 3), (4, 6), (5, 7), (0, 4), (1, 5), (2, 6), (3, 7)]
+    func index(_ node: SIMD3<Int>) -> Int { (node.z * counts.y + node.y) * counts.x + node.x }
+    func point(_ node: SIMD3<Int>) -> SIMD3<Float> { start + SIMD3<Float>(node) * cell }
+    func value(_ node: SIMD3<Int>) -> Float { values[index(node)] }
+
+    /// A vertex in every cell the surface crosses.
+    mutating func placeVertices(field: (SIMD3<Float>) -> Float) {
         for z in 0..<counts.z - 1 {
             for y in 0..<counts.y - 1 {
                 for x in 0..<counts.x - 1 {
-                    let samples = corners.map { values[index(x + $0.x, y + $0.y, z + $0.z)] }
-                    guard samples.contains(where: { $0 < 0 }), samples.contains(where: { $0 >= 0 }) else { continue }
-                    var sum = SIMD3<Float>.zero, crossings: Float = 0
-                    for (a, b) in edges where (samples[a] < 0) != (samples[b] < 0) {
-                        let along = samples[a] / (samples[a] - samples[b])
-                        let from = point(x + corners[a].x, y + corners[a].y, z + corners[a].z)
-                        let to = point(x + corners[b].x, y + corners[b].y, z + corners[b].z)
-                        sum += from + (to - from) * along
-                        crossings += 1
-                    }
-                    let position = sum / crossings
-                    let step = cell * 0.5
-                    let gradient = SIMD3(
-                        field(position + SIMD3(step, 0, 0)) - field(position - SIMD3(step, 0, 0)),
-                        field(position + SIMD3(0, step, 0)) - field(position - SIMD3(0, step, 0)),
-                        field(position + SIMD3(0, 0, step)) - field(position - SIMD3(0, 0, step)))
-                    vertexOfCell[index(x, y, z)] = UInt32(mesh.positions.count)
+                    let node = SIMD3(x, y, z)
+                    guard let position = crossing(at: node) else { continue }
+                    vertexOfCell[index(node)] = UInt32(mesh.positions.count)
                     mesh.positions.append(position)
-                    mesh.normals.append(simd_length(gradient) > 1e-9 ? simd_normalize(gradient) : SIMD3(0, 1, 0))
+                    mesh.normals.append(Self.normal(at: position, step: cell * 0.5, field: field))
                 }
             }
         }
-        // A face across every grid edge the surface crosses, between the four cells around it.
+    }
+
+    /// The middle of the surface's crossings of the cell's edges; nil when it does not cross the cell.
+    func crossing(at node: SIMD3<Int>) -> SIMD3<Float>? {
+        let samples = Self.corners.map { value(node &+ $0) }
+        guard samples.contains(where: { $0 < 0 }), samples.contains(where: { $0 >= 0 }) else { return nil }
+        var sum = SIMD3<Float>.zero, crossings: Float = 0
+        for (from, to) in Self.edges where (samples[from] < 0) != (samples[to] < 0) {
+            let along = samples[from] / (samples[from] - samples[to])
+            let low = point(node &+ Self.corners[from]), high = point(node &+ Self.corners[to])
+            sum += low + (high - low) * along
+            crossings += 1
+        }
+        return sum / crossings
+    }
+
+    /// The field's gradient at `position`, unit length: the surface's normal.
+    static func normal(at position: SIMD3<Float>, step: Float, field: (SIMD3<Float>) -> Float) -> SIMD3<Float> {
+        let gradient = SIMD3(
+            field(position + SIMD3(step, 0, 0)) - field(position - SIMD3(step, 0, 0)),
+            field(position + SIMD3(0, step, 0)) - field(position - SIMD3(0, step, 0)),
+            field(position + SIMD3(0, 0, step)) - field(position - SIMD3(0, 0, step)))
+        return simd_length(gradient) > 1e-9 ? simd_normalize(gradient) : SIMD3(0, 1, 0)
+    }
+
+    /// A face across every grid edge the surface crosses, between the four cells around it.
+    mutating func connectFaces() {
         let axes = [SIMD3(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
         for (axis, direction) in axes.enumerated() {
-            let (u, v) = (axes[(axis + 1) % 3], axes[(axis + 2) % 3])
+            let (across, up) = (axes[(axis + 1) % 3], axes[(axis + 2) % 3])
             for z in 1..<counts.z - 1 {
                 for y in 1..<counts.y - 1 {
                     for x in 1..<counts.x - 1 {
                         let here = SIMD3(x, y, z), next = here &+ direction
-                        guard next.x < counts.x, next.y < counts.y, next.z < counts.z else { continue }
-                        let a = values[index(here.x, here.y, here.z)], b = values[index(next.x, next.y, next.z)]
-                        guard (a < 0) != (b < 0) else { continue }
-                        let quad = [here, here &- u, here &- u &- v, here &- v]
-                            .compactMap { vertexOfCell[index($0.x, $0.y, $0.z)] }
-                        guard quad.count == 4 else { continue }
-                        for var triangle in [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]] {
-                            let points = triangle.map { mesh.positions[Int($0)] }
-                            let facing = simd_cross(points[1] - points[0], points[2] - points[0])
-                            let normal = triangle.map { mesh.normals[Int($0)] }.reduce(.zero, +)
-                            if simd_dot(facing, normal) < 0 { triangle.swapAt(1, 2) }
-                            mesh.indices += triangle
-                        }
+                        guard next.x < counts.x, next.y < counts.y, next.z < counts.z,
+                              (value(here) < 0) != (value(next) < 0) else { continue }
+                        let quad = [here, here &- across, here &- across &- up, here &- up]
+                            .compactMap { vertexOfCell[index($0)] }
+                        if quad.count == 4 { addQuad(quad) }
                     }
                 }
             }
         }
-        return mesh
+    }
+
+    /// Two triangles, each wound to face where its vertices' normals point.
+    mutating func addQuad(_ quad: [UInt32]) {
+        for var triangle in [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]] {
+            let points = triangle.map { mesh.positions[Int($0)] }
+            let facing = simd_cross(points[1] - points[0], points[2] - points[0])
+            let normal = triangle.map { mesh.normals[Int($0)] }.reduce(.zero, +)
+            if simd_dot(facing, normal) < 0 { triangle.swapAt(1, 2) }
+            mesh.indices += triangle
+        }
     }
 }
 

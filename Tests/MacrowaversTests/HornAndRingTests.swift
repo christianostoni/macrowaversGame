@@ -7,9 +7,9 @@ struct HornTipsTests {
         // Two horns rising from the head, the right one a little lower and shorter (like the stone dragon's).
         var points: [SIMD3<Float>] = []
         for step in 0...10 {
-            let t = Float(step) / 10
-            points.append(SIMD3(-0.03 - 0.06 * t, 0.12 * t, -0.07 * t))
-            points.append(SIMD3(0.03 + 0.015 * t, 0.115 * t, -0.1 * t))
+            let along = Float(step) / 10
+            points.append(SIMD3(-0.03 - 0.06 * along, 0.12 * along, -0.07 * along))
+            points.append(SIMD3(0.03 + 0.015 * along, 0.115 * along, -0.1 * along))
         }
         let tips = try #require(HornTips.find(in: points))
         #expect(simd_distance(tips.left, SIMD3(-0.09, 0.12, -0.07)) < 1e-5)

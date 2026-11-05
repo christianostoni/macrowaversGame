@@ -17,7 +17,9 @@ struct HornGlow {
     static let colour = SIMD3<Float>(0.38, 0.66, 1)
     static let haloColour = SIMD3<Float>(0.25, 0.45, 1)
     /// Opacity of each band (the half's first stretch, the rest to the tip, the halo) at full brightness.
-    static let opacities: (start: Float, tip: Float, halo: Float) = (0.4, 0.7, 0.2)
+    static let startOpacity: Float = 0.4
+    static let tipOpacity: Float = 0.7
+    static let haloOpacity: Float = 0.2
     /// Brightness while the hands are off the horns (breathing between the two), and while they hold.
     static let free: ClosedRange<Float> = 0.6...1
     static let held: Float = 0.3
@@ -28,10 +30,19 @@ struct HornGlow {
     let glow: Entity
     private var brightness: Float = 1
 
-    /// The glow, added to `head` over the horns' mesh (head space); `base`: the height where the horns leave the
-    /// head. nil when the mesh has no two horns.
+    /// One see-through shell: its triangles of the horns' mesh, how far off them, its colour and opacity.
+    private struct Band {
+        let indices: [UInt32]
+        let lift: Float
+        let colour: SIMD3<Float>
+        let opacity: Float
+    }
+
+    /// The glow, added to the head over the horns' mesh (`StoneDragonRig.hornMesh()`, head space). nil when the mesh
+    /// has no two horns.
     @MainActor
-    init?(head: Entity, positions: [SIMD3<Float>], normals: [SIMD3<Float>], indices: [UInt32], base: Float) {
+    init?(horns: StoneDragonRig.HornMesh) {
+        let positions = horns.positions, normals = horns.normals, indices = horns.indices, base = horns.faceTop
         guard positions.count == normals.count,
               let lower = HornTips.triangles(positions: positions, indices: indices, base: base,
                                              along: Self.start...Self.full),
@@ -50,10 +61,10 @@ struct HornGlow {
 
         glow = Entity()
         glow.name = "HornGlow"
-        let bands: [(indices: [UInt32], lift: Float, colour: SIMD3<Float>, opacity: Float)] = [
-            (lower, Self.lift, Self.colour, Self.opacities.start),
-            (upper, Self.lift, Self.colour, Self.opacities.tip),
-            (lower + upper, Self.haloLift, Self.haloColour, Self.opacities.halo),
+        let bands = [
+            Band(indices: lower, lift: Self.lift, colour: Self.colour, opacity: Self.startOpacity),
+            Band(indices: upper, lift: Self.lift, colour: Self.colour, opacity: Self.tipOpacity),
+            Band(indices: lower + upper, lift: Self.haloLift, colour: Self.haloColour, opacity: Self.haloOpacity),
         ]
         for (index, band) in bands.enumerated() where !band.indices.isEmpty {
             var descriptor = MeshDescriptor(name: "HornGlow\(index)")
@@ -70,7 +81,7 @@ struct HornGlow {
             material.faceCulling = .none
             glow.addChild(ModelEntity(mesh: mesh, materials: [material]))
         }
-        head.addChild(glow)
+        horns.head.addChild(glow)
     }
 
     /// Each vertex's normal averaged with those of every vertex at the same place (within `tolerance`).
