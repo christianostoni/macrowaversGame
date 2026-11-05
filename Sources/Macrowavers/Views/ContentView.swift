@@ -60,7 +60,8 @@ struct ContentView: View {
         }
         #if DEBUG
         .task {
-            if StoryViewModel.startsAtRide && story.step == .start { await start() }
+            let skips = StoryViewModel.startsAtRide || StoryViewModel.startsAtAdventure
+            if skips && story.step == .start { await start() }
         }
         #endif
     }
@@ -81,6 +82,7 @@ struct ContentView: View {
             #if DEBUG
             // Like in the story: the ride starts in the open space, which then turns fully immersive.
             if StoryViewModel.startsAtRide { story.skipToRide() }
+            if StoryViewModel.startsAtAdventure { story.skipToAdventure() }
             #endif
             // The state becomes `.open` in DragonImmersiveView's onAppear. The window steps aside once the world
             // is built (see `onChange`), at once if it already is.
