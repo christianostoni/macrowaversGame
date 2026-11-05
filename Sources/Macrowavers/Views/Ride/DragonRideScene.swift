@@ -18,7 +18,7 @@ final class RideStatus {
 }
 
 /// The ride on the dragon's back (`DragonRide`), drawn around the player: the dragon under them, a glow that brings
-/// it out of the dark into the night sky (an airbrushed dome with Persian clouds, lanterns, mountains far below,
+/// it out of the dark into the night sky (an airbrushed dome with stars, lanterns, mountains far below,
 /// glitter wound around the dragon (`RideScenery`), specks of air rushing past), the rush of air. Then chapter II
 /// (`DragonFeast`, drawn by `DragonFeastScene.swift`): fruit float in the sky, harder as the player does well; the
 /// dragon eats the ones it
@@ -52,6 +52,8 @@ struct DragonRideComponent: Component {
     let config: TangleConfig
     /// Holds the dragon: scaled up to a mount, leaning into the turns.
     let dragon: Entity
+    /// The blue glow on the horns' outer halves, where the hands take hold (nil without the horns' mesh).
+    var hornGlow: HornGlow?
     /// Sky space (`DragonRide`): the clouds, the specks of air and the fruit live here.
     let sky: Entity
     let specks: [Entity]
@@ -105,13 +107,17 @@ struct DragonRideSystem: System {
     /// The specks of air: how many, and how far away they are recycled ahead of the player (m).
     static let speckCount = 160
     static let skyRadius: Float = 16
-    /// The clouds: how many (none for now: the night sky is tried without the canopy-shaped clouds), how far away
-    /// they are recycled ahead (m), how big (m across) and how close they come before fading (distance from their
-    /// centre over their size), so the player never sits inside one.
-    static let cloudCount = 0
+    /// The clouds (`RideShapes.cloud`, airbrushed like the mountains): how many, how far away they are recycled
+    /// ahead (m), how long (m) and how close they come before fading (distance from their middle over their
+    /// length), so the player never sits inside one. They keep off the way ahead: all around, never in the middle
+    /// of the view (`cloudAngle`: how far to the side of the way they come back, rad).
+    static let cloudCount = 14
     static let cloudRadius: Float = 110
-    static let cloudSize: ClosedRange<Float> = 14...38
-    static let cloudFade: ClosedRange<Float> = 0.4...1
+    static let cloudSize: ClosedRange<Float> = 9...22
+    static let cloudFade: ClosedRange<Float> = 0.12...0.45
+    static let cloudAngle: ClosedRange<Float> = 0.55...1.35
+    /// A cloud the turns bring into the middle of the view fades out there (angle off the way ahead, rad).
+    static let cloudClearing: ClosedRange<Float> = 0.25...0.45
     static let domeRadius: Float = 400
     /// A fruit in the sky (m tall).
     static let fruitSize: Float = 1.1
@@ -182,6 +188,7 @@ struct DragonRideSystem: System {
             Self.report(state)
             Self.moveSky(&state)
             let mouth = Self.drawDragon(state, deltaTime: deltaTime)
+            state.hornGlow?.update(isHolding: state.ride.isHolding, time: state.ride.time, deltaTime: deltaTime)
             let (ride, bank) = (state.ride, state.dragon.orientation)
             state.scenery?.update(ride: ride, daylight: smoothstep(0.55, 1, ride.arrival), bank: bank,
                                   deltaTime: deltaTime)
@@ -247,12 +254,17 @@ struct DragonRideSystem: System {
         for cloud in state.clouds {
             var distance = simd_length(cloud.position - ride.position)
             if distance > cloudRadius {
-                // Far ahead, rarely right on the way: mostly below the dragon, some at its height to the sides.
+                // Far ahead, to the sides, around the dragon's height: they pass by.
                 cloud.position = ride.position + ride.orientation.act(randomCloudSpot(distance: cloudRadius * 0.95))
+                cloud.orientation = facing(from: cloud.position, to: ride.position)
                 distance = cloudRadius * 0.95
             }
             let near = smoothstep(cloudFade.lowerBound, cloudFade.upperBound, distance / cloud.scale.x)
-            cloud.components.set(OpacityComponent(opacity: daylight * near))
+            // One the dragon has turned towards fades out of the middle of the view.
+            let local = inverse.act(cloud.position - ride.position)
+            let offWay = atan2(simd_length(SIMD2(local.x, local.y)), -local.z)
+            let aside = smoothstep(cloudClearing.lowerBound, cloudClearing.upperBound, offWay)
+            cloud.components.set(OpacityComponent(opacity: daylight * near * aside))
         }
     }
 
@@ -325,21 +337,6 @@ struct DragonRideSystem: System {
     static func randomAhead() -> SIMD3<Float> {
         simd_normalize(SIMD3(Float.random(in: -1...1), Float.random(in: -0.8...0.8), -Float.random(in: 0.6...1.4)))
     }
-
-    /// Where a cloud appears (ride space), `distance` away: a sea of clouds below, a few at the dragon's height
-    /// off to the sides, now and then one high up.
-    static func randomCloudSpot(distance: Float) -> SIMD3<Float> {
-        let height: Float = switch Float.random(in: 0..<1) {
-        case ..<0.6: -.random(in: 18...40)
-        case ..<0.9: .random(in: -8...8)
-        default: .random(in: 16...32)
-        }
-        let across = max(distance * distance - height * height, 1).squareRoot()
-        // Ahead, in a wide fan, but never straight on the way at the dragon's height.
-        var angle = Float.random(in: -1.1...1.1)
-        if abs(height) < 12, abs(angle) < 0.3 { angle = angle < 0 ? -0.4 : 0.4 }
-        return SIMD3(across * sin(angle), height, -across * cos(angle))
-    }
 }
 
 private func smoothstep(_ edge0: Float, _ edge1: Float, _ x: Float) -> Float {
@@ -379,6 +376,11 @@ enum DragonRideSceneBuilder {
 
         let (dragon, mouth) = makeDragon(rig)
         root.addChild(dragon)
+        // Where the hands take hold, lit.
+        var hornGlow: HornGlow?
+        if let horns = rig.hornMesh() {
+            hornGlow = HornGlow(horns: horns)
+        }
         let ears = makeEars()
         root.addChild(ears)
 
@@ -390,7 +392,7 @@ enum DragonRideSceneBuilder {
         if cloud == nil { print("⚠️ \(cloudAssetName).usdz not found: no clouds, lanterns or mountains in the sky") }
         // Everything made in code shares the clouds' airbrush material, recoloured.
         let airbrush = cloud.flatMap { RideAirbrush(cloud: $0) }
-        let clouds = cloud.map(makeClouds) ?? []
+        let clouds = airbrush.map(makeClouds) ?? []
         clouds.forEach { sky.addChild($0) }
         let scenery = airbrush.map { RideScenery(airbrush: $0) }
         if let scenery {
@@ -419,7 +421,8 @@ enum DragonRideSceneBuilder {
         root.components.set(DragonRideComponent(status: status, shamseh: shamseh, shamsehSky: shamsehSky,
                                                 scenery: scenery, rush: rush, flash: flash, story: story,
                                                 viewer: viewer, hands: hands, rig: rig, config: config,
-                                                dragon: dragon, sky: sky, specks: specks, clouds: clouds, dome: dome,
+                                                dragon: dragon, hornGlow: hornGlow, sky: sky, specks: specks,
+                                                clouds: clouds, dome: dome,
                                                 beacon: beacon, mouth: mouth, ears: ears,
                                                 fruitModels: fruitModels,
                                                 poisonedModels: poisonedModels, spareFruit: spareFruit,
@@ -457,24 +460,6 @@ enum DragonRideSceneBuilder {
         // The faint lace over its top.
         if let pattern = await RideGlass.makePattern() { dome.addChild(pattern) }
         return dome
-    }
-
-    /// Clouds made of the tree canopy's low-poly puffs (`RideCloud.usdz`, made by
-    /// `Assets/Blender/ride-sky/make_cloud_asset.py`), scattered around the player, each its own size and turn.
-    @MainActor
-    private static func makeClouds(_ cloud: Entity) -> [Entity] {
-        return (0..<DragonRideSystem.cloudCount).map { _ in
-            let copy = cloud.clone(recursive: true)
-            copy.scale = SIMD3(repeating: .random(in: DragonRideSystem.cloudSize))
-            copy.orientation = simd_quatf(angle: .random(in: 0..<(2 * .pi)), axis: SIMD3(0, 1, 0))
-            let distance = Float.random(in: 25...DragonRideSystem.cloudRadius)
-            var spot = DragonRideSystem.randomCloudSpot(distance: distance)
-            // All around the player at first, not only ahead.
-            spot = simd_quatf(angle: .random(in: 0..<(2 * .pi)), axis: SIMD3(0, 1, 0)).act(spot)
-            copy.position = spot
-            copy.components.set(OpacityComponent(opacity: 0))
-            return copy
-        }
     }
 
     /// The fruit floating in the sky, centred and one metre tall (`DragonRideSystem.fruitSize` scales them): the

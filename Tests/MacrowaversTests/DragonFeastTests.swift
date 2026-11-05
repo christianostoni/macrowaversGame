@@ -288,7 +288,8 @@ struct DragonFeastTests {
         story.skipToRide()
         story.rideArrived()
         #expect(story.step == .secondChapter)
-        #expect(story.step.page?.title == "Chapter II")
+        // Named while the ride loaded (`rideTitle`): its page is only the goal.
+        #expect(story.step.page?.title == "" && StoryStep.rideTitle.title == "Chapter II")
         story.advance()
         #expect(story.step == .feast)
         story.showFeast(progress)

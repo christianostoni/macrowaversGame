@@ -98,6 +98,12 @@ struct DragonImmersiveView: View {
             subscriptions = subscribeToDragonGrabs(content)
             // Everything is built: the launch window's spinner steps aside, the narrator speaks.
             viewModel.isWorldLoaded = true
+            #if DEBUG
+            // `-OrchardFocusesFruit`: a fruit comes close at once (its ring, its gestures), without a tap.
+            if ProcessInfo.processInfo.arguments.contains("-OrchardFocusesFruit"), let fruit = orchard.fruits.first {
+                orchard.focus(fruit: fruit.id)
+            }
+            #endif
         } update: { content, _ in
             // Reading `story.step` here re-runs this block when the story moves on.
             if story.step.revealsWorld { world.reveal(in: content) }

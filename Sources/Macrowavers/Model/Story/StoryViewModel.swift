@@ -97,6 +97,14 @@ final class StoryViewModel {
     func skipToRide() {
         step = .ride
     }
+
+    /// Debug builds launched with `-StoryStartsAtAdventure` open on the island (the scroll and chapter I's title
+    /// skipped), to try the orchard without playing the story's start.
+    static var startsAtAdventure: Bool { ProcessInfo.processInfo.arguments.contains("-StoryStartsAtAdventure") }
+
+    func skipToAdventure() {
+        step = .adventure
+    }
     #endif
 
     /// The immersive space closed: back to the Start button.

@@ -35,6 +35,36 @@ struct RideShapesTests {
         }
     }
 
+    @Test(arguments: [RideShapes.CloudShape.heap, .puff], [false, true])
+    func aCloudIsAFlatSmoothShapeFacingOutwards(shape: RideShapes.CloudShape, mirrored: Bool) {
+        var random = SeededRandom(seed: 5)
+        let cloud = RideShapes.cloud(shape, mirrored: mirrored, using: &random)
+        expectWellFormed(cloud)
+        let low = cloud.positions.reduce(SIMD3(repeating: Float.infinity)) { simd_min($0, $1) }
+        let high = cloud.positions.reduce(SIMD3(repeating: -Float.infinity)) { simd_max($0, $1) }
+        // Centred, about one unit long, low and flat.
+        #expect(simd_length((low + high) / 2) < 1e-4)
+        let size = high - low
+        #expect(size.x > 0.8 && size.x < 1.2 && size.y < size.x * 0.65 && size.z < size.y * 0.8)
+        // One closed mesh: every edge is shared by exactly two faces (nothing inside it, no hole).
+        var edges: [SIMD2<UInt32>: Int] = [:]
+        for face in stride(from: 0, to: cloud.indices.count, by: 3) {
+            for corner in 0..<3 {
+                let (from, to) = (cloud.indices[face + corner], cloud.indices[face + (corner + 1) % 3])
+                edges[SIMD2(min(from, to), max(from, to)), default: 0] += 1
+            }
+        }
+        #expect(edges.values.allSatisfy { $0 == 2 })
+        // Its material culls the back faces: every face is counter-clockwise seen from where it faces.
+        for face in stride(from: 0, to: cloud.indices.count, by: 3) {
+            let corners = (0..<3).map { Int(cloud.indices[face + $0]) }
+            let normal = simd_cross(cloud.positions[corners[1]] - cloud.positions[corners[0]],
+                                    cloud.positions[corners[2]] - cloud.positions[corners[0]])
+            guard simd_length(normal) > 1e-7 else { continue }
+            #expect(simd_dot(normal, corners.map { cloud.normals[$0] }.reduce(.zero, +)) > 0)
+        }
+    }
+
     @Test func aMountainFacesOutwards() {
         // Its material culls the back faces: every face that is not a sliver at a peak is counter-clockwise seen
         // from outside.

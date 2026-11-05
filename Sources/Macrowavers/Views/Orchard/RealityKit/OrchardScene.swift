@@ -156,6 +156,8 @@ struct OrchardComponent: Component {
     let island: Entity
     /// Point in front of the player where the focused fruit is shown.
     let stage: Entity
+    /// The ring of light under the focused fruit, to turn it (`TurnRing`; nil without its texture).
+    let turnRing: Entity?
     let fruits: [OrchardFruit]
     /// The orb of each fruit, by fruit id.
     let orbs: [Int: Entity]
@@ -208,6 +210,7 @@ struct OrchardSystem: System {
         PineappleBodyComponent.registerComponent()
         OrbComponent.registerComponent()
         FocusComponent.registerComponent()
+        TurnRingComponent.registerComponent()
         OrchardComponent.registerComponent()
         FocusSystem.registerSystem()
         registerSystem()
@@ -230,6 +233,7 @@ struct OrchardSystem: System {
             }
             Self.detectChop(&orchard)
             Self.detectCup(&orchard)
+            Self.updateTurnRing(orchard, deltaTime: deltaTime)
             Self.updateOrbit(&orchard, deltaTime: deltaTime)
             Self.detectSnap(&orchard)
             Self.updateSnapHint(&orchard, deltaTime: deltaTime)
@@ -296,6 +300,15 @@ struct OrchardSystem: System {
         if let turn = orchard.cup.process(samples, fruitCentre: holder.position(relativeTo: nil)) {
             holder.setOrientation(turn * holder.orientation(relativeTo: nil), relativeTo: nil)
         }
+    }
+
+    /// The ring under the focused fruit, once it has arrived (none while it flies in or back to the tree).
+    @MainActor
+    private static func updateTurnRing(_ orchard: OrchardComponent, deltaTime: Float) {
+        guard let ring = orchard.turnRing else { return }
+        let fruit = orchard.fruits.first { $0.fruit.id == orchard.viewModel.focusedFruitID }?.holder
+        let hasArrived = fruit.map { !$0.components.has(FocusComponent.self) } ?? false
+        TurnRing.update(ring, fruit: hasArrived ? fruit : nil, deltaTime: deltaTime)
     }
 
     // MARK: - Zoom-in and back
@@ -400,6 +413,8 @@ enum OrchardSceneBuilder {
         let stage = Entity()
         stage.name = stageName
         root.addChild(stage)
+        let turnRing = await TurnRing.make()
+        turnRing.map { stage.addChild($0) }
 
         let orbTemplate = await makeOrbTemplate()
         var fruits: [OrchardFruit] = []
@@ -430,7 +445,8 @@ enum OrchardSceneBuilder {
         let sounds = OrchardSounds()
         Task { await sounds.load() }
         root.components.set(OrchardComponent(viewModel: viewModel, viewer: player.viewer, hands: player.hands,
-                                             island: island.root, stage: stage, fruits: fruits, orbs: orbs,
+                                             island: island.root, stage: stage, turnRing: turnRing,
+                                             fruits: fruits, orbs: orbs,
                                              elixir: elixir, snapRig: snapRig, deliveryTarget: deliveryTarget,
                                              background: background,
                                              sounds: sounds))

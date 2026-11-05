@@ -1,7 +1,6 @@
 """Paints the ride's sky dome: an equirectangular airbrush night, almost black, a faint glow of colour on the
-horizon, with stars, sparkles, far lantern lights and Persian clouds around the horizon: arches of
-round lobes with long tails, in the game's colours, without outlines. Every cloud shape is a gradient from almost
-clear to fully opaque, sprayed with grain like the fruit's airbrush.
+horizon, with stars, sparkles and far lantern lights. No clouds painted on it: the ride's clouds are 3D, flown
+past (the Persian clouds once painted around the horizon were taken out).
 
 Usage (numpy ships with Blender's Python; Blender itself is not used):
     /Applications/Blender/.../python3.11 Assets/Blender/ride-sky/make_ride_sky.py /tmp/RideSky.png
@@ -73,19 +72,6 @@ STARS = 2600
 SPARKLES = 70
 SPARKLE_COLOURS = [np.array(PALE_GOLD), np.array(PINK), np.array(MINT), np.array((1.0, 1.0, 1.0))]
 LIGHTS = 140
-
-# Persian clouds: how many, where (elevation of their base) and how long (degrees); the colour pairs their
-# gradients run through (from the clear end to the opaque one), the game's.
-CLOUDS = 26
-CLOUD_BASE = (-7.0, 20.0)
-CLOUD_LENGTH = (12.0, 34.0)
-CLOUD_COLOURS = [
-    (VIOLET, PINK), (DRAGON_BLUE, MINT), (MAGENTA, PALE_GOLD), (TEAL, LILAC), (VIOLET, GOLD), (DRAGON_BLUE, PINK),
-]
-# The airbrush gradient: how clear its clear end is, and the grain sprayed over it (like the fruit's).
-FAINT = 0.04
-SPRAY = 0.2
-
 
 def soft_noise(cells_x, cells_y):
     """Smooth noise, -1...1, that wraps around horizontally."""
@@ -178,61 +164,6 @@ for _ in range(LIGHTS):
     colour = np.array([GOLD, PINK, MINT, LILAC][int(rng.integers(4))])
     paint(rows, columns, colour, np.clip(glow, 0, 1))
 
-
-def airbrush(t):
-    """Opacity along a gradient `t` (0 almost clear ... 1 opaque), sprayed with grain like the fruit's airbrush:
-    a fine speckle that melts the gradient instead of a smooth digital fade."""
-    return np.clip(FAINT + (1 - FAINT) * t + rng.normal(0, SPRAY, t.shape), 0, 1)
-
-
-def gradient(colours, t):
-    """The colour along `t` from the first colour to the second, jittered by the same grain."""
-    jittered = np.clip(t + rng.normal(0, SPRAY * 0.5, t.shape), 0, 1)[..., None]
-    return np.array(colours[0]) * (1 - jittered) + np.array(colours[1]) * jittered
-
-
-def colour_cloud(cloud_longitude, base, length):
-    """A Persian cloud without outlines: an arch of round lobes on a flat base, each lobe its own gradient from
-    almost clear at the bottom to opaque at the top, the outer ones under the middle ones, and a long tail on either
-    side, opaque by the cloud and clearing towards its tip."""
-    lobes = int(rng.integers(3, 7))
-    radii = length / lobes * rng.uniform(0.6, 0.85, lobes)
-    radii *= 1 - 0.35 * np.abs(np.linspace(-1, 1, lobes))
-    xs = np.linspace(-length / 2 + radii[0], length / 2 - radii[-1], lobes) + rng.normal(0, 0.4, lobes)
-    # An arch: the middle lobes ride higher, over the others.
-    ys = radii * np.minimum(rng.uniform(0.3, 0.55, lobes) + 0.4 * (1 - np.abs(np.linspace(-1, 1, lobes))), 0.8)
-    tails = [(sign, rng.uniform(0.6, 1.3) * length, rng.uniform(0.25, 0.4) * radii.min()) for sign in (-1, 1)]
-    top = float((ys + radii).max())
-    span = length / 2 + max(tail for _, tail, _ in tails)
-    rows, columns, dx, dy = block(cloud_longitude, base, span, top + 2)
-    colours = CLOUD_COLOURS[int(rng.integers(len(CLOUD_COLOURS)))]
-
-    # The tails first, under the lobes.
-    for sign, tail_length, thickness in tails:
-        # From under the end lobe, fading in, out to the tip, clearing.
-        start = sign * (length / 2 - radii[0 if sign < 0 else -1] * 1.2)
-        along = (dx - start) * sign
-        taper = np.clip(1 - along / tail_length, 0, 1)
-        fade_in = np.clip(along / (0.2 * tail_length), 0, 1)
-        centre = thickness * 1.2 + 0.5 * thickness * np.sin(along / tail_length * 2 * math.pi)
-        inside = (np.abs(dy - centre) < thickness * taper) & (along > 0)
-        edge = np.clip((thickness * taper - np.abs(dy - centre)) / 0.08, 0, 1)
-        paint(rows, columns, gradient(colours, taper), airbrush(taper ** 1.5 * fade_in) * edge * inside)
-
-    # Lobes from the smallest (outer, behind) to the biggest (the arch's middle, in front).
-    for index in np.argsort(radii):
-        cx, cy, radius = xs[index], ys[index], radii[index]
-        distance = np.sqrt((dx - cx) ** 2 + (dy - cy) ** 2) - radius
-        edge = np.clip(-distance / 0.08, 0, 1) * (dy > 0)
-        t = np.clip(dy / (cy + radius), 0, 1) ** 0.8
-        paint(rows, columns, gradient(colours, t), airbrush(t) * edge)
-
-
-for _ in range(CLOUDS):
-    cloud_base = rng.uniform(*CLOUD_BASE)
-    # Lower clouds look bigger (closer).
-    nearness = 1 + 0.8 * max(0.0, -cloud_base) / abs(CLOUD_BASE[0])
-    colour_cloud(rng.uniform(0, 360), cloud_base, rng.uniform(*CLOUD_LENGTH) * nearness)
 
 image *= 1 + rng.normal(0, SPECKLE, (HEIGHT, WIDTH, 1))
 pixels = (np.clip(image, 0, 1) * 255 + 0.5).astype(np.uint8)

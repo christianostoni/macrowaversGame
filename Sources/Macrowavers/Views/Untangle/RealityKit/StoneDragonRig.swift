@@ -22,6 +22,7 @@ final class StoneDragonRig: DragonRig {
         static let name = "StoneDragon"
         static let head = "Head"
         static let jawHinge = "JawHinge"
+        static let horns = "Horns"
         static let stonePrefix = "Stone_"
         /// The stones' size compared with the design's proportions along the body (1 = as modelled, nearly
         /// touching). A little smaller leaves a thin gap between them (1–2 cm) and keeps them closer to the
@@ -133,6 +134,41 @@ final class StoneDragonRig: DragonRig {
         guard let face = head.findEntity(named: "Face"), let jawHinge else { return nil }
         return DragonSnout(face: points(of: face, in: head), jaw: points(of: jawHinge, in: head),
                            hinge: jawHinge.position(relativeTo: head))
+    }
+
+    /// The horns' mesh in head space (the head moves them with it): its vertices, their normals and its triangles,
+    /// and the top of the face (where the horns leave the head). nil without the horns.
+    func hornMesh() -> HornMesh? {
+        guard let head = headAnchor.findEntity(named: Asset.head),
+              let horns = head.findEntity(named: Asset.horns) else { return nil }
+        var positions: [SIMD3<Float>] = [], normals: [SIMD3<Float>] = [], indices: [UInt32] = []
+        func gather(_ entity: Entity) {
+            if let model = entity.components[ModelComponent.self] {
+                for part in model.mesh.contents.models.flatMap(\.parts) {
+                    guard let triangles = part.triangleIndices, let partNormals = part.normals else { continue }
+                    let first = UInt32(positions.count)
+                    positions += part.positions.elements.map { head.convert(position: $0, from: entity) }
+                    normals += partNormals.elements.map { simd_normalize(head.convert(direction: $0, from: entity)) }
+                    indices += triangles.elements.map { $0 + first }
+                }
+            }
+            entity.children.forEach(gather)
+        }
+        gather(horns)
+        let faceTop = head.findEntity(named: "Face").map { Self.points(of: $0, in: head) }?.map(\.y).max()
+        guard !indices.isEmpty else { return nil }
+        return HornMesh(head: head, positions: positions, normals: normals, indices: indices,
+                        faceTop: faceTop ?? positions.map(\.y).min() ?? 0)
+    }
+
+    /// The horns' mesh (`hornMesh()`), in head space.
+    struct HornMesh {
+        let head: Entity
+        let positions: [SIMD3<Float>]
+        let normals: [SIMD3<Float>]
+        let indices: [UInt32]
+        /// The top of the face: where the horns leave the head.
+        let faceTop: Float
     }
 
     /// Every vertex of the meshes under `entity`, in `space`.

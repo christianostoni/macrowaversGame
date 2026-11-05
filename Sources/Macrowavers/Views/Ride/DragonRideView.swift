@@ -55,6 +55,8 @@ struct DragonRideView: View {
                                (Self.hintID, DragonRideSceneBuilder.hintSpot)] {
                 guard let attachment = attachments.entity(for: id) else { continue }
                 attachment.position = spot
+                // Drawn after the ride's see-through sky (the shamseh's glass, the lanterns, the clouds), in their
+                // sort group: outside it they fell behind the medallion.
                 ride.addChild(attachment)
             }
         } attachments: {
@@ -207,37 +209,31 @@ private struct FeastTallyView: View {
     var body: some View {
         VStack(spacing: 8) {
             if story.step == .feast {
-                HStack(spacing: 18) {
-                    HStack(spacing: 4) {
-                        ForEach(0..<feast.maxHearts, id: \.self) { index in
-                            Image(systemName: index < feast.hearts ? "heart.fill" : "heart")
-                                .foregroundStyle(index < feast.hearts ? .red : .secondary)
-                        }
-                    }
-                    .accessibilityLabel("\(feast.hearts) of \(feast.maxHearts) hearts")
+                // No panel behind it: the flask of the dragon's life (`LifeFlaskView`) floats in the sky, the
+                // icons beside it as big as its bulb.
+                let iconSize = LifeFlaskView.bulbDiameter
+                HStack(spacing: 32) {
+                    LifeFlaskView(hearts: feast.hearts, maxHearts: feast.maxHearts)
                     // The flame shows whether the fire is ready; pressed, it breathes fire like a snap (the way to do
                     // it without hand tracking).
                     Button {
                         story.requestFire()
                     } label: {
-                        Image(systemName: "flame.fill")
-                            .foregroundStyle(feast.isFireReady ? .orange : .secondary)
-                            .opacity(feast.isFireReady ? 1 : 0.4)
+                        FlameIcon(isLit: feast.isFireReady, size: iconSize)
                     }
                     .buttonStyle(.plain)
                     .disabled(!feast.isFireReady)
                     .accessibilityLabel(feast.isFireReady ? "Breathe fire" : "Fire recharging")
-                    Label {
+                    HStack(spacing: 14) {
+                        AppleIcon(size: iconSize)
                         Text("\(feast.eaten)/\(feast.goal)")
+                            .font(.system(size: iconSize * 1.05, weight: .bold, design: .rounded))
                             .monospacedDigit()
-                    } icon: {
-                        Image(systemName: "leaf.fill")
                     }
+                    .foregroundStyle(.white)
+                    .accessibilityElement(children: .combine)
                 }
-                .font(.title2.bold())
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .glassBackgroundEffect()
+                .shadow(color: .black.opacity(0.6), radius: 8)
                 .contentTransition(.numericText())
                 .transition(.opacity)
                 if let message = phaseMessage ?? flash ?? hint {
