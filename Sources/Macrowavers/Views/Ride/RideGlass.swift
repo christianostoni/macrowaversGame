@@ -30,8 +30,13 @@ enum RideGlass {
     /// it over the shamseh (1/s).
     static let archDirection = SIMD3<Float>(-1, 0, 0)
     static let turnRate: Float = 1.2
-    /// Drawn first of the ride's see-through things: the lanterns, the mountains and the shamseh come over it.
+    /// The ride's far see-through things (the lanterns, the mountains, the clouds, the shamseh), drawn in order.
     @MainActor static let sortGroup = ModelSortGroup()
+    /// The lace on its own: a whole sphere around the player, in the group above it made the whole sky count as
+    /// right at the player's eyes and drawn over the ride's panels (the shamseh over the feast's tally). Its own
+    /// group keeps the others far, behind the panels; the lace (faint light added to the sky, high up) never
+    /// meets the panels, and its arch keeps it off the shamseh.
+    @MainActor static let laceSortGroup = ModelSortGroup()
 
     /// The lace on the inside of a sphere, nil without the asset.
     @MainActor
@@ -44,7 +49,7 @@ enum RideGlass {
         try? material.setParameter(name: "Strength", value: .float(patternStrength))
         let pattern = ModelEntity(mesh: .generateSphere(radius: patternRadius), materials: [material])
         pattern.name = "RideSkyPattern"
-        pattern.components.set(ModelSortGroupComponent(group: sortGroup, order: 0))
+        pattern.components.set(ModelSortGroupComponent(group: laceSortGroup, order: 0))
         pattern.orientation = turn(heading: nil)
         return pattern
     }

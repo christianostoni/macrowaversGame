@@ -145,13 +145,15 @@ player holds them. From there the arms lead: moved to a side (20 cm) turn that w
 **pushed forward (20 cm) speed up** from 3 to 6.5 m/s. Letting go of either hand releases the horns: the dragon
 glides straight and levels out, and the next hold starts level again. While the hands don't hold, a hint over the
 dragon's head shows how (`HornsHintView`; after a hold it waits 1.5 s, so a hand let go to snap the fire does not
-bring it back). The view never rolls or sways: only the dragon leans.
+bring it back). The horns' outer halves glow blue (`HornGlow`), brighter while the hands are off them, so
+the player sees where to take hold. The view never rolls or sways: only the dragon leans.
 
 **The night sky** (`RideScenery`, `RideAirbrush`, `RideShapes`): an almost black airbrush
-dome with Persian clouds, sparkles and a crescent moon (`RideSky.jpg`, `Assets/Blender/ride-sky/make_ride_sky.py`),
+dome with stars and sparkles, no painted clouds (`RideSky.jpg`, `Assets/Blender/ride-sky/make_ride_sky.py`),
 floating Persian lanterns and mountain peaks far below (made in code, shaded with the cloud asset's airbrush
 material, recoloured from `RidePalette`), a twinkling glitter wound around the dragon, which glows. The
-canopy-shaped 3D clouds are off for now (`DragonRideSystem.cloudCount = 0`).
+clouds are 3D, like cut paper (`RideShapes.cloud`: lobes, spiral curls and a long tail, airbrushed like the
+mountains, see-through), passing all around at the dragon's height, never in the middle of the view.
 
 **The lace and the stained glass** (`RideGlass`, `RideGlass.usdz`, made by `Assets/Blender/ride-sky/make_glass_sky.py`
 and `make_glass_material.py`): a faint lace cap of Persian geometry over the top of the sky (a rosette, rings of

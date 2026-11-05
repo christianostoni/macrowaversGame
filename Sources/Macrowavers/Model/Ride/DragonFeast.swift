@@ -407,8 +407,8 @@ extension DragonFeast {
     }
 
     enum Settings {
-        /// Fruit in the sky at a time.
-        static let count = 12
+        /// Fruit in the sky at a time (12 crowded the view).
+        static let count = 7
         /// The fruit the dragon likes, found in the sky.
         static let liked: [FruitKind] = [.apple, .pineapple, .pomegranate, .orange]
         /// The sky's stages, by difficulty: first only good fruit (learn to steer), then bananas, then poison, then

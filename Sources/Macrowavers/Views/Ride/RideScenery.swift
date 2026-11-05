@@ -38,6 +38,17 @@ struct RideScenery {
     static let mountainRamp: RideAirbrush.Ramp = [
         (SIMD3(0, 0.03, 0.03), 0), (SIMD3(0.02, 0.2, 0.16), 0.35), (RidePalette.teal, 0.7), (RidePalette.mint, 1),
     ]
+    /// The clouds, clean like the mountains: one smooth gradient, never pure white, from a dusky lilac on the faces
+    /// seen straight on to a pale lilac at the rims; grain cells per unit of the mesh (one unit long, the cloud
+    /// ~9-22 m: a fine grain), 90% opaque, fading out towards their bottom like the mountains (object space: the
+    /// mesh is centred, about 0.5 tall).
+    static let cloudRamp: RideAirbrush.Ramp = [
+        (SIMD3(0.06, 0.05, 0.12), 0), (SIMD3(0.24, 0.2, 0.4), 0.35), (RidePalette.lilac, 0.7),
+        (SIMD3(0.85, 0.8, 0.93), 1),
+    ]
+    static let cloudGrain: Float = 320
+    static let cloudTranslucency = RideAirbrush.Translucency(facing: 0.9, rim: 0.9, bottom: 0.05,
+                                                                fade: -0.22...0.05)
     /// Translucent gradients: the lanterns clear towards their rims, a glow more than an outline; the mountains
     /// fade from their tops down into the dark (object space: the mesh is 100 tall).
     static let lanternTranslucency = RideAirbrush.Translucency(facing: 1, rim: 0.15)

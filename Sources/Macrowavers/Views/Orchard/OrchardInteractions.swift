@@ -33,6 +33,7 @@ struct OrchardInteractions: ViewModifier {
         content
             .simultaneousGesture(pickFruitGesture)
             .simultaneousGesture(pullStemGesture)
+            .simultaneousGesture(turnRingGesture)
             .simultaneousGesture(catchWormGesture)
             .simultaneousGesture(openPomegranateGesture)
             .simultaneousGesture(dragSeedGesture)
@@ -65,6 +66,19 @@ struct OrchardInteractions: ViewModifier {
             .onEnded { value in
                 guard untangle.phase.isOnIsland, let fruit = value.entity.components[FruitComponent.self] else { return }
                 orchard.focus(fruit: fruit.id)
+            }
+    }
+
+    /// Pinch the ring of light under the fruit in front of the player and slide round it: the fruit turns with the
+    /// hand (`TurnRing`).
+    private var turnRingGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .targetedToEntity(where: .has(TurnRingComponent.self))
+            .onChanged { value in
+                TurnRing.drag(value.entity, to: value.convert(value.location3D, from: .local, to: value.entity))
+            }
+            .onEnded { value in
+                TurnRing.endDrag(value.entity)
             }
     }
 
