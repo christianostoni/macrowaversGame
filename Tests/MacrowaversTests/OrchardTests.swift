@@ -141,7 +141,11 @@ struct OrchardViewModelTests {
 
     @Test func treeHasEveryKindOfFruit() {
         let orchard = OrchardViewModel()
-        #expect(orchard.fruits.map(\.kind) == [.apple, .apple, .apple, .pomegranate, .banana, .orange, .pineapple])
+        // Three of each, one of each kind in turn: the front (the first seven hang points) has one of each.
+        let kinds = orchard.fruits.map(\.kind)
+        #expect(kinds.count == 15)
+        #expect(Array(kinds.prefix(5)) == OrchardViewModel.kinds)
+        #expect(OrchardViewModel.kinds.allSatisfy { kind in kinds.filter { $0 == kind }.count == 3 })
         #expect(orchard.orbs.allSatisfy { $0 == .sealed })
     }
 

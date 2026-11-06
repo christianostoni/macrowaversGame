@@ -289,11 +289,14 @@ island):
   The result matches the previous island: `Island` spans (−1.16, −0.91, −1.15)…(1.32, 0.14, 1.34) m, 2.48 m wide,
   as before, so `IslandPlacement.standard`, the dragon's orbit (`OrbitPath.aroundTree`), the rock's collider and
   the floor occluder are unchanged.
-- **Seven empty prims `fruit_01` … `fruit_07`** mark where the fruit hangs: the script casts rays at the canopy
-  (the meshes with `Airbrush_Canopy`) from outside, the first six at the same angles and heights as before and the
-  seventh (260°, for the banana next to the orange) in the widest gap left (it looks around a
-  spot when a ray slips between the canopy's blobs), and puts each point 4.5 cm off the foliage, 1.14–1.36 m
-  above the grass.
+- **Fifteen empty prims `fruit_01` … `fruit_15`** mark where the fruit hangs. The first seven are where the design
+  team circled them on a picture of the tree seen from the player's seat: rays from that viewpoint (`FRONT_VIEW`)
+  through each circle (`FRONT_RAYS`) meet the canopy (the meshes with `Airbrush_Canopy`), nudged by a hair when a
+  circle sits on its outline. The other eight are out of the player's sight from that seat, among spots sampled
+  all round the canopy (rays from outside every 6° at five heights, hits deep inside between its blobs dropped),
+  each as far as it can be from those already picked, never closer than 24 cm. Each point is 4.5 cm off the
+  foliage. The fruit take them in order, one of each kind in turn (`OrchardViewModel.kinds`), so the front holds
+  an apple, a pomegranate, a banana, an orange, a pineapple, then a second apple and pomegranate.
 - No faces to turn: the source's meshes are double-sided (the earlier export's rock was wound inwards and looked
   hollow; this one is drawn from both sides).
 - 183 KB, 91 `ShaderGraphMaterial`s once loaded (checked with RealityKit on macOS), validated with `usdchecker`.

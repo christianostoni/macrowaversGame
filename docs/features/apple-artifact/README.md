@@ -65,7 +65,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | A 4th ingredient | With 3 already in orbit the orb stays above its fruit: "Three ingredients already orbit you: brew the elixir first." |
 | Back to the Tree / Close It Again | The fruit flies back to its branch, closing gently on the way / closes it again. An ingredient already freed still joins the orbit from the branch |
 
-Every fruit holds one ingredient, so no choice is wrong: any 3 of the 7 fruits make the elixir.
+Every fruit holds one ingredient, so no choice is wrong: any 3 of the 15 fruits (three of each kind) make the elixir.
 
 ## The orbit
 
@@ -278,9 +278,9 @@ Sources/Macrowavers/
         └── PineappleRig.swift               Pineapple.usdz, halves and crown opening
 ```
 
-The fruit hangs from the island's root at the points `fruit_01` … `fruit_07` stored in `FloatingIsland.usdz`
-(see the island section of the dragon docs). The code reads up to `fruit_12`; with more fruits than points they
-share them.
+The fruit hangs from the island's root at the points `fruit_01` … `fruit_15` stored in `FloatingIsland.usdz`
+(see the island section of the dragon docs), one of each kind in turn: the first seven (one of each kind, then an apple
+and a pomegranate) face the player where the design team placed them. The code reads up to `fruit_24`; with more fruits than points they share them.
 
 ### State
 

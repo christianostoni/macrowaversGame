@@ -114,13 +114,13 @@ final class OrchardViewModel {
     /// ... and how long it then floats there before joining the orbit by itself (the player sees what they found).
     static let orbOrbitDelay: Float = 0.6
 
-    init(apples: Int = 3, pomegranates: Int = 1, bananas: Int = 1, oranges: Int = 1, pineapples: Int = 1,
-         wormSettings: WormSwarm.Settings = WormSwarm.Settings()) {
-        let kinds = Array(repeating: FruitKind.apple, count: apples)
-            + Array(repeating: .pomegranate, count: pomegranates)
-            + Array(repeating: .banana, count: bananas)
-            + Array(repeating: .orange, count: oranges)
-            + Array(repeating: .pineapple, count: pineapples)
+    /// Every kind of fruit on the tree, in the order they take the tree's hang points.
+    static let kinds: [FruitKind] = [.apple, .pomegranate, .banana, .orange, .pineapple]
+
+    /// `perKind` fruit of each kind, one of each in turn: the island's first seven hang points face the player
+    /// (`make_island_asset.py`), so one of each kind hangs in front.
+    init(perKind: Int = 3, wormSettings: WormSwarm.Settings = WormSwarm.Settings()) {
+        let kinds = (0..<perKind).flatMap { _ in Self.kinds }
         fruits = kinds.enumerated().map { Fruit(id: $0.offset, kind: $0.element) }
         orbs = Array(repeating: .sealed, count: kinds.count)
         orbRevealTimes = Array(repeating: 0, count: kinds.count)

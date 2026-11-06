@@ -175,7 +175,7 @@ enum IslandSceneBuilder {
                                                        amplitude: 0.05 * simd_length(up), period: 4.5, phase: 1.3))
             }
             // Hang points made by Assets/Blender/floating-island/make_island_asset.py (`fruit_01`, `fruit_02`, ...).
-            hangPoints = (1...12).compactMap { index in
+            hangPoints = (1...24).compactMap { index in
                 model.findEntity(named: String(format: "fruit_%02d", index))?.position(relativeTo: root)
             }
         } catch {
