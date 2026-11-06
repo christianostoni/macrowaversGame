@@ -36,15 +36,25 @@ struct ScrollHintView: View {
                             Label("Drag the paper to read at your own pace", systemImage: "hand.point.up.left")
                                 .foregroundStyle(.secondary)
                         case .carryOn:
-                            Button("Continue") { scroll.finish() }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
+                            // Like Start: a glass capsule as wide, with the name's ring light.
+                            Button {
+                                scroll.finish()
+                            } label: {
+                                Text("Continue")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonBorderShape(.capsule)
+                            .controlSize(.large)
+                            .frame(width: ContentView.titleWidth)
+                            .ringLight()
                         }
                         if hint != .carryOn {
+                            // The same, smaller and quieter: it is not the way on.
                             Button("Skip the story") { scroll.finish() }
-                                .buttonStyle(.plain)
                                 .font(.callout.weight(.medium))
-                                .foregroundStyle(.secondary)
+                                .buttonBorderShape(.capsule)
+                                .controlSize(.small)
+                                .ringLight()
                         }
                     }
                     .font(.title3.weight(.medium))

@@ -262,18 +262,21 @@ struct OrchardViewModelTests {
         #expect(orchard.orbs[orange] == .orbiting(slot: 0))
     }
 
-    @Test func emptyFruitStaysUntilThePlayerSendsItBack() {
+    @Test func emptyFruitGoesBackByItselfOnceOpened() {
         let orchard = OrchardViewModel()
         let pineapple = id(of: .pineapple, in: orchard)
         harvest(pineapple, into: orchard)
         orchard.focus(fruit: pineapple)
         #expect(orchard.isFocusedFruitEmpty)
-        orchard.chopPineapple()
-        // Its ingredient already orbits: nothing comes out, and the fruit does not leave by itself.
-        #expect(orchard.orbs[pineapple] == .orbiting(slot: 0))
-        run(orchard, seconds: 3)
+        // Closed, it waits for the player to open it.
+        run(orchard, seconds: OrchardViewModel.emptyReturnDelay + 1)
         #expect(orchard.focusedFruitID == pineapple)
-        orchard.back()
+        orchard.chopPineapple()
+        // Its ingredient already orbits: nothing comes out, and after a moment the fruit goes back by itself.
+        #expect(orchard.orbs[pineapple] == .orbiting(slot: 0))
+        run(orchard, seconds: OrchardViewModel.emptyReturnDelay - 0.5)
+        #expect(orchard.focusedFruitID == pineapple)
+        run(orchard, seconds: 1)
         #expect(orchard.focusedFruitID == nil)
     }
 
@@ -329,5 +332,23 @@ struct OrchardViewModelTests {
         orchard.focus(fruit: id(of: .orange, in: orchard))
         #expect(orchard.brewElixir())
         #expect(orchard.focusedFruitID == nil)
+    }
+}
+
+struct FruitPanelLinesTests {
+    @Test func shortHintStaysOneLine() {
+        #expect(FruitPanelView.lines(of: "Pull it apart with both hands.") == ["Pull it apart with both hands."])
+    }
+
+    @Test func longHintSplitsAtItsSentenceBreak() {
+        let lines = FruitPanelView.lines(of: "Catch the worms! They burrow now and then, and get faster after each catch.")
+        #expect(lines == ["Catch the worms! They burrow now and then,", "and get faster after each catch."])
+    }
+
+    @Test func longHintKeepsEveryWordInTwoLines() {
+        let hint = "Pinch a strip of the peel and pull it outwards and down. Peel all four."
+        let lines = FruitPanelView.lines(of: hint)
+        #expect(lines.count == 2)
+        #expect(lines.joined(separator: " ") == hint)
     }
 }
