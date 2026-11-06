@@ -8,8 +8,8 @@ enum SceneFocus: Equatable {
     case none
     /// A fruit is close to the player: the island, the tree, the other fruit and the dragon fade back.
     case fruit
-    /// The dragon settles into the knot and is untangled, or speaks to the player once free: the island, the
-    /// tree and the fruit fade back.
+    /// The dragon settles into the knot, is untangled, or is free and speaks to the player: the island, the tree and
+    /// the fruit fade back.
     case dragon
     /// The player rides the dragon in the dark sky: the island and the dragon in the room are gone.
     case ride

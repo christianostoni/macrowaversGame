@@ -10,7 +10,8 @@ private func sample(_ time: Float, at timestamp: TimeInterval) -> HandSample {
     return HandSample(chirality: .right, timestamp: timestamp, knuckle: knuckles[1], wrist: .zero,
                       thumbTip: pose.thumbTip, indexTip: pose.fingers[0][2], middleDistal: pose.fingers[1][1],
                       middleTip: pose.fingers[1][2], indexKnuckle: knuckles[0], ringKnuckle: knuckles[2],
-                      littleKnuckle: knuckles[3], ringTip: pose.fingers[2][2], littleTip: pose.fingers[3][2])
+                      littleKnuckle: knuckles[3], ringTip: pose.fingers[2][2], littleTip: pose.fingers[3][2],
+                      indexDistal: pose.fingers[0][1])
 }
 
 /// How far apart two round cones are (m; negative: one inside the other), sampling the first along its axis.
@@ -93,15 +94,20 @@ private func palmGap(_ cone: HandSurface.Cone) -> Float {
         #expect(SnapHint.wrist(at: SnapHint.period) == 0)
     }
 
-    /// The hologram teaches the snap the game reads: its loaded and snapped poses, a frame apart at hand-tracking
-    /// speed, are a snap for `SnapDetector`.
+    /// The hologram teaches the snap the game reads: its loop, read in real time at hand-tracking rates, is one snap
+    /// for `SnapDetector`, pressed from the loaded pose on and fired before the finger lands on the palm.
     @Test func theHologramsSnapIsOneTheDetectorAccepts() {
-        var detector = SnapDetector()
-        let loaded = detector.process(sample(1.1, at: 10))
-        #expect(!loaded)
-        #expect(detector.isLoaded)
-        let snapped = detector.process(sample(SnapHint.snapTime, at: 10.05))
-        #expect(snapped, "\(String(describing: detector.lastAttempt))")
+        for rate: Float in [30, 90] {
+            var detector = SnapDetector()
+            var fired: [Float] = []
+            for step in 0...Int((SnapHint.period - 0.85) * rate) {
+                let time = 0.85 + Float(step) / rate
+                if detector.process(sample(time, at: 10 + Double(time))) { fired.append(time) }
+                if time > 0.95 && time < 1.3 { #expect(detector.isLoaded, "\(rate) Hz, \(time) s") }
+            }
+            #expect(fired.count == 1, "\(rate) Hz: \(String(describing: detector.lastAttempt))")
+            #expect((fired.first ?? .infinity) <= SnapHint.snapTime + 0.001, "\(rate) Hz: \(fired)")
+        }
     }
 
     @Test func itSnapsOncePerLoopAndStartsOverWhenShownAgain() {

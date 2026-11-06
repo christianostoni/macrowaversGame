@@ -27,6 +27,20 @@ struct MusicTrackTests {
         #expect(!MusicTrack.farewell.loops)
     }
 
+    @Test func theMusicChangesOnceAtTheKnotAndOnceWhenTheDragonIsFree() {
+        // From the poured elixir to the ride, in the order the island's space sees it: the frame the dragon is freed,
+        // before the story makes it speak, included. Settling into the knot changes nothing; nothing starts over.
+        let journey: [(story: StoryStep, dragon: DragonPhase)] = [
+            (.adventure, .receivingElixir), (.adventure, .approaching), (.adventure, .landing),
+            (.adventure, .untangling), (.adventure, .free), (.gratitude, .free), (.safety, .free), (.ride, .free),
+        ]
+        let tracks = journey.map { MusicTrack.playing(story: $0.story, dragon: $0.dragon) }
+        let changes = zip(tracks, tracks.dropFirst()).filter { $0 != $1 }.map(\.1)
+
+        #expect(tracks.first == .intro)
+        #expect(changes == [.puzzle, .farewell])
+    }
+
     @Test func theRideTrackFromTheArrivalToTheMedallion() {
         for step in [StoryStep.ride, .secondChapter, .feast, .feastFailed, .finale] {
             #expect(MusicTrack.riding(story: step) == .ride)

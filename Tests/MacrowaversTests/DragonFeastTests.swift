@@ -357,31 +357,33 @@ struct RideSnapTests {
                           middleDistal: pose.fingers[1][1] + offset, middleTip: pose.fingers[1][2] + offset,
                           indexKnuckle: knuckles[0] + offset, ringKnuckle: knuckles[2] + offset,
                           littleKnuckle: knuckles[3] + offset, ringTip: pose.fingers[2][2] + offset,
-                          littleTip: pose.fingers[3][2] + offset)
+                          littleTip: pose.fingers[3][2] + offset, indexDistal: pose.fingers[0][1] + offset)
+    }
+
+    /// The hologram's snap read at 90 Hz in real time, from its loaded pose to a moment after the strike; `jerk`: how
+    /// far the whole hand moves during the flick.
+    private func snaps(_ detector: inout SnapDetector, jerk: SIMD3<Float> = .zero) -> Int {
+        (0...Int((SnapHint.snapTime + 0.15 - 1.1) * 90)).filter { step in
+            let time = 1.1 + Float(step) / 90
+            let flick = min(max((time - (SnapHint.snapTime - 0.1)) / 0.1, 0), 1)
+            return detector.process(sample(time, at: 10 + Double(time), offset: jerk * flick))
+        }.count
     }
 
     @Test func steeringTheHornsWhileSnappingIsNotASnap() {
-        let loaded = sample(1.1, at: 10)
-        let released = sample(SnapHint.snapTime, at: 10.05)
-        // The whole hand jerks 10 cm as it opens (turning the horns).
-        let jerked = sample(SnapHint.snapTime, at: 10.05, offset: SIMD3(0, -0.1, 0))
-
         var ride = SnapDetector(settings: .whileSteering)
-        _ = ride.process(loaded)
+        _ = ride.process(sample(1.1, at: 11.1))
         #expect(ride.isLoaded(.right) && !ride.isLoaded(.left))
-        let snapped = ride.process(released)
-        #expect(snapped)
+        var still = SnapDetector(settings: .whileSteering)
+        #expect(snaps(&still) == 1)
 
+        // The whole hand jerks 10 cm as it snaps (turning the horns).
         var steering = SnapDetector(settings: .whileSteering)
-        _ = steering.process(loaded)
-        let snappedWhileSteering = steering.process(jerked)
-        #expect(!snappedWhileSteering)
+        #expect(snaps(&steering, jerk: SIMD3(0, -0.1, 0)) == 0)
 
         // For the elixir (no steering) the same movement still counts.
         var orchard = SnapDetector()
-        _ = orchard.process(loaded)
-        let snappedForTheElixir = orchard.process(jerked)
-        #expect(snappedForTheElixir)
+        #expect(snaps(&orchard, jerk: SIMD3(0, -0.1, 0)) == 1)
     }
 
     @Test func theSnappingHandDoesNotSteer() {

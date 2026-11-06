@@ -38,8 +38,9 @@ struct DetanglingStateComponent: Component {
     static let fadeDuration: Float = 0.6
     /// Radius of the tappable colliders: larger than the body, the dragon moves and is far away.
     static let tapRadius: Float = 0.09
-    /// Grab colliders set up per frame while the dragon settles into the knot (`prepareGrab`).
-    static let preparedPerFrame = 4
+    /// Grab colliders set up per frame while the dragon flies to the player and settles into the knot
+    /// (`prepareGrab`): one is enough, the flight lasts seconds.
+    static let preparedPerFrame = 1
 
     /// `grabTargets`: the rig's grabbable nodes and their sphere's radius (nil: every node).
     @MainActor
@@ -51,12 +52,13 @@ struct DetanglingStateComponent: Component {
         appliedPhase = phase
     }
 
-    /// While the dragon settles into the knot, its grab colliders are set up a few per frame, their input off: the
-    /// puzzle's first frame only turns it on. Set up all at once there (a manipulation, a collision shape and a hover
-    /// effect for every grabbable node), they made the frame the dragon lands in stutter.
+    /// While the dragon flies to the player and settles into the knot, its grab colliders are set up one per frame,
+    /// their input off: the puzzle's first frame only turns it on. Set up all at once there (a manipulation, a
+    /// collision shape and a hover effect for every grabbable node), they made the frame the dragon lands in stutter;
+    /// started only once it was settling (`.landing`), four a frame, the last ones could still be left for that frame.
     @MainActor
     func prepareGrab(phase: DragonPhase, colliders: [Entity], config: TangleConfig, grabTargets: [Int: Float]?) {
-        guard phase == .landing else { return }
+        guard phase == .approaching || phase == .landing else { return }
         var budget = Self.preparedPerFrame
         for (index, collider) in colliders.enumerated() where budget > 0 {
             guard grabTargets.map({ $0[index] != nil }) ?? true, !Self.isPrepared(collider) else { continue }
@@ -94,7 +96,7 @@ struct DetanglingStateComponent: Component {
 
     /// Captive: the whole body can be tapped (large spheres, highlighted when looked at).
     /// Mini-game: every node can be grabbed, head included, or only the rig's grab targets (the stone dragon: the
-    /// head and one node per stone). Flying: nothing.
+    /// head and one node per stone). Flying, and free: nothing.
     @MainActor
     private static func configure(_ colliders: [Entity], for interaction: DragonPhase.Interaction, config: TangleConfig,
                                   grabTargets: [Int: Float]?) {
@@ -129,7 +131,15 @@ struct DetanglingStateComponent: Component {
             case .none:
                 collider.components.remove(DragonTapTargetComponent.self)
                 collider.components[InputTargetComponent.self]?.isEnabled = false
-                collider.components.remove(CollisionComponent.self)
+                // The puzzle's grab colliders only lose their input (as `prepareGrab` leaves them): tearing down every
+                // collision shape under a manipulation and a hover effect in the frame the dragon is freed is the same
+                // all-at-once work that made the landing frame stutter. Going back to the tree (`.tap`) replaces them.
+                // The others (the tap spheres, as the dragon leaves the tree) lose their shape and highlight now, so the
+                // puzzle's first frame has nothing left to tear down.
+                if !Self.isPrepared(collider) {
+                    collider.components.remove(CollisionComponent.self)
+                    collider.components.remove(HoverEffectComponent.self)
+                }
             }
         }
     }

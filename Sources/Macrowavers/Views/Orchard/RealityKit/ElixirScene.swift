@@ -401,8 +401,9 @@ extension OrchardSystem {
         }
         orchard.snap.beginFrame()
         var snapped = false
-        // Both hands every frame (no early exit): each keeps its own state.
-        for sample in orchard.hands.samples.values where orchard.snap.process(sample) {
+        // Both hands every frame (no early exit): each keeps its own state. Every reading since the last frame
+        // (the detector skips those it has seen): the snap is over in a few of them.
+        for sample in orchard.hands.recentSamples.values.joined() where orchard.snap.process(sample) {
             snapped = true
         }
         if snapped { viewModel.brewElixir() }

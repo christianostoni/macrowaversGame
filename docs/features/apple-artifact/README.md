@@ -172,21 +172,38 @@ flight time over `duration = max(|P₂ − P₀| / 1.1 m/s, 0.9 s)`, eased in an
 ## The snap
 
 ARKit hand tracking (`HandTracker`) gives each hand's wrist, the four knuckles, the thumb, index, ring and little
-tips, and the middle finger's last joint (DIP) and tip (the snap reads the thumb, index and middle finger; the
-cupped hand that turns the fruit reads the others too). Joints flagged "not tracked" are kept with ARKit's estimate: in a fast
-movement the fingertips lose tracking for a frame, exactly when the snap happens.
+tips, and the index's and middle finger's last joint (DIP) and tip (the snap reads the thumb, index and middle
+finger against the wrist and middle knuckle; the cupped hand that turns the fruit reads the others too). Joints
+flagged "not tracked" are kept with ARKit's estimate: in a fast movement the fingertips lose tracking for a frame,
+exactly when the snap happens. `HandTracker.samples` holds each hand's latest reading; `recentSamples` its last 30
+(a third of a second at 90 Hz). The tracking runs at its own rate and its updates reach the main actor in bursts
+when it is busy, so a system reading `samples` once a frame misses some of them: the snap reads the whole history
+every frame (the detector skips readings it has already seen).
 
-A snap lasts a few hundredths of a second (one to three readings), so `SnapDetector` does not follow the finger:
-it compares the two poses on either side of it, each against the player's own hand.
-1. **Loaded:** the thumb tip within 3 cm of the middle finger's **last phalanx** (the segment DIP → tip,
-   `thumbToMiddlePad`), not pinching the index (thumb–index ≥ 2 cm: that is the system's tap). Measured tip to
-   tip it would fail: pressing the pad, the two tip joints stay 2–4 cm apart.
-2. **Released**, at most 0.3 s after the last loaded reading (a late frame or two), compared with it:
-   - thumb and middle tips at least **3 cm farther apart**, opened at **0.5 m/s** or more (a snap: 1 m/s or more);
-   - the middle tip at least **1.2 cm closer to the wrist**: it flexed into the palm. Simply opening the fingers
-     stretches it instead, so it never counts.
+A real snap, as `SnapDetector` reads it (each hand on its own, every distance against the player's own hand, never
+against the world, so moving the arm counts for nothing):
+1. **Press.** The thumb tip within **3 cm** of the middle finger's **last phalanx** (the segment DIP → tip,
+   `thumbToMiddlePad`; tip to tip it would fail: pressing the pad, the two tip joints stay 2–4 cm apart) and nearer
+   to it than to the index's (`thumbToIndexPad`), held at least **50 ms** (the tension before the flick; a thumb
+   only brushing the middle finger on its way somewhere does not count). The press lasts until the thumb is
+   **4 cm** away: tracking jitter around 3 cm neither breaks it nor starts a release. The thumb held on the index's
+   pad for 50 ms (a pinch, the system's tap) unloads it; a brush of the index during the flick does not.
+2. **Strike**, within **0.25 s** of the press's last firm reading, measured against the press: its firm reading with
+   the middle finger farthest from the palm (not simply the last one: the thumb stays within 3 cm of the pad for
+   the flick's first readings, the finger already on its way, and measured from there the flick looks smaller, more
+   so at 90 Hz than at 30). Hand length = wrist → middle knuckle (`handLength`, ~9.5 cm).
+   - the middle tip lands near the palm: at most **0.7 hand lengths** from the palm's middle (`middleToPalm`;
+     pressed it is ~1, struck ~0.3, a pinch let go 0.9–1.5), after coming at least **0.2 hand lengths** closer to
+     it than pressed. A pinch that opens stretches the finger away from the palm, so it never counts;
+   - it came at **0.5 m/s** or faster: the middle tip's fastest approach to the palm, each measured over at least
+     25 ms (over one 11 ms reading a few millimetres of jitter would read as speed). A snap: 1 m/s or more; curling
+     into a fist: a few tenths;
+   - the thumb and middle tips at least **2.5 cm** farther apart than pressed (the thumb is off the finger).
 
-Each hand on its own, with a 0.6 s cooldown; repeated readings (the frame is faster than the tracking) count once.
+It fires on the first reading that completes the strike, with no smoothing: with a 60 ms flick, 33 ms after the
+release at 30, 60 and 90 Hz (the finger past 0.7 hand lengths from the palm, before it lands). It works on
+timestamps, never on reading counts. 0.4 s cooldown per hand; a strike during it is used up, never fired late;
+repeated readings count once.
 The snap is read only while the orbit is complete. A tap on an orbiting ingredient does the same, so the game also
 works without hand tracking.
 
@@ -232,9 +249,9 @@ closest, 5 cm in space; 9° from the flask). Seen from the eyes it spans ~3–12
 horizon (the flask: 30° right, 17° down); it shows only while no fruit is close, so it never covers one.
 
 **Tuning on the headset.** `SnapDetector` keeps what it reads: `closestContact` is the closest thumb–pad distance
-in the current frame (it must go under 3 cm when the thumb presses) and `lastAttempt` the separation, curl and
-speed the latest release measured, and whether it counted as a snap. Log them while tuning: a missed snap shows
-which threshold it failed.
+in the current frame's readings (it must go under 3 cm when the thumb presses) and `lastAttempt` what the latest
+reading after a press measured (`separation` in metres, `strike` and `palmReach` in hand lengths, the peak `speed`
+in m/s) and whether it counted as a snap. Log them while tuning: a missed snap shows which threshold it failed.
 
 ## Code layout
 
@@ -248,7 +265,7 @@ Sources/Macrowavers/
 │   ├── ElixirOrbit.swift                  The ellipse to the player's right, lazy follow, the dive into the neck, ElixirFlight
 │   ├── CupTurn.swift                      A cupped hand next to the close fruit turns it
 │   ├── LiquidVolume.swift                 The flask's liquid at any level: the glass's profile (32 heights), its mesh
-│   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
+│   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir, ride's fire)
 │   ├── SnapHint.swift                     The hologram hand's snapping loop: poses (finger bends, thumb IK), release curve, wrist turn, fade
 │   ├── HandSurface.swift                  The hologram hand's skin: distance field (palm, tapering fingers), surface nets
 │   ├── SnapHintBake.swift                 The hologram hand's skins baked into a resource: file format, check against the code
@@ -269,7 +286,7 @@ Sources/Macrowavers/
         ├── SnapHintRig.swift                The hologram hand: its baked meshes (one per frame) read in the background,
         │                                    the wrist's turn every frame, depth pre-pass sort group, sparks
         ├── LiquidLevels.swift               One liquid mesh per level step (48), built once when the flask loads
-        ├── HandTracker.swift                ARKit hand tracking → HandSample
+        ├── HandTracker.swift                ARKit hand tracking → HandSample (latest, and the last 30 per hand)
         ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, Worm.usdz
         ├── AppleSpiral.metal                `deformApple` kernel (one thread per vertex)
         ├── PomegranateRig.swift             The design team's pomegranate: halves, seed burst
@@ -307,7 +324,7 @@ elixir's flight (`OrchardComponent.flight`).
    **Cup.** Once the close fruit has arrived, it feeds `CupTurn` with both hands and turns the fruit's holder by
    the cupped palm's turn since the last reading (scene space).
 5. **Orbit.** `ElixirOrbit.follow` with the head's pose (faster spin while brewing); the label's anchor follows it.
-6. **Snap.** With the orbit complete, it feeds `SnapDetector` with both hands; a snap calls `orchard.brewElixir()`.
+6. **Snap.** With the orbit complete, it feeds `SnapDetector` both hands' `recentSamples`; a snap calls `orchard.brewElixir()`.
    **Hologram.** `SnapHint.update` (shown while the orbit is complete and no fruit is close) and
    `SnapHintRig.draw` next to the flask, facing the player (its baked meshes are read on the orchard's first frame).
 7. **Orbs.** It moves each orb: sealed, rising above its fruit, flying into its slot, orbiting, diving into the flask.
@@ -337,7 +354,8 @@ elixir's flight (`OrchardComponent.flight`).
 - **The chop, the snap and the cupped hand use ARKit hand tracking, the rest are SwiftUI gestures.** SwiftUI has no
   "fast hand coming down", "snap" or "cupped hand". The detectors are pure structs fed with `HandSample`s, so they
   are unit-tested.
-  - **Two poses, not a trajectory.** See [The snap](#the-snap): robust at the tracking's rate.
+  - **A press, then a strike into the palm.** See [The snap](#the-snap): the press and the strike are each
+    compared with the player's own hand, on timestamps, so the tracking's rate and the arm's movement do not matter.
   - **A cup is never a pinch.** `CupTurn` ignores a hand whose thumb touches its index, so pulling the stem,
     peeling the banana or pulling a fruit apart never turns it. The turn is the palm's frame built from the
     joints (wrist → middle knuckle, little → index knuckle), followed with a little smoothing; it lives on the
@@ -431,7 +449,7 @@ elixir's flight (`OrchardComponent.flight`).
 | `OrbComponent` | `heldScaleRange` | how small and how big two hands can make an ingredient |
 | `ChopDetector.Settings` | `speed`, `cooldown` | how fast the hand must come down |
 | `CupTurn.Settings` | `bend`, `keepMargin`, `pinchClearance`, `reach`, `keepReach`, `grace`, `smoothing` | how curled the fingers must be, how close to the fruit, how forgiving once holding, how smooth the turn is |
-| `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
+| `SnapDetector.Settings` | `contactDistance`, `releaseDistance`, `minimumPress`, `releaseWindow`, `palmReach`, `strike`, `strikeSpeed`, `speedSpan`, `separation`, `cooldown` | how strict the snap is |
 | `SnapHint` | `period`, `snapTime`, `fadeDuration`, `keys` (with each key's `Curve`), `open`/`loaded`/`tensed`/`snapped`, `fist`, `snapWrist`, `padAngle`, `fingers`, `thumb…` | the hologram's loop, its key poses, the release's easing, the wrist's turn and its bones |
 | `HandSurface` | `cellSize`, `palmBlend`, `fingerBlend`, `palm…`, `wristHalfWidth`, `palmWidening`, `taper` | the hologram's skin: detail, how softly fingers join the palm, the palm's shape, how fingers taper (after any change to `SnapHint` or `HandSurface`, bake the hand again) |
 | `SnapHintBake` | `framesPerSecond` | the hologram's smoothness (bake it again after changing it) |
@@ -552,8 +570,12 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   much; a flat hand, a fist, a pinch or a far hand do not; a wobbly or briefly lost cup keeps holding, a longer
   one lets go; no jump after a tracking gap or on a repeated reading; one hand at a time; the palm frame and the
   bends follow the joints.
-- **`Tests/MacrowaversTests/HandGestureTests.swift`:** chop speed, zone and cooldown; the snap (fast, slow, late,
-  fingers that do not curl, a pinch, repeated readings, cooldown, one hand at a time); the elixir's slots and
+- **`Tests/MacrowaversTests/SnapDetectorTests.swift`:** the snap on synthetic joint traces: a real snap fires
+  33 ms after the release at 30, 60 and 90 Hz, a looser one with the index resting by the middle finger still
+  fires; never a thumb–index pinch, a thumb–middle pinch opened or let go (slowly or briskly), a slow fist, an arm
+  swing with a still hand (a snap during one still counts), a flick without a press held; jitter around the
+  contact keeps the press; repeated readings, the cooldown (no late fire), one hand at a time.
+- **`Tests/MacrowaversTests/HandGestureTests.swift`:** chop speed, zone and cooldown; the elixir's slots and
   timing; the flask appearing and wobbling when an ingredient arrives, the cork popping before the first dive and
   going back on after the last, the dives one at a time in order, the liquid rising by thirds and turning blue,
   the slosh dying down, no jumps between states, the pour (cork, tip, stream, its fall onto the head, the drain
@@ -594,8 +616,10 @@ field's maths, the surface nets) is not caught: bake it again by hand.
 ## Known limits
 
 - **The snap, the chop and the cupped-hand turn need a headset.** The simulator has no hand tracking: use the taps.
-- **Snap thresholds come from hand proportions, not from recordings:** tune `SnapDetector.Settings` on device
-  with `SnapDetector.closestContact` and `lastAttempt`. The same goes for `CupTurn.Settings` (finger bends).
+- **Snap thresholds come from hand proportions and synthetic traces, not from recordings:** tune
+  `SnapDetector.Settings` on device with `SnapDetector.closestContact` and `lastAttempt` (most likely `palmReach`,
+  if ARKit reports the struck middle finger less curled than it is, and `strikeSpeed`). The same goes for
+  `CupTurn.Settings` (finger bends).
 - **A turned pineapple is chopped as if upright.** `PineappleRig.chopTarget` ignores the fruit's turn; its zone
   is generous, so a chop still lands, but on a fruit turned on its side the zone is off.
 - **Head, not body.** The orbit turns with the head's yaw past 30° (visionOS gives no torso pose): a long look to

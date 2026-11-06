@@ -26,9 +26,18 @@ struct HandSample: Equatable {
     var littleKnuckle = SIMD3<Float>.zero
     var ringTip = SIMD3<Float>.zero
     var littleTip = SIMD3<Float>.zero
+    /// Last joint of the index finger before its tip (ARKit's `indexFingerIntermediateTip`). Nil: unknown, the index
+    /// tip stands in for its last phalanx.
+    var indexDistal: SIMD3<Float>?
 
     /// Middle of the palm: halfway from the wrist to the middle knuckle.
     var palmCentre: SIMD3<Float> { (wrist + knuckle) / 2 }
+
+    /// Wrist to middle knuckle: the player's own hand size, which the snap's distances are measured against.
+    var handLength: Float { simd_distance(wrist, knuckle) }
+
+    /// Middle tip to the middle of the palm: it drops to about a third of `handLength` when the finger strikes the palm.
+    var middleToPalm: Float { simd_distance(middleTip, palmCentre) }
 
     /// The palm's orientation, built from the joints alone: z from the wrist to the middle knuckle, x from the
     /// little knuckle to the index knuckle, y out of the palm's plane. Only its changes matter (how the hand turns),
@@ -56,16 +65,23 @@ struct HandSample: Equatable {
 
     /// Thumb tip to the middle finger's last phalanx (the segment DIP → tip). Before a snap the thumb presses on
     /// the pad of that phalanx, not on its tip: the two tip joints can stay 2–4 cm apart while touching.
-    var thumbToMiddlePad: Float {
-        let segment = middleTip - middleDistal
-        let length = simd_length_squared(segment)
-        guard length > 1e-8 else { return simd_distance(thumbTip, middleTip) }
-        let along = min(max(simd_dot(thumbTip - middleDistal, segment) / length, 0), 1)
-        return simd_distance(thumbTip, middleDistal + segment * along)
+    var thumbToMiddlePad: Float { Self.distance(from: thumbTip, toSegment: middleDistal, middleTip) }
+
+    /// Thumb tip to the index finger's last phalanx: a pinch presses there, the tip joints a couple of centimetres
+    /// apart (without `indexDistal`, to the index tip).
+    var thumbToIndexPad: Float {
+        guard let indexDistal else { return simd_distance(thumbTip, indexTip) }
+        return Self.distance(from: thumbTip, toSegment: indexDistal, indexTip)
     }
 
-    /// Wrist to middle tip: shrinks when the middle finger flexes into the palm, grows when it stretches.
-    var middleReach: Float { simd_distance(wrist, middleTip) }
+    private static func distance(from point: SIMD3<Float>, toSegment start: SIMD3<Float>,
+                                 _ end: SIMD3<Float>) -> Float {
+        let segment = end - start
+        let length = simd_length_squared(segment)
+        guard length > 1e-8 else { return simd_distance(point, end) }
+        let along = min(max(simd_dot(point - start, segment) / length, 0), 1)
+        return simd_distance(point, start + segment * along)
+    }
 }
 
 /// The pineapple's chop: a hand coming down fast through the fruit (ported from the fruit lab prototype).
@@ -128,119 +144,197 @@ struct ChopDetector {
     }
 }
 
-/// The finger snap that brews the elixir: thumb pressed on the middle finger's pad, then, in a flash, the middle
-/// finger slides off the thumb and flexes into the palm while the thumb flies away from it.
+/// The finger snap that brews the elixir and breathes the ride's fire, read the way a real snap moves:
+/// 1. **Press**: the thumb tip pressed on the middle finger's last phalanx (`thumbToMiddlePad` under
+///    `contactDistance`), nearer to it than to the index's, held at least `minimumPress` (the tension before the
+///    flick). The thumb held on the index's pad as long (a pinch, the system's tap) unloads it. The press lasts until
+///    the thumb is `releaseDistance` away (hysteresis: a jittery reading does not break it).
+/// 2. **Strike**, within `releaseWindow` of the press's last firm reading, measured against the press (its firm reading
+///    with the middle finger farthest from the palm, just before the flick) and the player's own hand (`handLength`),
+///    never against the world, so moving the arm counts for nothing:
+///    - the middle tip lands near the palm (`middleToPalm` at most `palmReach` hand lengths) after coming at least
+///      `strike` hand lengths closer to it: a pinch that opens stretches the finger away from the palm instead;
+///    - it came at `strikeSpeed` or faster (its fastest approach over any `speedSpan`): a slow fist is not a snap;
+///    - the thumb and middle tips at least `separation` farther apart (the thumb is off the finger).
 ///
-/// Hand tracking runs at 30–90 Hz and the snap itself takes a few hundredths of a second (the fast finger is
-/// often reported a frame late, or estimated), so the detector does not follow the finger: it compares the two
-/// poses on either side of the snap, each against the player's own hand, never against absolute hand sizes.
-/// 1. **Loaded**: the thumb tip within `contactDistance` of the middle finger's last phalanx
-///    (`thumbToMiddlePad`), and not pinching the index (thumb and index is the system's tap).
-/// 2. **Released**, within `window` of the last loaded reading, compared with that reading:
-///    - thumb and middle tips at least `separation` farther apart, opened at `minimumSpeed` or faster;
-///    - the middle tip at least `curl` closer to the wrist (it flexed into the palm). Simply opening the fingers
-///      stretches it instead, so it does not count.
-/// Each hand has a `cooldown` after a snap.
+/// It fires on the first reading that completes the strike: no smoothing, no waiting for the hand to settle. It works
+/// on timestamps, never on reading counts, so it behaves the same at 30 and 90 Hz, and feeding it every reading
+/// (`HandTracker.recentSamples`) or only the latest each frame changes nothing but how finely it sees the strike.
+/// Each hand on its own, with a `cooldown` after a snap.
 struct SnapDetector {
     struct Settings {
-        /// Thumb tip to the middle finger's last phalanx below this = loaded (m). Joint centres: a firm press
-        /// reads 1–2 cm.
+        /// Thumb tip to the middle finger's last phalanx below this = pressed (m). Joint centres: a firm press reads
+        /// 1–2 cm.
         var contactDistance: Float = 0.03
-        /// Thumb tip to index tip above this while loaded (m): not a pinch.
-        var pinchClearance: Float = 0.02
-        /// Thumb and middle tips at least this much farther apart than when loaded (m); a snap opens ~4–7 cm.
-        var separation: Float = 0.03
-        /// The middle tip at least this much closer to the wrist than when loaded (m); a snap flexes it ~3–6 cm.
-        var curl: Float = 0.012
-        /// Longest time from the last loaded reading to the released one (s): a snap plus a late frame or two.
-        var window: TimeInterval = 0.3
-        /// The thumb–middle gap must open at least this fast (m/s); a snap opens it at 1 m/s or more.
-        var minimumSpeed: Float = 0.5
+        /// A press lasts until the thumb is this far from that phalanx (m): above `contactDistance`, so tracking
+        /// jitter around it neither breaks the press nor starts a release.
+        var releaseDistance: Float = 0.04
+        /// Shortest press that loads a snap (s): a snap holds the thumb on the finger for a tenth of a second or more;
+        /// a thumb only sweeping past the middle finger (on its way to a pinch) touches it for a reading or two.
+        var minimumPress: TimeInterval = 0.05
+        /// Longest time from the press's last firm reading to the strike (s). The flick itself takes 50–100 ms;
+        /// the rest is room for a late or estimated reading of the fast finger.
+        var releaseWindow: TimeInterval = 0.25
+        /// The middle tip ends at most this far from the middle of the palm, in hand lengths (`handLength`).
+        /// Pressed it is about 1 away, struck on the palm about 0.3; a pinch opening moves it out to 1.2 or more.
+        var palmReach: Float = 0.7
+        /// The middle tip comes at least this much closer to the palm than it was pressed, in hand lengths
+        /// (a snap: 0.6–0.7).
+        var strike: Float = 0.2
+        /// The middle tip's fastest approach to the palm must reach this (m/s). A snap: 1 m/s or more (7 cm in under
+        /// a tenth of a second); curling the fingers slowly into a fist: a few tenths.
+        var strikeSpeed: Float = 0.5
+        /// Speeds are measured over at least this long (s): over one reading at 90 Hz (11 ms) a few millimetres of
+        /// tracking jitter would read as a fast finger.
+        var speedSpan: TimeInterval = 0.025
+        /// The thumb and middle tips at least this much farther apart than pressed (m); a snap opens them 3–5 cm.
+        var separation: Float = 0.025
         /// After a snap the same hand cannot snap again for this long (s).
-        var cooldown: TimeInterval = 0.6
-        /// When set, the wrist may move at most this far between the loaded and the released pose (m): a snap
-        /// moves the fingers, not the hand. On the ride the hands steer by moving: a quick turn of the horns that
-        /// happens to open a curled hand is not a snap.
+        var cooldown: TimeInterval = 0.4
+        /// When set, the wrist may move at most this far between the press and the strike (m): a snap moves the
+        /// fingers, not the hand. On the ride the hands steer by moving: a quick turn of the horns that happens to
+        /// curl a hand is not a snap.
         var maxWristTravel: Float?
     }
 
-    /// What the last released pose measured against its loaded pose (for tuning on the headset).
+    /// What the latest reading after a press measured (for tuning on the headset).
     struct Attempt: Equatable {
+        /// Thumb and middle tips, farther apart than pressed (m).
         var separation: Float
-        var curl: Float
+        /// How much closer to the palm the middle tip came, in hand lengths.
+        var strike: Float
+        /// The middle tip to the middle of the palm, in hand lengths.
+        var palmReach: Float
+        /// The middle tip's fastest approach to the palm since the press (m/s).
         var speed: Float
         var isSnap: Bool
     }
 
-    private struct Loaded {
+    /// One reading, as the snap needs it.
+    private struct Point {
         var time: TimeInterval
+        /// Middle tip to the middle of the palm (m).
+        var toPalm: Float
+        /// Thumb tip to middle tip (m).
         var gap: Float
-        var reach: Float
         var wrist: SIMD3<Float>
+        /// The thumb firmly on the middle finger's pad (under `contactDistance`, not on the index).
+        var isFirm: Bool
+        /// How fast the middle tip was coming to the palm (m/s, over at least `speedSpan`).
+        var speed: Float
     }
 
     private struct HandState {
-        var loaded: Loaded?
-        /// The latest reading was in the loaded pose.
-        var isLoadedNow = false
+        /// When the current press began (nil: the thumb is off the middle finger).
+        var pressStart: TimeInterval?
+        /// The latest firm reading of a press held `minimumPress` (nil: nothing to snap from).
+        var loadedUntil: TimeInterval?
+        /// When the thumb came onto the index's pad (nil: it is not there).
+        var indexPinchStart: TimeInterval?
+        /// The readings of the last `releaseWindow` (and `speedSpan` before it), oldest first.
+        var history: [Point] = []
         var lastTime: TimeInterval?
         var cooldownUntil: TimeInterval = 0
     }
 
     let settings: Settings
     private var hands: [HandSample.Chirality: HandState] = [:]
-    /// The latest reading after a loaded pose (within `window`): how close it came to a snap.
+    /// The latest reading after a loaded press (within `releaseWindow`): how close it came to a snap.
     private(set) var lastAttempt: Attempt?
-    /// Thumb to middle pad of the closest hand, at the latest readings (m).
+    /// Thumb to middle pad of the closest hand, at this frame's new readings (m).
     private(set) var closestContact: Float?
 
     init(settings: Settings = Settings()) {
         self.settings = settings
     }
 
-    /// A hand holds the loaded pose right now: the hologram hand (`SnapHint`) brightens.
-    var isLoaded: Bool { hands.values.contains { $0.isLoadedNow } }
+    /// A hand presses its thumb on its middle finger right now: the hologram hand (`SnapHint`) brightens.
+    var isLoaded: Bool { hands.values.contains { $0.pressStart != nil } }
 
-    /// That hand holds the loaded pose right now (the ride stops reading it for steering).
+    /// That hand presses its thumb on its middle finger right now (the ride stops reading it for steering).
     func isLoaded(_ chirality: HandSample.Chirality) -> Bool {
-        hands[chirality]?.isLoadedNow ?? false
+        hands[chirality]?.pressStart != nil
     }
 
-    /// Feeds one hand reading; returns true when this reading completes a snap.
+    /// Feeds one hand reading; returns true when this reading completes a snap. Readings already seen (or older)
+    /// are ignored, so the same reading may be fed again.
     mutating func process(_ sample: HandSample) -> Bool {
         var state = hands[sample.chirality] ?? HandState()
-        defer {
-            hands[sample.chirality] = state
-            closestContact = min(closestContact ?? .infinity, sample.thumbToMiddlePad)
-        }
-        // The same reading again (the frame is faster than the tracking), or an older one: nothing new.
+        defer { hands[sample.chirality] = state }
         if let last = state.lastTime, sample.timestamp <= last { return false }
         state.lastTime = sample.timestamp
+        let pad = sample.thumbToMiddlePad
+        closestContact = min(closestContact ?? .infinity, pad)
 
-        let isPinching = simd_distance(sample.thumbTip, sample.indexTip) < settings.pinchClearance
-        if sample.thumbToMiddlePad < settings.contactDistance && !isPinching {
-            state.loaded = Loaded(time: sample.timestamp, gap: sample.snapGap, reach: sample.middleReach,
-                                 wrist: sample.wrist)
-            state.isLoadedNow = true
+        // The thumb nearer to the index's pad than to the middle finger's: not a press.
+        let isOnIndex = sample.thumbToIndexPad < pad
+        let isFirm = pad < settings.contactDistance && !isOnIndex
+        record(sample, isFirm: isFirm, in: &state)
+        // Held there, it pinches the index (the system's tap): whatever was pressed before is not a snap. Only held:
+        // in the flick the thumb often brushes the index's pad for a reading or two on its way up.
+        if isOnIndex && sample.thumbToIndexPad < settings.contactDistance {
+            let since = state.indexPinchStart ?? sample.timestamp
+            state.indexPinchStart = since
+            if sample.timestamp - since >= settings.minimumPress {
+                state.pressStart = nil
+                state.loadedUntil = nil
+                return false
+            }
+        } else {
+            state.indexPinchStart = nil
+        }
+        if isFirm {
+            let start = state.pressStart ?? sample.timestamp
+            state.pressStart = start
+            if sample.timestamp - start >= settings.minimumPress { state.loadedUntil = sample.timestamp }
             return false
         }
-        state.isLoadedNow = false
-        guard let loaded = state.loaded else { return false }
-        let elapsed = sample.timestamp - loaded.time
-        guard elapsed <= settings.window else {
-            state.loaded = nil
+        if pad >= settings.releaseDistance || isOnIndex { state.pressStart = nil }
+        return strikes(sample, state: &state)
+    }
+
+    /// Adds the reading to the hand's history, with how fast its middle tip is coming to the palm.
+    private func record(_ sample: HandSample, isFirm: Bool, in state: inout HandState) {
+        let now = sample.timestamp
+        let toPalm = sample.middleToPalm
+        var speed: Float = 0
+        if let reference = state.history.last(where: { now - $0.time >= settings.speedSpan }) ?? state.history.first {
+            speed = (reference.toPalm - toPalm) / Float(max(now - reference.time, settings.speedSpan))
+        }
+        state.history.removeAll { now - $0.time > settings.releaseWindow + settings.speedSpan }
+        state.history.append(Point(time: now, toPalm: toPalm, gap: sample.snapGap, wrist: sample.wrist,
+                                   isFirm: isFirm, speed: speed))
+    }
+
+    /// A reading off the press: whether it completes the strike of a loaded press.
+    private mutating func strikes(_ sample: HandSample, state: inout HandState) -> Bool {
+        let now = sample.timestamp
+        guard let loadedUntil = state.loadedUntil else { return false }
+        guard now - loadedUntil <= settings.releaseWindow else {
+            state.loadedUntil = nil
             return false
         }
-        let separation = sample.snapGap - loaded.gap
-        let curl = loaded.reach - sample.middleReach
-        let speed = separation / Float(max(elapsed, 1e-3))
-        let isStill = settings.maxWristTravel.map { simd_distance(sample.wrist, loaded.wrist) <= $0 } ?? true
-        let isSnap = separation >= settings.separation && curl >= settings.curl && speed >= settings.minimumSpeed
-            && sample.timestamp >= state.cooldownUntil && isStill
-        lastAttempt = Attempt(separation: separation, curl: curl, speed: speed, isSnap: isSnap)
-        guard isSnap else { return false }
-        state.loaded = nil
-        state.cooldownUntil = sample.timestamp + settings.cooldown
+        // Measured against the press before the flick: of its firm readings in the window, the one with the middle
+        // finger farthest from the palm. Not simply the last: the thumb stays within `contactDistance` of the pad for
+        // the flick's first readings, the finger already on its way.
+        let firm = state.history.filter { $0.isFirm && now - $0.time <= settings.releaseWindow }
+        guard let pressed = firm.max(by: { $0.toPalm < $1.toPalm }) else { return false }
+        let speed = state.history.filter { $0.time > pressed.time }.map(\.speed).max() ?? 0
+        let length = max(sample.handLength, 0.01)
+        let toPalm = sample.middleToPalm
+        var attempt = Attempt(separation: sample.snapGap - pressed.gap, strike: (pressed.toPalm - toPalm) / length,
+                              palmReach: toPalm / length, speed: speed, isSnap: false)
+        let isStill = settings.maxWristTravel.map { simd_distance(sample.wrist, pressed.wrist) <= $0 } ?? true
+        let isStrike = attempt.palmReach <= settings.palmReach && attempt.strike >= settings.strike
+            && attempt.speed >= settings.strikeSpeed && attempt.separation >= settings.separation && isStill
+        attempt.isSnap = isStrike && now >= state.cooldownUntil
+        lastAttempt = attempt
+        guard isStrike else { return false }
+        // A strike ends the press, even in the cooldown: it never fires late, once the cooldown is over.
+        state.loadedUntil = nil
+        state.pressStart = nil
+        guard attempt.isSnap else { return false }
+        state.cooldownUntil = now + settings.cooldown
         return true
     }
 

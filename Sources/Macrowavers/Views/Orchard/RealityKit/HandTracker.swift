@@ -11,6 +11,12 @@ import ARKit
 final class HandTracker {
     /// Latest reading of each hand still tracked.
     private(set) var samples: [HandSample.Chirality: HandSample] = [:]
+    /// Each hand's last `historyLength` readings, oldest first, kept while the hand is lost. The tracking runs at its
+    /// own rate, its updates reach the main actor in bursts when it is busy, and a system reading `samples` once a frame
+    /// misses the readings in between: the snap (`SnapDetector`), over in a few hundredths of a second, reads them all.
+    private(set) var recentSamples: [HandSample.Chirality: [HandSample]] = [:]
+    /// About a third of a second at 90 Hz: longer than a snap from its press to its strike.
+    static let historyLength = 30
 
     #if os(visionOS)
     private let session = ARKitSession()
@@ -57,7 +63,14 @@ final class HandTracker {
         for await update in handTracking.anchorUpdates {
             let anchor = update.anchor
             let chirality: HandSample.Chirality = anchor.chirality == .left ? .left : .right
-            samples[chirality] = Self.sample(from: anchor, chirality: chirality, timestamp: update.timestamp)
+            let sample = Self.sample(from: anchor, chirality: chirality, timestamp: update.timestamp)
+            samples[chirality] = sample
+            if let sample {
+                var recent = recentSamples[chirality] ?? []
+                recent.append(sample)
+                if recent.count > Self.historyLength { recent.removeFirst(recent.count - Self.historyLength) }
+                recentSamples[chirality] = recent
+            }
         }
         #endif
     }
@@ -68,6 +81,7 @@ final class HandTracker {
         isRunning = false
         #endif
         samples = [:]
+        recentSamples = [:]
     }
 
     #if os(visionOS)
@@ -86,7 +100,7 @@ final class HandTracker {
                           middleDistal: position(.middleFingerIntermediateTip), middleTip: position(.middleFingerTip),
                           indexKnuckle: position(.indexFingerKnuckle), ringKnuckle: position(.ringFingerKnuckle),
                           littleKnuckle: position(.littleFingerKnuckle), ringTip: position(.ringFingerTip),
-                          littleTip: position(.littleFingerTip))
+                          littleTip: position(.littleFingerTip), indexDistal: position(.indexFingerIntermediateTip))
     }
     #endif
 }

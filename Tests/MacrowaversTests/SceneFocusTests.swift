@@ -49,8 +49,19 @@ struct SceneFocusTests {
         #expect(focus == .none)
     }
 
-    @Test func onlyTheKnotFocusesOnTheDragon() {
-        #expect(phases.filter(\.focusesOnDragon) == [.landing, .untangling])
+    @Test func onlyTheKnotAndTheFreedDragonFocusOnTheDragon() {
+        #expect(phases.filter(\.focusesOnDragon) == [.landing, .untangling, .free])
+    }
+
+    @Test func theIslandStaysBackTheMomentTheDragonIsFreed() {
+        // The dragon is freed a frame before the story makes it speak: the island must not start to come back.
+        for isDragonSpeaking in [false, true] {
+            let focus = SceneFocus(isFruitFocused: false, isElixirFlying: false, phase: .free,
+                                   isDragonSpeaking: isDragonSpeaking)
+
+            #expect(focus == .dragon)
+            #expect(focus.opacity(of: .island) == SceneFocus.dimmedOpacity)
+        }
     }
 }
 
@@ -123,5 +134,101 @@ struct IslandPlacementTests {
         viewer.y += 1
         let turn = IslandPlacement.standard.spinAngle(handMovement: SIMD3(0.1, 0, 0), viewer: viewer)
         #expect(turn.isFinite)
+    }
+}
+
+/// Carrying the island by its grab bar, like a window.
+struct IslandCarryTests {
+    private let viewer = SIMD3<Float>(0, 1.15, 0)   // seated player at the origin
+    private let hand = SIMD3<Float>(0, 0.9, -0.45)  // pinching the bar, in front of the chest
+
+    private func distance(_ placement: IslandPlacement) -> Float {
+        simd_length(SIMD2(placement.position.x - viewer.x, placement.position.z - viewer.z))
+    }
+
+    @Test func aStillHandLeavesItWhereItIs() {
+        let carried = IslandPlacement.standard.carried(from: hand, to: hand, viewer: viewer)
+        #expect(simd_distance(carried.position, IslandPlacement.standard.position) < 1e-5)
+        #expect(abs(carried.yaw - IslandPlacement.standard.yaw) < 1e-6)
+    }
+
+    @Test func itGoesWhereTheHandPointsAndKeepsItsFaceToThePlayer() {
+        let start = IslandPlacement.standard
+        // The hand swings 20° to the player's left around them, at the same reach.
+        let angle: Float = 20 * .pi / 180
+        let reach = simd_length(SIMD2(hand.x, hand.z))
+        let swung = SIMD3(-reach * sin(angle), hand.y, -reach * cos(angle))
+        let carried = start.carried(from: hand, to: swung, viewer: viewer)
+
+        #expect(carried.position.x < -0.9)   // 2.8 m · sin 20° ≈ 0.96 m to the left
+        #expect(abs(distance(carried) - distance(start)) < 1e-4)
+        // Turned with the swing: the same side still faces the player.
+        #expect(abs(carried.yaw - angle) < 1e-4)
+    }
+
+    @Test func pushedItGoesFartherThanTheHandAndStaysOnTheFloor() {
+        let start = IslandPlacement.standard
+        let pushed = start.carried(from: hand, to: hand + SIMD3(0, 0.3, -0.2), viewer: viewer)
+
+        #expect(abs(distance(pushed) - (distance(start) + IslandPlacement.pushGain * 0.2)) < 1e-4)
+        #expect(pushed.position.y == start.position.y)
+        #expect(abs(pushed.yaw - start.yaw) < 1e-5)
+    }
+
+    @Test func itNeverLandsOnThePlayerNorLeavesTheRoom() {
+        let start = IslandPlacement.standard
+        let pulled = start.carried(from: hand, to: SIMD3(0, 0.9, -0.05), viewer: viewer)
+        let thrown = start.carried(from: hand, to: SIMD3(0, 0.9, -3), viewer: viewer)
+
+        #expect(abs(distance(pulled) - IslandPlacement.distanceRange.lowerBound) < 1e-4)
+        #expect(abs(distance(thrown) - IslandPlacement.distanceRange.upperBound) < 1e-4)
+    }
+
+    @Test @MainActor func theViewModelTakesTheCarriedPlacement() {
+        let viewModel = UntangleViewModel()
+        let carried = IslandPlacement.standard.carried(from: hand, to: hand + SIMD3(0.1, 0, -0.1), viewer: viewer)
+        viewModel.moveIsland(to: carried, viewer: viewer)
+        #expect(viewModel.islandPlacement.position == carried.position)
+        #expect(abs(viewModel.islandPlacement.yaw - carried.yaw) < 1e-5)
+
+        viewModel.resetGame()
+        #expect(viewModel.islandPlacement == .standard)
+        #expect(viewModel.placement == .seated)
+    }
+
+    @Test func theStandardIslandKeepsTheSeatedPlayArea() {
+        let playArea = PlayAreaPlacement.seated.facing(island: .standard, viewer: viewer)
+        #expect(simd_distance(playArea.position, PlayAreaPlacement.seated.position) < 1e-5)
+        #expect(abs(playArea.yaw - PlayAreaPlacement.seated.yaw) < 1e-6)
+        #expect(playArea.tilt == PlayAreaPlacement.seated.tilt)
+    }
+
+    @Test @MainActor func theDragonComesToCoilOnTheWayToTheCarriedIsland() {
+        let viewModel = UntangleViewModel()
+        // Swung 90° to the player's left: the island stands at their left, 2.8 m away.
+        let left = SIMD3<Float>(-0.45, hand.y, 0)
+        let carried = IslandPlacement.standard.carried(from: hand, to: left, viewer: viewer)
+        viewModel.moveIsland(to: carried, viewer: viewer)
+
+        let playArea = viewModel.placement
+        #expect(abs(playArea.position.x + 0.6) < 1e-4)
+        #expect(abs(playArea.position.z) < 1e-4)
+        #expect(playArea.position.y == PlayAreaPlacement.seated.position.y)
+        // Its far edge (−Z at yaw 0) points at the island.
+        let farEdge = simd_quatf(angle: playArea.yaw, axis: SIMD3(0, 1, 0)).act(SIMD3(0, 0, -1))
+        #expect(simd_distance(farEdge, SIMD3(-1, 0, 0)) < 1e-4)
+    }
+
+    @Test @MainActor func onceCalledTheDragonKeepsItsKnotWhereItWas() {
+        let viewModel = UntangleViewModel()
+        let orbit = AnchoredOrbit(path: .aroundTree, worldFromAnchor: IslandPlacement.standard.transform)
+        viewModel.update(deltaTime: 1 / 90, viewer: viewer, worldFromLocal: matrix_identity_float4x4, orbit: orbit)
+        viewModel.callDragon()
+        #expect(viewModel.phase == .approaching)
+
+        let carried = IslandPlacement.standard.carried(from: hand, to: SIMD3(-0.45, hand.y, 0), viewer: viewer)
+        viewModel.moveIsland(to: carried, viewer: viewer)
+        #expect(viewModel.islandPlacement.position == carried.position)
+        #expect(viewModel.placement == .seated)
     }
 }

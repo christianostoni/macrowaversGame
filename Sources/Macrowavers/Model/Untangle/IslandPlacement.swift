@@ -37,6 +37,49 @@ struct IslandPlacement: Equatable {
         return simd_dot(SIMD2(handMovement.x, handMovement.z), right) / Self.spinDistance
     }
 
+    /// How much farther the island goes than the hand when the hand pushes it away or pulls it in (along the
+    /// line from the player), as a window does: a short reach carries it across the room.
+    static let pushGain: Float = 3
+    /// How near and how far (m, across the floor, from the player's eyes to the trunk) the player can carry it:
+    /// never on top of them (the island is ~2.5 m wide), never out of the room's reach.
+    static let distanceRange: ClosedRange<Float> = 1.8...6
+
+    /// The island carried by its grab bar like a window, for a hand that went from `handStart` to `hand`
+    /// (scene space) while the player's eyes were at `viewer`. `self` is the placement when the drag began.
+    /// Across the view it follows the hand's direction (the angle the hand turned around the player), so it
+    /// sweeps around them and keeps the same side towards them (the yaw turns as well); pushed or pulled, it
+    /// goes `pushGain` times the hand's way. It stays on the floor: the grass keeps its height.
+    func carried(from handStart: SIMD3<Float>, to hand: SIMD3<Float>, viewer: SIMD3<Float>) -> IslandPlacement {
+        let eyes = SIMD2(viewer.x, viewer.z)
+        let reachStart = SIMD2(handStart.x, handStart.z) - eyes
+        let reach = SIMD2(hand.x, hand.z) - eyes
+        // The hand's turn around the player (positive: around +Y, to the player's left), only when the hand is
+        // away from the eyes enough to give a direction.
+        var turn: Float = 0
+        if simd_length(reachStart) > 1e-3, simd_length(reach) > 1e-3 {
+            let cross = reachStart.y * reach.x - reachStart.x * reach.y
+            turn = atan2(cross, simd_dot(reachStart, reach))
+        }
+        let push = simd_length(reach) - simd_length(reachStart)
+
+        var offset = SIMD2(position.x, position.z) - eyes
+        // Player right above the trunk: carry it the way the hand points (or straight ahead).
+        if simd_length(offset) < 1e-3 {
+            offset = simd_length(reachStart) > 1e-3 ? simd_normalize(reachStart) * 1e-3 : SIMD2(0, -1e-3)
+        }
+        let distance = min(max(simd_length(offset) + Self.pushGain * push, Self.distanceRange.lowerBound),
+                           Self.distanceRange.upperBound)
+        let direction = simd_normalize(offset)
+        // Rotation around +Y of a floor vector (x, z).
+        let turned = SIMD2(direction.x * cos(turn) + direction.y * sin(turn),
+                           -direction.x * sin(turn) + direction.y * cos(turn))
+        var placement = self
+        placement.position = SIMD3(eyes.x + turned.x * distance, position.y, eyes.y + turned.y * distance)
+        let yaw = yaw + turn
+        placement.yaw = atan2(sin(yaw), cos(yaw))
+        return placement
+    }
+
     var rotation: simd_quatf {
         simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
     }

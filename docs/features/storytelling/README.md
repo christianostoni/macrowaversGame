@@ -253,8 +253,8 @@ steering never fight:
 - holding the horns is a pinch (thumb on index), the snap starts from the thumb on the middle finger: to snap, a
   hand lets go of its horn (the dragon glides level meanwhile) and takes hold again after (level again, no swerve);
 - the snap is read only during the feast, with `SnapDetector.Settings.whileSteering`: the wrist may move at most
-  4 cm between the loaded and the released pose, so a quick move of the horns that opens a curled hand is not a
-  snap;
+  4 cm between the press and the strike (see the elixir's [snap](../apple-artifact/README.md#the-snap)), so a
+  quick move of the horns that curls a hand is not a snap;
 - `SteeringHold` (on the pinched hands): while a hand holds the loaded pose, and for 0.35 s after its snap, the steering reads it where
   it was just before, so the dragon does not swerve; a hand that keeps looking loaded (a curled grip) steers again
   after 0.8 s.
@@ -346,8 +346,16 @@ the launch window; chapter II's name comes after it, once the ride is built.
 `MusicTrack.playing(story:dragon:)` picks the track: silence on Start; `MusicIntro` (a setar, looped) under the
 narrator's pages and the fruit; `MusicPuzzle` (looped) from the soothed dragon's flight to the player until it is
 untangled; `MusicFarewell` (once) from the moment it is free through its words and its flight. `GameMusic` plays it
-as non-spatial channel audio (−14 dB), crossfades over 2 s when the track changes, and ducks to −26 dB while the
-dragon rears up. The island's music closes with its space; the ride's space has its own `GameMusic`, and
+as non-spatial channel audio (−14 dB) and ducks to −26 dB while the dragon rears up. When the track changes the new
+one rises from −24 dB in 1.5 s while the old one keeps playing under it, fading to −60 dB over 6 s before it stops.
+The fades run in decibels: the old crossfade (both tracks to and from −80 dB over 2 s) left both inaudible for over
+a second, and the farewell's own first second is quiet (~−45 dB), so when the dragon was freed the music seemed to
+stop and start over. A track asked for again while it is still fading out comes back from where it is instead of
+starting over, and the same track asked for again changes nothing. Every track's controller is prepared once its file
+is loaded, so starting one in a busy frame (the dragon freed, its page and the darkened room arriving together) only
+sets its gain and plays it. A stopped track is not prepared again at once: that opened a stream on the main actor 6 s
+after the dragon was called, right as it began to coil into the knot, and stuttered; one asked for again is prepared
+then. The island's music closes with its space; the ride's space has its own `GameMusic`, and
 `MusicTrack.riding(story:)` picks its track: `MusicRide` (looped) fades in out of the dark arrival and plays through
 chapter II and the finale, then `MusicFarewell` comes back under the story's last page. `MusicRide.caf` is 67 s of
 "Persian" by Echobrainz (Pixabay, `Assets/Audio/music_ride_persian.mp3`; see `CREDITS.md`), seven of its phrases cut
@@ -421,7 +429,8 @@ outwards (their back faces are culled). `RideGlassTests.swift`: the light's path
 between the shamseh and the painted sky. `ShamsehColourTests.swift`: the petals' colour wheel and gold.
 
 `MusicTrackTests.swift`: silence before Start, the intro under the pages and the fruit, the puzzle from the flight
-to the knot, the farewell once the dragon is free (played once), the ride's track from the arrival to the medallion
+to the knot, the farewell once the dragon is free (played once), one change at the knot and one when the dragon is
+freed (none as it settles into the knot, none as it starts to speak), the ride's track from the arrival to the medallion
 (looped), the farewell again under the last page, then silence.
 
 `ScrollRollTests.swift`: the paper keeps its length however it is rolled, the window goes from the page's top to

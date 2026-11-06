@@ -35,9 +35,12 @@ extension DragonRideSystem {
         }
         state.snap.beginFrame()
         var snapped: Set<HandSample.Chirality> = []
-        // Both hands every frame (no early exit): each keeps its own state.
-        for (chirality, sample) in state.hands.samples where state.snap.process(sample) {
-            snapped.insert(chirality)
+        // Both hands every frame (no early exit): each keeps its own state. Every reading since the last frame
+        // (the detector skips those it has seen): the snap is over in a few of them.
+        for (chirality, readings) in state.hands.recentSamples {
+            for sample in readings where state.snap.process(sample) {
+                snapped.insert(chirality)
+            }
         }
         return snapped
     }
