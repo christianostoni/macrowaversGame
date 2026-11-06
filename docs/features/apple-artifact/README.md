@@ -61,9 +61,10 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | Brewed (1.2 s) | The flask swells a little with a flash of sparks and floats there, throbbing; bubbles rise, and its glow lights the player's hands |
 | The elixir flies | The flask flies in an arc rising above the straight line, to just above the dragon's head (upright, its bottom clear of it) even as it moves. The scene comes back from focus mode. If the dragon has already left the island, the flask keeps floating in the middle of the orbit, at the player's side |
 | Poured (3.2 s) | The dragon has stopped and lifted its snout. Above its head the flask stops turning and turns side-on to the player, the cork pops, and it tips over slowly around its neck's mouth, held above the head. A thick, glowing blue stream falls straight onto the head, droplets bounce off it, and the flask drains (fastest at first) while the stream thins to a trickle. When the last of it has landed, a shimmer rises around the dragon's head and the flask fades. **Only then** does the dragon, soothed, come to the player |
-| Empty fruit | A fruit whose ingredient already orbits: once opened, the panel says "No gem left" and **Back to the Tree** becomes the prominent button. The fruit never leaves by itself |
+| Empty fruit | A fruit whose ingredient already orbits: once opened, the panel says "You already took this gem. Back to the tree it goes." and 2.5 s later the fruit goes back by itself |
 | A 4th ingredient | With 3 already in orbit the orb stays above its fruit: "You already have three gems: brew the elixir first." |
-| Back to the Tree / Close It Again | The fruit flies back to its branch, closing gently on the way / closes it again. An ingredient already freed still joins the orbit from the branch |
+| The fruit's panel | A story page to read (clear glass in the tile frame, serif words), with nothing to press: what to do now, and how to turn the fruit with its ring (or the worms caught). It changes with a soft fade at each step |
+| Back to the tree | By itself: once the ingredient joins the orbit, once the fruit is found empty, at the snap, or when the elixir flies. The fruit flies back to its branch, closing gently on the way |
 
 Every fruit holds one ingredient, so no choice is wrong: any 3 of the 15 fruits (three of each kind) make the elixir.
 
@@ -405,7 +406,7 @@ elixir's flight (`OrchardComponent.flight`).
 - **Fruit on the island, focus on a stage.** On the tree the fruit is a child of the island. Focused, it moves to
   a stage ~50 cm from the eyes. The ingredients and the elixir live under the orchard's root, outside the faded
   parts, so they always stay fully visible.
-- **A fruit leaves only when the player is done with it.** **Back to the Tree**, its ingredient joining the orbit,
+- **A fruit leaves only when the player is done with it.** Its ingredient joining the orbit, the fruit found empty,
   the snap, or the elixir flying. The return is eased and the fruit closes gently on the way.
 
 ## Tuning

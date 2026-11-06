@@ -16,7 +16,7 @@ struct StoryPanelView: View {
     var body: some View {
         ZStack {
             if let page = story.step.page {
-                StoryPageView(page: page, isChapter: story.step == .chapter || story.step == .secondChapter) {
+                StoryPageView(page: page, isChapter: isNamedInGold) {
                     story.advance()
                 }
                 .id(story.step)
@@ -24,6 +24,11 @@ struct StoryPanelView: View {
             }
         }
         .animation(.easeInOut(duration: 0.6), value: story.step)
+    }
+
+    /// The chapters and the dragon's thanks are named in gold; the other pages' titles are plain serif.
+    private var isNamedInGold: Bool {
+        [.chapter, .secondChapter, .gratitude, .safety].contains(story.step)
     }
 }
 
@@ -103,9 +108,8 @@ struct StoryPageCard<Footer: View>: View {
             VStack(spacing: 2) {
                 ForEach(page.lines, id: \.self) { line in
                     Text(line)
-                        // One line, a proverb, is bigger than a page of two.
-                        .font(.system(size: page.lines.count > 1 ? 26 : 30, weight: .medium, design: .serif)
-                            .italic())
+                        // One size on every page and panel, one line or two.
+                        .font(.system(size: StoryPageCardStyle.lineSize, weight: .medium, design: .serif).italic())
                         .foregroundStyle(.primary)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
@@ -122,6 +126,8 @@ struct StoryPageCard<Footer: View>: View {
 enum StoryPageCardStyle {
     static let size = CGSize(width: 720, height: 200)
     static let cornerRadius: CGFloat = 60
+    /// The words' size (points), the same everywhere so no window reads bigger than another.
+    static let lineSize: CGFloat = 26
     /// The kit's gold for the chapter's name over clear glass (#f2cf86).
     static let gold = Color(red: 0.95, green: 0.81, blue: 0.53)
 }

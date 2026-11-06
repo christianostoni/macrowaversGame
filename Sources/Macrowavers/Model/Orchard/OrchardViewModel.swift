@@ -113,6 +113,11 @@ final class OrchardViewModel {
     static let orbRiseDuration: Float = 1.2
     /// ... and how long it then floats there before joining the orbit by itself (the player sees what they found).
     static let orbOrbitDelay: Float = 0.6
+    /// Seconds an opened fruit whose ingredient already orbits stays in front of the player (they read that it is
+    /// empty) before going back to the tree by itself: there is no button to send it back.
+    static let emptyReturnDelay: Float = 2.5
+    /// How long the focused fruit has been open and empty.
+    @ObservationIgnored private var emptyTime: Float = 0
 
     /// Every kind of fruit on the tree, in the order they take the tree's hang points.
     static let kinds: [FruitKind] = [.apple, .pomegranate, .banana, .orange, .pineapple]
@@ -266,6 +271,13 @@ final class OrchardViewModel {
             orbRevealTimes[index] += deltaTime
             // Found: after rising and floating for a moment it joins the others in orbit.
             if orbRevealTimes[index] >= Self.orbRiseDuration + Self.orbOrbitDelay { sendToOrbit(fruit: index) }
+        }
+        // Opened and found empty: after a moment it goes back to the tree by itself.
+        if isFocusedFruitEmpty && isFocusedFruitExplored {
+            emptyTime += deltaTime
+            if emptyTime >= Self.emptyReturnDelay { back() }
+        } else {
+            emptyTime = 0
         }
         let before = elixir.state
         elixir.update(deltaTime: deltaTime, canFly: isDragonOnIsland)
