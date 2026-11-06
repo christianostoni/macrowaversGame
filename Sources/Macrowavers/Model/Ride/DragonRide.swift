@@ -70,7 +70,7 @@ struct DragonRide {
         static let responsiveness: Float = 1.6
         /// The dragon leans into its turns (rad at full turn), drawn on the dragon only: the player's view never rolls.
         static let maxBank: Float = 0.3
-        /// A weak dragon (sick, exhausted: `DragonFeast.weakness`) loses this share of its speed and sways its body
+        /// A weak dragon (sick, or its feast failed: `DragonFeast.weakness`) loses this share of its speed and sways its body
         /// by this much (rad; the body only: the player's view never sways).
         static let weakSlowdown: Float = 0.45
         static let weakSway: Float = 0.22

@@ -55,7 +55,7 @@ Status: playable with the design team's ingredient gem (`IngredientGem.usdz`, in
 | Into the orbit | It takes its ingredient's colour (pomegranate red, saffron gold, pistachio green), lifts and arcs into its slot on the orbit (1.4 s), leaving a trail of sparks. The fruit goes back to its branch |
 | In orbit | The ingredients go round a small ellipse (26 × 28 cm) 60 cm away, 30° to the player's right and a little below their eyes, facing them, its far side tilted up so they see it whole: always between ~18° and ~42° to the right, never in the middle of the view where the fruit comes close; evenly spaced (120°), one turn every 9 s. The orbit follows the player as they walk and turns with them only when they really turn (not when they glance at a fruit). A small label under the orbit counts them |
 | Hold an ingredient | Pinch an ingredient in orbit and move it (before the brew): it follows the hand and turns with the wrist, while the others keep going round. With two hands (in the simulator: hold Option) move them apart or together to make it bigger or smaller (0.5×–3×), turn them around it to turn it about any axis. Let go (the last hand), it flies back to its slot in the same arc it came in from its fruit (1.4 s), turns upright again and takes back its own size. A pinch that does not move stays a tap. Looking at it or taking it draws no highlight |
-| Orbit complete | The label goes away and a **hologram hand** fades in to the left of the flask, a little lower, clear of the ingredients' path: a ghostly white right hand alone (no arm), one smooth see-through skin with no joints showing, turned so the player sees the thumb and the palm. It snaps in a loop (2.8 s): open hand, thumb pressed on the middle finger's pad, the middle finger flicks into the palm with a puff of white sparks, the hand opens again. It flickers faintly like a hologram, glows brighter while the player's own thumb presses on the middle finger, and fades out at the snap or while a fruit is close. Without hand tracking the label stays ("Tap an ingredient to brew the elixir." and **Brew the Elixir**) under the orbit |
+| Orbit complete | The label goes away and a **hologram hand** fades in to the left of the flask, a little lower, clear of the ingredients' path: a ghostly white right hand alone (no arm), one smooth see-through skin with no joints showing, turned so the player sees the thumb and the palm. It snaps in a loop (3 s), like a real snap: from a loose open hand it slowly sets up (ring and little fingers curl into the palm, index lifted clear, the middle finger's pad on the thumb) while the wrist turns 20° so the thumb and middle finger meet in profile; the thumb pushes the finger up (tension); then in a flash the thumb flicks up along the index and the middle finger strikes the palm beside the ball of the thumb, with a puff of white sparks; a hold, the hand relaxes, a pause. It flickers faintly like a hologram, glows brighter while the player's own thumb presses on the middle finger, and fades out at the snap or while a fruit is close. Without hand tracking the label stays ("Tap an ingredient to brew the elixir." and **Brew the Elixir**) under the orbit |
 | The flask | As the first ingredient leaves its fruit for the orbit, an empty, corked glass flask appears in the middle of the orbit (0.6 s) and turns slowly there; the ingredients go round it. Each time one reaches the orbit the flask wobbles and its glass glows in that ingredient's colour |
 | Snap (3.6 s) | No words: the label stays hidden while the elixir brews and flies. The cork pops out and tumbles above the neck (0.4 s). The ingredients dive in **one at a time** (0.75 s each): each leaves its place in an arc up above the neck, drops down into the flask, shrinking, and lands with a burst of bubbles; the liquid rises by a third, sloshes and takes its colour (red, then mixed with gold, then with green). The cork goes back on (2.7–3.2 s) and the liquid swirls into the elixir's glowing blue (3.2–3.6 s) |
 | Brewed (1.2 s) | The flask swells a little with a flash of sparks and floats there, throbbing; bubbles rise, and its glow lights the player's hands |
@@ -191,11 +191,22 @@ works without hand tracking.
 
 **The hologram hand** (`SnapHint`, its skin `HandSurface`, drawn by `SnapHintRig`) teaches the gesture without
 words. Its pose is pure maths in its own space (wrist at the origin, fingers up, palm towards the viewer): each
-finger bends at its three joints (the last at 0.7 of the middle one); the thumb's metacarpal turns towards the palm
-and its two phalanges reach a target by two-bone IK, so in the loaded pose the thumb's tip touches the middle
-finger's pad exactly. Key poses (open → loaded at 0.8 s → snapped at 1.3 s → open at 2.6 s) are eased with
-`smootherstep`. A test feeds its loaded and snapped poses to `SnapDetector`: the hologram shows a snap the game
-accepts.
+finger bends at its three joints (the last at 0.7 of the middle one) and leans sideways by its splay (the index
+towards the thumb, the ring and little fingers away from it, so the open fingers fan out and the curled ones close
+in); the thumb's metacarpal turns towards the palm and its two phalanges reach a target by two-bone IK, so in the
+loaded pose the thumb's tip touches the middle finger's pad exactly, from the thumb's side (`padAngle`, 0.6 rad).
+Key poses (`keys`, 3 s): open until 0.2 s → **loaded** at 0.85 s (middle finger's pad on the thumb, index lifted
+and slightly curled, ring and little fingers curled with their tips on the palm) → **tensed** at 1.35 s (the thumb
+pushes the middle finger up and back) → **snapped** at 1.45 s (the middle finger's tip on the palm beside the ball
+of the thumb, the thumb up against the index's first phalanx) → held until 2.0 s → open at 2.6 s, a pause. Every
+segment is eased with `smootherstep` except the release (`Curve.strike`, 0.1 s): the thumb leaves at once
+(ease-out) while the fingers start slowly and speed up (ease-in), so the thumb is clear of the middle finger before
+the finger sweeps past it, and the finger hits the palm at full speed. The wrist (`KeyPose.wrist`, read with
+`SnapHint.wrist(at:)` apart from the skin) turns the thumb 20° further towards the player from the set-up to the
+release and back as the hand opens; `SnapHintRig` applies it every frame on top of its fixed `turn`.
+Tests check that no digit passes through another (thumb and fingers, neighbouring fingers) and no fingertip sinks
+into the palm at any moment of the loop, and feed its loaded and snapped poses to `SnapDetector`: the hologram shows
+a snap the game accepts.
 
 Its skin is one smooth surface, like a real hand's: a signed distance field made of a rounded box for the palm
 (narrower at the wrist), a round cone for the ball of the thumb melted into it, and three tapering round cones per
@@ -237,7 +248,7 @@ Sources/Macrowavers/
 │   ├── CupTurn.swift                      A cupped hand next to the close fruit turns it
 │   ├── LiquidVolume.swift                 The flask's liquid at any level: the glass's profile (32 heights), its mesh
 │   ├── HandGestures.swift                 HandSample, ChopDetector (pineapple), SnapDetector (elixir)
-│   ├── SnapHint.swift                     The hologram hand's snapping loop: poses (finger bends, thumb IK), fade
+│   ├── SnapHint.swift                     The hologram hand's snapping loop: poses (finger bends, thumb IK), release curve, wrist turn, fade
 │   ├── HandSurface.swift                  The hologram hand's skin: distance field (palm, tapering fingers), surface nets
 │   ├── SnapHintBake.swift                 The hologram hand's skins baked into a resource: file format, check against the code
 │   └── OrchardViewModel.swift             @Observable: fruit focus, openings, worms, one ingredient per fruit, elixir
@@ -255,7 +266,7 @@ Sources/Macrowavers/
         │                                    snap, flight and pour in the system
         ├── ElixirParticles.swift            The flash, the bubbles, the pour's stream, splash and shimmer
         ├── SnapHintRig.swift                The hologram hand: its baked meshes (one per frame) read in the background,
-        │                                    depth pre-pass sort group, sparks
+        │                                    the wrist's turn every frame, depth pre-pass sort group, sparks
         ├── LiquidLevels.swift               One liquid mesh per level step (48), built once when the flask loads
         ├── HandTracker.swift                ARKit hand tracking → HandSample
         ├── AppleRig.swift                   Apple.usdz while closed; LowLevelMesh + Metal pipeline once open; stem, Worm.usdz
@@ -420,7 +431,7 @@ elixir's flight (`OrchardComponent.flight`).
 | `ChopDetector.Settings` | `speed`, `cooldown` | how fast the hand must come down |
 | `CupTurn.Settings` | `bend`, `keepMargin`, `pinchClearance`, `reach`, `keepReach`, `grace`, `smoothing` | how curled the fingers must be, how close to the fruit, how forgiving once holding, how smooth the turn is |
 | `SnapDetector.Settings` | `contactDistance`, `pinchClearance`, `separation`, `curl`, `window`, `minimumSpeed`, `cooldown` | how strict the snap is |
-| `SnapHint` | `period`, `snapTime`, `fadeDuration`, `keys`, `open`/`loaded`/`snapped`, `fingers`, `thumb…` | the hologram's loop, its key poses and its bones |
+| `SnapHint` | `period`, `snapTime`, `fadeDuration`, `keys` (with each key's `Curve`), `open`/`loaded`/`tensed`/`snapped`, `fist`, `snapWrist`, `padAngle`, `fingers`, `thumb…` | the hologram's loop, its key poses, the release's easing, the wrist's turn and its bones |
 | `HandSurface` | `cellSize`, `palmBlend`, `fingerBlend`, `palm…`, `wristHalfWidth`, `palmWidening`, `taper` | the hologram's skin: detail, how softly fingers join the palm, the palm's shape, how fingers taper (after any change to `SnapHint` or `HandSurface`, bake the hand again) |
 | `SnapHintBake` | `framesPerSecond` | the hologram's smoothness (bake it again after changing it) |
 | `SnapHintRig` | `scale`, `side`, `drop`, `turn`, `lean`, `opacity`, `flashOpacity`, `readyOpacity` | the hologram's smoothness, size, place, angle and brightness |
@@ -549,7 +560,9 @@ The source (Z-up, real size: ~21 cm wide, ~30 cm tall with the cork, tilted 20°
   right and its shape (always seen whole, to the side, clear of the fruit), period, lazy follow and the dive into the
   neck; the flight's arc and arrival.
 - **`Tests/MacrowaversTests/SnapHintTests.swift`:** the hologram's thumb touching the middle finger's pad when
-  loaded, the finger flicking into the palm, finite poses, its snap accepted by `SnapDetector`, one snap per loop,
+  loaded, the finger flicking into the palm, finite poses, no digit through another nor into the palm at any moment
+  of the loop, a slow wind-up held in contact and a fast release, the wrist's turn, its snap accepted by
+  `SnapDetector`, one snap per loop,
   the fade and the loop starting over when shown again; its skin (inside the palm and fingertips, no webbing
   between fingers, tapering, every vertex on the surface, faces turned out, closed); its bake (the shipped
   `SnapHintHand.bin` matches the code and one of its skins is the one the code builds, a changed pose no longer
@@ -569,7 +582,7 @@ sh Assets/SnapHint/make_snap_hint_hand.sh
 
 Run from the repository's root after any change to `SnapHint.swift`, `HandSurface.swift` or
 `SnapHintBake.framesPerSecond`. It compiles `Assets/SnapHint/make_snap_hint_hand.swift` with the app's model
-(`Sources/Macrowavers/Model`), optimised, and writes `Sources/Macrowavers/Resources/SnapHintHand.bin` (~1 s, ~4.5 MB,
+(`Sources/Macrowavers/Model`), optimised, and writes `Sources/Macrowavers/Resources/SnapHintHand.bin` (~1 s, ~5.8 MB,
 Git LFS): every skin of the loop with its pose's signature (`HandSurface.signature`: every bone's ends and radii and
 the skin's constants), positions and normals in Float16 (~0.06 mm off), LZFSE-compressed. The app compares each
 frame's pose with the signatures (`SnapHintBake.matchesCode`, ~5 ms): if the file is missing or out of date it says

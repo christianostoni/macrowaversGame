@@ -8,10 +8,10 @@ import Observation
 @Observable
 final class StoryViewModel {
     private(set) var step = StoryStep.start
-    /// Chapter II's tally: the fruit eaten, the sky's stage, the dragon's hearts, the fire (`DragonFeast`).
+    /// Chapter II's tally: the fruit eaten, the sky's stage, the fire, the feast lost or won (`DragonFeast`).
     private(set) var feast = FeastProgress()
-    /// The tally's fire button was pressed (the snap's alternative without hand tracking): the ride breathes fire
-    /// on its next frame and clears it.
+    /// The sky was tapped (the snap's alternative without hand tracking): the ride breathes fire on its next frame
+    /// and clears it.
     private(set) var isFireRequested = false
 
     /// Screen 1: the player presses Start (the immersive space is opening).
@@ -28,9 +28,12 @@ final class StoryViewModel {
         case .gratitude: .safety
         case .safety: .ride
         case .secondChapter: .feast
+        case .feastFailed: .feast
         case .epilogue: .ended
         case .start, .adventure, .ride, .feast, .finale, .ended: nil
         }
+        // Trying the feast again: a new tally (the ride starts a new feast).
+        if step == .feastFailed, feast != FeastProgress() { feast = FeastProgress() }
         if let next { step = next }
     }
 
@@ -62,7 +65,7 @@ final class StoryViewModel {
         feast = progress
     }
 
-    /// The fire button: like a snap of the fingers (only while feeding).
+    /// A tap on the sky without hand tracking: like a snap of the fingers (only while feeding).
     func requestFire() {
         guard step == .feast else { return }
         isFireRequested = true
@@ -73,6 +76,12 @@ final class StoryViewModel {
         guard isFireRequested else { return false }
         isFireRequested = false
         return true
+    }
+
+    /// A poisoned fruit shattered the medallion's last petal: the feast is lost, a page says so.
+    func feastFailed() {
+        guard step == .feast, feast.phase == .failed else { return }
+        step = .feastFailed
     }
 
     /// The dragon is full and its medallion complete: it flies off into it.

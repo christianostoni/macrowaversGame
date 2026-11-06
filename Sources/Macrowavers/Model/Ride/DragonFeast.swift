@@ -3,9 +3,10 @@ import simd
 
 /// Chapter II on the dragon's back: fruit float among the clouds and the player steers the dragon into them to feed
 /// it. It eats the fruit it likes and spits out the bananas (it doesn't like them: a waste of time); a poisoned fruit
-/// makes it sick and costs one of its hearts. A snap of the fingers makes it breathe fire, burning the fruit in front
-/// of it: the way to clear poisoned ones off the way (a good one burnt is lost). Out of hearts, the dragon is
-/// exhausted: it loses some of the fruit it ate and rests. `Settings.totalGoal` fruit eaten, it is full.
+/// makes it sick and takes back `Settings.poisonCost` of the fruit it ate (their petals of the medallion shatter). A
+/// snap of the fingers makes it breathe fire, burning the fruit in front of it: the way to clear poisoned ones off the
+/// way (a good one burnt is lost). A poisoned fruit that leaves it with nothing eaten fails the feast: the player tries
+/// chapter II again. `Settings.totalGoal` fruit eaten, it is full.
 ///
 /// No waves and no pauses: the sky grows harder as the player does well (`difficulty`, 0...1). Each fruit eaten
 /// raises it, more on a streak; a poisoned fruit lowers it, and so does a long time without eating. It sets what the
@@ -50,20 +51,21 @@ struct DragonFeast {
     enum Event: Equatable {
         case ate(FruitKind)
         case refused(FruitKind)
-        /// Ate a poisoned fruit: a heart lost.
-        case poisoned(FruitKind)
+        /// Ate a poisoned fruit: `lost` of the fruit eaten taken back.
+        case poisoned(FruitKind, lost: Int)
         case burned(FruitKind, wasPoisoned: Bool)
         /// The sky reached a harder stage for the first time (its index in `Settings.levels`): its hint shows.
         case stageReached(Int)
-        /// Out of hearts: the dragon loses `lost` of the fruit it ate, rests, then flies on.
-        case exhausted(lost: Int)
+        /// A poisoned fruit took back the last fruit eaten: the feast is lost (the player tries it again).
+        case failed
         /// The goal eaten: the dragon is full.
         case finished
     }
 
     enum Phase: Equatable {
         case playing
-        case exhausted
+        /// Nothing eaten left after a poisoned fruit: the sky clears, the dragon flies weak, the player starts over.
+        case failed
         case finished
     }
 
@@ -80,9 +82,8 @@ struct DragonFeast {
     private(set) var stage = 0
     /// Good fruit eaten in a row (no banana, no poison in between).
     private(set) var streak = 0
-    /// Fruit eaten over the whole feast (less those lost when exhausted).
+    /// Fruit eaten over the whole feast (less those the poison took back).
     private(set) var eaten = 0
-    private(set) var hearts = Settings.hearts
     private(set) var phase = Phase.playing
     /// Over the whole feast: bananas spat out, poisoned fruit eaten, fruit burnt.
     private(set) var bananas = 0
@@ -101,8 +102,8 @@ struct DragonFeast {
 
     /// What the sky holds now.
     var level: Level { Level.at(difficulty) }
-    /// The fire is out and can be breathed again (not once the feast is over).
-    var isFireReady: Bool { fireTime >= Settings.fireCooldown && phase != .finished }
+    /// The fire is out and can be breathed again (only while the feast is on).
+    var isFireReady: Bool { fireTime >= Settings.fireCooldown && phase == .playing }
     var isBreathingFire: Bool { fireTime < Settings.fireDuration }
     /// 0...1: the breath of fire now (it flares up, holds, dies down).
     var fire: Float {
@@ -111,14 +112,16 @@ struct DragonFeast {
         let fall = min((Settings.fireDuration - fireTime) / 0.25, 1)
         return min(rise, fall)
     }
-    /// 0...1: how weak the dragon is (sick, or exhausted): it flies slower.
-    var weakness: Float { phase == .exhausted ? 1 : 0.6 * sickness }
+    /// 0...1: how weak the dragon is (sick, or the feast failed): it flies slower.
+    var weakness: Float { phase == .failed ? 1 : 0.6 * sickness }
+    /// Seconds since the feast failed (nil while it is not): the story shows its page after a moment, once the
+    /// medallion's last glass has fallen.
+    var failedFor: Float? { phase == .failed ? phaseTime : nil }
 
     /// What the tally shows.
     var progress: FeastProgress {
-        FeastProgress(stage: stage, eaten: eaten, goal: Settings.totalGoal, hearts: hearts,
-                      maxHearts: Settings.hearts, phase: phase, isFireReady: isFireReady, bananas: bananas,
-                      poisoned: poisoned, burned: burned)
+        FeastProgress(stage: stage, eaten: eaten, goal: Settings.totalGoal, phase: phase, isFireReady: isFireReady,
+                      bananas: bananas, poisoned: poisoned, burned: burned)
     }
 
     /// The player snapped their fingers: the dragon breathes fire, if it can. Returns whether it did.
@@ -138,7 +141,6 @@ struct DragonFeast {
         phaseTime += deltaTime
         time += deltaTime
         relieveHunger(deltaTime: deltaTime)
-        advancePhase(ride: ride, using: &random)
 
         var nearest = Float.infinity
         for index in plants.indices {
@@ -184,16 +186,6 @@ struct DragonFeast {
 
     // MARK: - Difficulty
 
-    /// The dragon's rest ends: hearts back, a new sky.
-    private mutating func advancePhase(ride: DragonRide, using random: inout some RandomNumberGenerator) {
-        guard phase == .exhausted, phaseTime >= Settings.restDuration else { return }
-        hearts = Settings.hearts
-        phase = .playing
-        phaseTime = 0
-        hungerTime = 0
-        fill(ride: ride, using: &random)
-    }
-
     /// A new sky at the current difficulty, its first fruit close.
     private mutating func fill(ride: DragonRide, using random: inout some RandomNumberGenerator) {
         plants = (0..<Settings.count).map { index in
@@ -222,7 +214,8 @@ struct DragonFeast {
         difficulty = max(difficulty - amount, 0)
     }
 
-    /// The consequences of a bite: counting, the difficulty, a heart lost, the dragon full or exhausted.
+    /// The consequences of a bite: counting, the difficulty, fruit taken back by poison, the dragon full or the feast
+    /// failed.
     private mutating func bite(_ event: Event) -> [Event] {
         var events = [event]
         switch event {
@@ -239,31 +232,28 @@ struct DragonFeast {
                 let bonus = Settings.streakBonus * Float(min(streak - 1, Settings.longestStreakBonus))
                 events += harden(by: Settings.rise + bonus)
             }
-        case .poisoned:
+        case .poisoned(_, let lost):
             poisoned += 1
-            hearts = max(hearts - 1, 0)
+            eaten -= lost
             sickness = 1
             streak = 0
             ease(by: Settings.poisonRelief)
-            if hearts == 0 {
-                let lost = min(Settings.exhaustionCost, eaten)
-                eaten -= lost
-                ease(by: Settings.exhaustionRelief)
-                events.append(.exhausted(lost: lost))
-                phase = .exhausted
+            if eaten == 0 {
+                events.append(.failed)
+                phase = .failed
                 phaseTime = 0
                 clearSky()
             }
         case .refused:
             bananas += 1
             streak = 0
-        case .burned, .stageReached, .exhausted, .finished:
+        case .burned, .stageReached, .failed, .finished:
             break
         }
         return events
     }
 
-    /// The dragon rests or is full: what still floats fades away (the fruit being bitten is written back by
+    /// The feast failed or the dragon is full: what still floats fades away (the fruit being bitten is written back by
     /// `update`).
     private mutating func clearSky() {
         for index in plants.indices where plants[index].isFloating {
@@ -297,7 +287,9 @@ struct DragonFeast {
         if distance < Settings.biteRadius, phase == .playing {
             if plant.kind.isLikedByDragon {
                 plant.state = .eaten(progress: 0)
-                return (plant.isPoisoned ? .poisoned(plant.kind) : .ate(plant.kind), nil)
+                guard plant.isPoisoned else { return (.ate(plant.kind), nil) }
+                // The poison takes back the last fruit eaten (`bite` counts them off).
+                return (.poisoned(plant.kind, lost: min(Settings.poisonCost, eaten)), nil)
             }
             // Spat forward and to one side, the way it came from.
             let side = simd_normalize(simd_cross(ride.forward, SIMD3(0, 1, 0)))
@@ -434,18 +426,15 @@ extension DragonFeast {
         static let rise: Float = 0.1
         static let streakBonus: Float = 0.04
         static let longestStreakBonus = 2
-        /// How much a poisoned fruit lowers it, and exhaustion.
+        /// How much a poisoned fruit lowers it.
         static let poisonRelief: Float = 0.12
-        static let exhaustionRelief: Float = 0.25
         /// Help for a player who struggles: after this long without eating (s), the difficulty falls this fast (1/s).
         static let reliefDelay: Float = 10
         static let reliefRate: Float = 0.02
-        /// Fruit lost (and petals uncoloured) when the dragon is exhausted.
-        static let exhaustionCost = 2
+        /// Fruit a poisoned fruit takes back (their petals of the medallion shatter).
+        static let poisonCost = 2
         /// How long a fruit's swing from side to side and back lasts (s).
         static let swayPeriod: Float = 4
-        /// The dragon's hearts: each poisoned fruit costs one.
-        static let hearts = 3
         /// Where new fruit appear in front of the player (ride space, m): ahead, to the sides, above and below
         /// the dragon's mouth.
         static let ahead: ClosedRange<Float> = 16...36
@@ -469,8 +458,8 @@ extension DragonFeast {
         static let appetiteRange: Float = 6
         static let disgustDuration: Float = 1.8
         static let sicknessDuration: Float = 3
-        /// The dragon's rest when exhausted (s).
-        static let restDuration: Float = 4
+        /// After the feast fails, how long the medallion's glass falls before the story says so (s).
+        static let failurePause: Float = 2.2
         /// The fire: how long a breath lasts, how long until the next one, how far it reaches (m) and how wide
         /// (half-angle around the flight's direction, radians; a fruit counts with its own size).
         static let fireDuration: Float = 0.9
@@ -487,8 +476,6 @@ struct FeastProgress: Equatable {
     var stage = 0
     var eaten = 0
     var goal = DragonFeast.Settings.totalGoal
-    var hearts = DragonFeast.Settings.hearts
-    var maxHearts = DragonFeast.Settings.hearts
     var phase = DragonFeast.Phase.playing
     var isFireReady = true
     var bananas = 0

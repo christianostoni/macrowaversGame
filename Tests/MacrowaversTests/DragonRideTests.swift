@@ -24,7 +24,7 @@ struct DragonRideTests {
 
     @Test func theStoryEndsOnTheDragonsBackInFullImmersion() {
         #expect(StoryStep.allCases.filter(\.isFullyImmersed)
-                    == [.ride, .secondChapter, .feast, .finale, .epilogue, .ended])
+                    == [.ride, .secondChapter, .feast, .feastFailed, .finale, .epilogue, .ended])
         #expect(StoryStep.ride.page == nil && StoryStep.ride.revealsWorld)
         let focus = SceneFocus(isFruitFocused: false, isElixirFlying: false, phase: .free, isDragonSpeaking: false,
                                isRiding: true)

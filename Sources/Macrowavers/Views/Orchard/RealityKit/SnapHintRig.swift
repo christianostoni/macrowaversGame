@@ -31,7 +31,8 @@ final class SnapHintRig {
     static let side: Float = 0.25
     static let drop: Float = 0.06
     /// The hand turned from facing the player (radians, around the vertical): its palm turns to the left, the thumb
-    /// comes towards the player, so they see the thumb on the middle finger and the finger flick into the palm.
+    /// comes towards the player. The wrist turns it 20° further while it snaps (`SnapHint.wrist(at:)`), so the
+    /// player sees the thumb and the middle finger meet in profile and the finger strike the palm.
     static let turn: Float = -50 * .pi / 180
     /// Leaning back (radians): the player looks down at it, its palm faces their eyes.
     static let lean: Float = 0.3
@@ -49,6 +50,8 @@ final class SnapHintRig {
     private var meshes: [MeshResource] = []
     private var frames: [Int] = []
     private var shownMesh: Int?
+    /// The wrist's turn last drawn (`SnapHint.wrist(at:)`).
+    private var shownWrist: Float = 0
     private var isPreparing = false
 
     init() {
@@ -112,6 +115,12 @@ final class SnapHintRig {
         let opacity = hint.presence * (Self.opacity + flicker + Self.flashOpacity * hint.flash
             + (isPlayerReady ? Self.readyOpacity : 0))
         root.components.set(OpacityComponent(opacity: min(max(opacity, 0), 1)))
+
+        let wrist = SnapHint.wrist(at: hint.time)
+        if wrist != shownWrist {
+            hand.orientation = simd_quatf(angle: Self.turn - wrist, axis: SIMD3(0, 1, 0))
+            shownWrist = wrist
+        }
 
         let frame = min(max(Int(hint.time * SnapHintBake.framesPerSecond), 0), frames.count - 1)
         let mesh = frames[frame]

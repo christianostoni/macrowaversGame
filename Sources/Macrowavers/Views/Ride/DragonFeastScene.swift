@@ -3,6 +3,9 @@ import RealityKit
 import simd
 import UIKit
 
+/// The invisible wall in front of the player a tap on breathes fire, without hand tracking.
+struct RideFireTarget: Component {}
+
 /// What a fruit in the sky looks like: its kind, poisoned or not.
 struct FruitLook: Hashable {
     let kind: FruitKind
@@ -71,6 +74,38 @@ extension DragonRideSystem {
                                            time: state.ride.time)
     }
 
+    /// Chapter II's goal once the dragon has flown out of the dark for a moment; the fruit once the player has
+    /// read it. A feast lost: its page once the medallion's last glass has fallen; tried again, a new feast (the
+    /// medallion is already bare).
+    @MainActor
+    static func followStory(_ state: inout DragonRideComponent) {
+        if state.story.step == .ride, state.ride.time > DragonRide.Settings.arrivalDuration + titleDelay {
+            state.story.rideArrived()
+        }
+        if state.story.step == .feast, let failedFor = state.feast?.failedFor,
+           failedFor >= DragonFeast.Settings.failurePause {
+            state.story.feastFailed()
+        }
+        if state.story.step == .feastFailed, state.feast != nil {
+            state.feast = nil
+            state.shamseh.uncolour(last: state.shamseh.colours.count)
+        }
+        if state.story.step == .feast, state.feast == nil {
+            state.feast = DragonFeast(ride: state.ride, using: &state.random)
+        }
+    }
+
+    /// The sky takes a tap (to breathe fire) only while the player feeds the dragon without hand tracking: with it,
+    /// the pinches that hold the horns would breathe fire too.
+    @MainActor
+    static func enableFireTap(_ state: DragonRideComponent) {
+        let isEnabled = state.story.step == .feast && !state.hands.isTracking
+        guard var target = state.fireTarget.components[InputTargetComponent.self],
+              target.isEnabled != isEnabled else { return }
+        target.isEnabled = isEnabled
+        state.fireTarget.components.set(target)
+    }
+
     /// A snap: the dragon breathes fire, if its fire is ready.
     @MainActor
     static func breatheFire(_ state: inout DragonRideComponent) {
@@ -80,8 +115,7 @@ extension DragonRideSystem {
     }
 
     /// The fruit: eaten, spat out, poisoning the dragon, burnt; the tally; the medallion's petals (one per fruit
-    /// eaten, a poisoned one darkening the last for a moment; out of hearts, the petals of the fruit the dragon lost
-    /// fade).
+    /// eaten; a poisoned one takes back the last two, which shatter, `ShamsehSky`).
     @MainActor
     static func feed(_ state: inout DragonRideComponent, mouth: SIMD3<Float>, deltaTime: Float) {
         guard var feast = state.feast else { return }
@@ -95,15 +129,13 @@ extension DragonRideSystem {
                 state.shamseh.colour(with: fruit)
                 play(.eating(fruit), from: state.mouth, sounds: state.sounds)
             case .refused: play(.growl, from: state.mouth, sounds: state.sounds)
-            case .poisoned:
-                state.shamsehSky.poison(state.shamseh)
+            case .poisoned(_, let lost):
+                state.shamseh.uncolour(last: lost)
                 play(.sick, from: state.mouth, sounds: state.sounds)
                 play(.poison, from: state.ears, sounds: state.sounds)
             case .burned: break
             case .stageReached: play(.chime, from: state.mouth, sounds: state.sounds)
-            case .exhausted(let lost):
-                state.shamseh.uncolour(last: lost)
-                play(.rumble, from: state.mouth, sounds: state.sounds)
+            case .failed: play(.rumble, from: state.mouth, sounds: state.sounds)
             case .finished: play(.chime, from: state.mouth, sounds: state.sounds)
             }
         }
@@ -228,6 +260,21 @@ extension DragonRideSceneBuilder {
         emitter.mainEmitter.sizeMultiplierAtEndOfLifespan = 5
         emitter.isEmitting = false
         entity.components.set(emitter)
+        return entity
+    }
+
+    /// Without hand tracking (the simulator), a tap on the sky breathes fire: a wide invisible wall far in front of
+    /// the player, behind every panel, in ride space so it stays in front of them. Off until the feast
+    /// (`DragonRideSystem.enableFireTap`).
+    @MainActor
+    static func makeFireTarget() -> Entity {
+        let entity = Entity()
+        entity.name = "RideFireTarget"
+        entity.position = SIMD3(0, 0, -12)
+        entity.components.set(CollisionComponent(shapes: [.generateBox(size: SIMD3(60, 40, 0.1))]))
+        entity.components.set(InputTargetComponent(allowedInputTypes: .indirect))
+        entity.components[InputTargetComponent.self]?.isEnabled = false
+        entity.components.set(RideFireTarget())
         return entity
     }
 

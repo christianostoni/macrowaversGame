@@ -6,19 +6,24 @@ import simd
 /// Pure maths (Foundation + simd): the `OrchardSystem` keeps one and advances it; its skin is `HandSurface`.
 ///
 /// The hand lives in its own space (metres): the wrist at the origin, the fingers up (+Y), the palm facing +Z, the
-/// thumb on +X (a right hand with its palm towards the viewer). Each loop: the open hand, the thumb pressed on the
-/// middle finger's pad (the ring and little fingers curled), then, in a flash, the middle finger flicks into the
-/// palm as the thumb slides along the index, a hold, and the hand opens again.
+/// thumb on +X (a right hand with its palm towards the viewer). Each loop, like a real snap:
+/// 1. **Set up** (slowly, so it reads): the ring and little fingers curl into the palm, the index lifts out of the
+///    way, the thumb comes across and the middle finger's pad settles on it, from the thumb's side.
+/// 2. **Tension**: the thumb pushes the middle finger up and back while the finger presses down on it.
+/// 3. **Release** (in a flash): the thumb flicks up and out first, along the index, and the middle finger, freed,
+///    slides off it and strikes the ball of the thumb at full speed (`Curve.strike`).
+/// 4. A hold, the hand relaxes, a pause.
 ///
 /// The fingers bend at their three joints (`FingerPose`, the last one at 0.7 of the middle one); the thumb is a
 /// fixed first bone (the metacarpal, turned towards the palm as the hand loads) and two phalanges solved to reach a
-/// target point (two-bone IK): its tip lands exactly on the middle finger's pad in the loaded pose.
+/// target point (two-bone IK): its tip lands exactly on the middle finger's pad in the loaded pose. No two digits
+/// pass through each other at any moment of the loop (`SnapHintTests`).
 struct SnapHint: Equatable {
     /// The joints of one pose (hand space) and the points the effects need.
     struct Pose: Equatable {
         var thumb: ThumbJoints
         var thumbTip: SIMD3<Float> { thumb.tip }
-        /// The pad of the middle finger's last phalanx: where the thumb presses.
+        /// The pad of the middle finger's last phalanx: where the thumb presses (on its surface, facing the thumb).
         var middlePad: SIMD3<Float>
         var middleTip: SIMD3<Float>
         /// Each finger's three joints after its knuckle (index, middle, ring, little; the last is the fingertip).
@@ -26,8 +31,8 @@ struct SnapHint: Equatable {
     }
 
     /// Seconds of one loop, and when in it the middle finger hits the palm (the snap).
-    static let period: Float = 2.8
-    static let snapTime: Float = 1.3
+    static let period: Float = 3.0
+    static let snapTime: Float = 1.45
     /// How fast the hand fades in and out (s).
     static let fadeDuration: Float = 0.5
 
@@ -79,62 +84,129 @@ struct SnapHint: Equatable {
         var opposition: Float
         /// Where the thumb's tip goes.
         var thumb: ThumbTarget
+        /// How far the wrist turns the thumb towards the viewer (radians, around the forearm), on top of
+        /// `SnapHintRig.turn`: the open hand shows its palm, the snap is seen from the thumb's side.
+        var wrist: Float = 0
     }
 
     enum ThumbTarget: Equatable {
-        /// Relaxed, out to the side.
+        /// Relaxed, beside the index.
         case rest
-        /// Pressed on the middle finger's pad.
+        /// Pressed on the middle finger's pad, from the thumb's side (`padAngle`).
         case middlePad
-        /// Slid along the index, against its first phalanx.
-        case alongIndex
+        /// Flicked up against the index's first phalanx, on its thumb side, a little towards the palm.
+        case indexSide
     }
 
-    static let open = KeyPose(index: FingerPose(base: 0.12, middle: 0.12), middle: FingerPose(base: 0.12, middle: 0.12),
-                              ring: FingerPose(base: 0.18, middle: 0.2), little: FingerPose(base: 0.22, middle: 0.22),
-                              opposition: 0, thumb: .rest)
-    static let loaded = KeyPose(index: FingerPose(base: 0.25, middle: 0.35), middle: FingerPose(base: 1.0, middle: 0.85),
-                                ring: FingerPose(base: 1.35, middle: 1.5), little: FingerPose(base: 1.4, middle: 1.5),
-                                opposition: 1, thumb: .middlePad)
-    static let snapped = KeyPose(index: FingerPose(base: 0.3, middle: 0.4), middle: FingerPose(base: 1.45, middle: 1.5),
-                                 ring: FingerPose(base: 1.35, middle: 1.5), little: FingerPose(base: 1.4, middle: 1.5),
-                                 opposition: 1, thumb: .alongIndex)
+    /// How the hand moves into a key pose from the one before.
+    enum Curve: Equatable {
+        /// Eased in and out (`smootherstep`): it starts and stops gently.
+        case smooth
+        /// The snap's release: the thumb leaves at once and slows down (ease-out), the fingers start slowly and
+        /// speed up into the palm (ease-in), so the thumb is out of the middle finger's way before the finger sweeps
+        /// past, and the finger hits at full speed.
+        case strike
+    }
 
-    /// The loop: (time, key pose); between two keys the hand eases from one to the other.
-    static let keys: [(time: Float, pose: KeyPose)] = [
-        (0, open), (0.2, open), (0.8, loaded), (1.18, loaded), (snapTime, snapped), (1.9, snapped),
-        (2.6, open), (period, open)
+    struct Key: Equatable {
+        var time: Float
+        var pose: KeyPose
+        var curve: Curve = .smooth
+    }
+
+    /// A loose, relaxed hand.
+    static let open = KeyPose(index: FingerPose(base: 0.1, middle: 0.18), middle: FingerPose(base: 0.12, middle: 0.2),
+                              ring: FingerPose(base: 0.16, middle: 0.24), little: FingerPose(base: 0.2, middle: 0.28),
+                              opposition: 0.15, thumb: .rest)
+    /// Ready: the middle finger's pad on the thumb, the index lifted clear, the ring and little fingers in a fist.
+    static let loaded = KeyPose(index: FingerPose(base: 0.25, middle: 0.42), middle: FingerPose(base: 0.85, middle: 0.85),
+                                ring: fist.ring, little: fist.little, opposition: 1, thumb: .middlePad,
+                                wrist: snapWrist)
+    /// Tension: the thumb pushes the middle finger up and back, the finger presses on it.
+    static let tensed = KeyPose(index: FingerPose(base: 0.22, middle: 0.4), middle: FingerPose(base: 0.7, middle: 0.95),
+                                ring: fist.ring, little: fist.little, opposition: 1, thumb: .middlePad,
+                                wrist: snapWrist)
+    /// Snapped: the middle finger struck on the palm, beside the ball of the thumb; the thumb up against the index.
+    static let snapped = KeyPose(index: FingerPose(base: 0.28, middle: 0.46), middle: FingerPose(base: 1.45, middle: 1.8),
+                                 ring: fist.ring, little: fist.little, opposition: 0.75, thumb: .indexSide,
+                                 wrist: snapWrist)
+    /// The ring and little fingers curled into the palm, their tips on it.
+    private static let fist = (ring: FingerPose(base: 1.4, middle: 1.8), little: FingerPose(base: 1.35, middle: 1.65))
+    /// The wrist's turn while the hand snaps (20°): the thumb and the middle finger meet in profile.
+    private static let snapWrist: Float = 20 * .pi / 180
+
+    /// The loop: a pause, the set-up (0.65 s), the tension (0.5 s), the release (0.1 s), a hold, the hand relaxing,
+    /// a pause.
+    static let keys: [Key] = [
+        Key(time: 0, pose: open), Key(time: 0.2, pose: open), Key(time: 0.85, pose: loaded),
+        Key(time: 1.35, pose: tensed), Key(time: snapTime, pose: snapped, curve: .strike),
+        Key(time: 2.0, pose: snapped), Key(time: 2.6, pose: open), Key(time: period, pose: open)
     ]
 
-    /// The hand at `time` seconds into the loop.
-    static func pose(at time: Float) -> Pose {
+    /// The two keys around a moment of the loop and how far between them it is (0…1, not eased).
+    private struct Segment {
+        var from: Key
+        var to: Key
+        var linear: Float
+    }
+
+    private static func segment(at time: Float) -> Segment {
         let time = min(max(time, 0), period)
         let next = keys.firstIndex { $0.time > time } ?? keys.count - 1
         let from = keys[max(next - 1, 0)]
         let to = keys[next]
         let span = to.time - from.time
-        let progress = span > 0 ? Elixir.smootherstep((time - from.time) / span) : 1
-        return pose(from.pose, to.pose, progress)
+        return Segment(from: from, to: to, linear: span > 0 ? min(max((time - from.time) / span, 0), 1) : 1)
     }
 
-    /// The hand between two key poses (`progress` 0…1, already eased).
-    static func pose(_ from: KeyPose, _ to: KeyPose, _ progress: Float) -> Pose {
+    /// The hand at `time` seconds into the loop.
+    static func pose(at time: Float) -> Pose {
+        let segment = segment(at: time)
+        let linear = segment.linear
+        switch segment.to.curve {
+        case .smooth:
+            let progress = Elixir.smootherstep(linear)
+            return pose(segment.from.pose, segment.to.pose, fingers: progress, thumb: progress)
+        case .strike:
+            let fingers = linear * linear
+            let thumb = 1 - (1 - linear) * (1 - linear) * (1 - linear)
+            return pose(segment.from.pose, segment.to.pose, fingers: fingers, thumb: thumb)
+        }
+    }
+
+    /// The wrist's turn at `time` seconds into the loop (radians, `KeyPose.wrist`). Apart from the skin: the rig
+    /// turns the hand with it every frame, smoothly, and the baked skins stay one per finger pose.
+    static func wrist(at time: Float) -> Float {
+        let segment = segment(at: time)
+        return simd_mix(segment.from.pose.wrist, segment.to.pose.wrist, Elixir.smootherstep(segment.linear))
+    }
+
+    /// The hand between two key poses (`fingers` and `thumb` 0…1, already eased: the thumb may lead).
+    static func pose(_ from: KeyPose, _ to: KeyPose, fingers progress: Float, thumb thumbProgress: Float) -> Pose {
         func mix(_ first: FingerPose, _ second: FingerPose) -> FingerPose {
             FingerPose(base: simd_mix(first.base, second.base, progress),
                        middle: simd_mix(first.middle, second.middle, progress))
         }
+        func chains(_ pose: KeyPose) -> [[SIMD3<Float>]] {
+            zip(Self.fingers, [pose.index, pose.middle, pose.ring, pose.little]).map { chain($0, pose: $1) }
+        }
         let fingers = [mix(from.index, to.index), mix(from.middle, to.middle), mix(from.ring, to.ring),
                        mix(from.little, to.little)]
-        let chains = zip(Self.fingers, fingers).map { chain($0, pose: $1) }
-        let opposition = simd_mix(from.opposition, to.opposition, progress)
-        let start = target(from.thumb, fingers: zip(Self.fingers, [from.index, from.middle, from.ring, from.little])
-            .map { chain($0, pose: $1) })
-        let end = target(to.thumb, fingers: zip(Self.fingers, [to.index, to.middle, to.ring, to.little])
-            .map { chain($0, pose: $1) })
-        let thumb = thumbChain(opposition: opposition, target: simd_mix(start, end, SIMD3(repeating: progress)))
-        let middle = chains[1]
+        let current = zip(Self.fingers, fingers).map { chain($0, pose: $1) }
+        let opposition = simd_mix(from.opposition, to.opposition, thumbProgress)
+        let goal: SIMD3<Float>
+        if from.thumb == to.thumb {
+            // The same hold (the pad, through the tension): the thumb follows the finger it touches.
+            goal = target(to.thumb, fingers: current)
+        } else {
+            let start = target(from.thumb, fingers: chains(from))
+            let end = target(to.thumb, fingers: chains(to))
+            goal = simd_mix(start, end, SIMD3(repeating: thumbProgress))
+        }
+        let thumb = thumbChain(opposition: opposition, target: goal)
+        let middle = current[1]
         return Pose(thumb: thumb, middlePad: pad(of: middle, radius: Self.fingers[1].tipRadius), middleTip: middle[2],
-                    fingers: chains)
+                    fingers: current)
     }
 
     // MARK: - The hand's shape
@@ -165,10 +237,13 @@ struct SnapHint: Equatable {
     /// The thumb's metacarpal, out to the side and turned towards the palm.
     static let thumbSide = simd_normalize(SIMD3<Float>(0.75, 0.6, 0.25))
     static let thumbOpposed = simd_normalize(SIMD3<Float>(0.25, 0.65, 0.72))
-    /// The relaxed thumb's tip.
-    static let thumbRest = SIMD3<Float>(0.068, 0.088, 0.03)
+    /// The relaxed thumb's tip: nearly straight, beside the index.
+    static let thumbRest = SIMD3<Float>(0.07, 0.104, 0.03)
     /// The side the thumb's middle joint bends out to (two-bone IK pole).
     static let thumbPole = simd_normalize(SIMD3<Float>(1, 0.1, -0.5))
+    /// Where on the middle finger's pad the thumb presses: turned this far (radians) from straight under the pad
+    /// towards the thumb's side, so the thumb has only a little way to go to clear the finger at the release.
+    static let padAngle: Float = 0.6
     /// The three joints after the knuckle (the last one is the fingertip).
     static func chain(_ finger: Finger, pose: FingerPose) -> [SIMD3<Float>] {
         let angles = [pose.base, pose.base + pose.middle, pose.base + pose.middle + 0.7 * pose.middle]
@@ -181,14 +256,17 @@ struct SnapHint: Equatable {
 
     /// A finger bone's direction: up, leaning sideways by `splay`, bent towards the palm by `bend`.
     static func direction(splay: Float, bend: Float) -> SIMD3<Float> {
-        SIMD3(sin(splay) * cos(bend), cos(splay) * cos(bend), sin(bend))
+        SIMD3(-sin(splay) * cos(bend), cos(splay) * cos(bend), sin(bend))
     }
 
-    /// The pad of a finger's last phalanx: `radius` off its axis, on its palm side, a little before the tip.
+    /// The pad of a finger's last phalanx: `radius` off its axis, a little before the tip, on its palm side turned
+    /// `padAngle` towards the thumb.
     static func pad(of joints: [SIMD3<Float>], radius: Float) -> SIMD3<Float> {
         let axis = simd_normalize(joints[2] - joints[1])
         let palmSide = simd_normalize(simd_cross(SIMD3(1, 0, 0), axis))
-        return joints[2] - axis * 0.006 + palmSide * radius
+        let thumbSide = simd_normalize(simd_cross(axis, palmSide))
+        let facing = palmSide * cos(padAngle) + thumbSide * sin(padAngle)
+        return joints[2] - axis * 0.006 + facing * radius
     }
 
     private static func target(_ target: ThumbTarget, fingers: [[SIMD3<Float>]]) -> SIMD3<Float> {
@@ -198,11 +276,17 @@ struct SnapHint: Equatable {
         case .middlePad:
             // The thumb's tip touching the pad: its centre one thumb radius further out.
             return pad(of: fingers[1], radius: Self.fingers[1].tipRadius + thumbTipRadius)
-        case .alongIndex:
-            // Against the index's first phalanx, on the palm's side.
+        case .indexSide:
+            // Against the index's first phalanx, two thirds of the way up, on its thumb side, turned towards the
+            // palm, with a hair of air between them.
             let index = fingers[0]
             let knuckle = Self.fingers[0].knuckle
-            return (knuckle + index[0]) / 2 + SIMD3(0.004, 0, 0.02)
+            let along = simd_mix(knuckle, index[0], SIMD3(repeating: 0.6))
+            let axis = simd_normalize(index[0] - knuckle)
+            let palmSide = simd_normalize(simd_cross(SIMD3(1, 0, 0), axis))
+            let thumbSide = simd_normalize(simd_cross(axis, palmSide))
+            let radius = Self.fingers[0].radius * simd_mix(1, HandSurface.taper.x, 0.6)
+            return along + simd_normalize(thumbSide + palmSide) * (radius + thumbTipRadius + 0.001)
         }
     }
 

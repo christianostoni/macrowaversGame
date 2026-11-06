@@ -22,11 +22,13 @@ enum StoryStep: Equatable, CaseIterable {
     /// The player is ready: the room goes dark (full immersion) and they fly on the dragon's back, steering it
     /// with both hands, out of the dark into the sky.
     case ride
-    /// Over the clouds: chapter II's goal (its name was shown while the ride loaded).
+    /// Over the clouds: chapter II's goal (its name was tapped away before the ride began).
     case secondChapter
     /// Fruit float in the sky, harder as the player does well: they steer the dragon into the ones it likes (not the
     /// bananas, not the poisoned ones: fire burns those away) (`DragonFeast`).
     case feast
+    /// A poisoned fruit shattered the medallion's last petal: the feast is lost, the player tries it again.
+    case feastFailed
     /// The dragon is full: it flies on its own into the heart of the shamseh, in a rush of light.
     case finale
     /// In the light at the medallion's heart: the story's last page.
@@ -75,6 +77,9 @@ enum StoryStep: Equatable, CaseIterable {
         case .secondChapter:
             // Named while the ride loaded (`rideTitle`): only its goal, without a title.
             Page(title: "", lines: ["Feed the dragon the right plants."], anchor: .viewer, advance: .tap)
+        case .feastFailed:
+            Page(title: "The poison won", lines: ["The shamseh's glass is broken.", "Feed the dragon again."],
+                 anchor: .viewer, advance: .answer("Try Again"))
         case .epilogue:
             Page(title: "Home at last", lines: ["The dragon is full, and the curse is gone.",
                                                 "Thank you for flying with it."],
@@ -82,8 +87,8 @@ enum StoryStep: Equatable, CaseIterable {
         }
     }
 
-    /// Chapter II's name, over the ride's loading animation while its sky is built (`DragonRideView`): the wait in the
-    /// dark opens the chapter as chapter I's title does. No step of its own: it goes once the sky is built and read.
+    /// Chapter II's name, in the dark once the ride's sky is built (`DragonRideView`; a loading animation until then),
+    /// as chapter I's title opens the island. No step of its own: tapping it starts the ride out of the dark.
     static let rideTitle = Page(title: "Chapter II", lines: ["Havā-tō dāram: I have your back"],
                                 anchor: .viewer, advance: .tap)
 
@@ -94,7 +99,9 @@ enum StoryStep: Equatable, CaseIterable {
     var revealsWorld: Bool {
         switch self {
         case .start, .scroll, .chapter: false
-        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast, .finale, .epilogue, .ended: true
+        case .adventure, .gratitude, .safety, .ride, .secondChapter, .feast, .feastFailed, .finale, .epilogue,
+             .ended:
+            true
         }
     }
 
@@ -104,7 +111,7 @@ enum StoryStep: Equatable, CaseIterable {
     /// The room is gone: the player is in the sky (full immersion), on the dragon's back.
     var isFullyImmersed: Bool {
         switch self {
-        case .ride, .secondChapter, .feast, .finale, .epilogue, .ended: true
+        case .ride, .secondChapter, .feast, .feastFailed, .finale, .epilogue, .ended: true
         case .start, .scroll, .chapter, .adventure, .gratitude, .safety: false
         }
     }

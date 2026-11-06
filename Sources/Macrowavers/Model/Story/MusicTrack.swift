@@ -18,8 +18,8 @@ enum MusicTrack: String, CaseIterable {
     static func playing(story: StoryStep, dragon: DragonPhase) -> MusicTrack? {
         switch (story, dragon) {
         case (.start, _): nil
-        case (.gratitude, _), (.safety, _), (.ride, _), (.secondChapter, _), (.feast, _), (.finale, _),
-             (.epilogue, _), (.ended, _), (_, .free):
+        case (.gratitude, _), (.safety, _), (.ride, _), (.secondChapter, _), (.feast, _), (.feastFailed, _),
+             (.finale, _), (.epilogue, _), (.ended, _), (_, .free):
             .farewell
         case (_, .approaching), (_, .landing), (_, .untangling): .puzzle
         default: .intro
@@ -30,7 +30,7 @@ enum MusicTrack: String, CaseIterable {
     /// medallion's heart, the farewell again under the story's last page, silence as the space closes.
     static func riding(story: StoryStep) -> MusicTrack? {
         switch story {
-        case .ride, .secondChapter, .feast, .finale: .ride
+        case .ride, .secondChapter, .feast, .feastFailed, .finale: .ride
         case .epilogue: .farewell
         default: nil
         }

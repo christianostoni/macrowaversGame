@@ -48,7 +48,7 @@ struct DragonFeastTests {
         }
         #expect(feast.plants.allSatisfy { $0.isGood })
         #expect(feast.difficulty == 0 && feast.stage == 0)
-        #expect(feast.hearts == DragonFeast.Settings.hearts && feast.phase == .playing)
+        #expect(feast.eaten == 0 && feast.phase == .playing)
     }
 
     @Test func theSkyGrowsHarderWithTheDifficulty() {
@@ -128,13 +128,14 @@ struct DragonFeastTests {
         #expect(!feast.plants.contains { $0.isFloating })
     }
 
-    @Test func aPoisonedFruitCostsAHeartAndMakesTheDragonSick() {
+    @Test func aPoisonedFruitTakesBackTwoFruitAndMakesTheDragonSick() {
         var random = SeededRandom(seed: 1)
         let ride = flying()
         var feast = DragonFeast(ride: ride, using: &random)
+        for _ in 0..<5 { _ = feed(&feast, ride: ride, random: &random) }
         let events = feed(&feast, ride: ride, kind: .pineapple, isPoisoned: true, random: &random)
-        #expect(events == [.poisoned(.pineapple)])
-        #expect(feast.hearts == DragonFeast.Settings.hearts - 1 && feast.eaten == 0)
+        #expect(events == [.poisoned(.pineapple, lost: DragonFeast.Settings.poisonCost)])
+        #expect(feast.eaten == 5 - DragonFeast.Settings.poisonCost && feast.phase == .playing)
         #expect(feast.sickness > 0.9 && feast.weakness > 0.5)
         _ = wait(&feast, ride: ride, seconds: DragonFeast.Settings.sicknessDuration, random: &random)
         #expect(feast.sickness == 0 && feast.weakness == 0)
@@ -165,25 +166,33 @@ struct DragonFeastTests {
         #expect(feast.difficulty < before - 4 * DragonFeast.Settings.reliefRate)
     }
 
-    @Test func outOfHeartsTheDragonLosesSomeFruitAndRests() {
+    @Test func aPoisonedFruitThatTakesBackTheLastFruitFailsTheFeast() {
         var random = SeededRandom(seed: 2)
         let ride = flying()
         var feast = DragonFeast(ride: ride, using: &random)
         var events: [DragonFeast.Event] = []
         for _ in 0..<3 { events += feed(&feast, ride: ride, random: &random) }
-        for _ in 0..<DragonFeast.Settings.hearts {
-            events += feed(&feast, ride: ride, kind: .orange, isPoisoned: true, random: &random)
-        }
-        let cost = DragonFeast.Settings.exhaustionCost
-        #expect(events.last == .exhausted(lost: cost))
-        #expect(feast.phase == .exhausted && feast.hearts == 0 && feast.weakness == 1)
-        #expect(feast.eaten == 3 - cost)
+        events += feed(&feast, ride: ride, kind: .orange, isPoisoned: true, random: &random)
+        #expect(events.last == .poisoned(.orange, lost: 2) && feast.eaten == 1 && feast.phase == .playing)
+        // Only one left to take back: the feast is lost.
+        events = feed(&feast, ride: ride, kind: .apple, isPoisoned: true, random: &random)
+        #expect(events == [.poisoned(.apple, lost: 1), .failed])
+        #expect(feast.eaten == 0 && feast.phase == .failed && feast.weakness == 1 && !feast.isFireReady)
+        #expect(feast.failedFor == 0 && feast.progress.phase == .failed && feast.progress.poisoned == 2)
 
-        _ = wait(&feast, ride: ride, seconds: DragonFeast.Settings.restDuration + 0.1, random: &random)
-        #expect(feast.phase == .playing && feast.eaten == 3 - cost)
-        #expect(feast.hearts == DragonFeast.Settings.hearts)
-        #expect(feast.plants.allSatisfy { $0.isFloating })
-        #expect(feast.progress.poisoned == DragonFeast.Settings.hearts)
+        // The sky clears and stays empty; nothing more is eaten.
+        events = wait(&feast, ride: ride, seconds: DragonFeast.Settings.failurePause, random: &random)
+        #expect(events.isEmpty && !feast.plants.contains { $0.isFloating })
+        #expect((feast.failedFor ?? 0) >= DragonFeast.Settings.failurePause - 0.05)
+        #expect(feast.phase == .failed)
+    }
+
+    @Test func aPoisonedFruitWithNothingEatenFailsTheFeast() {
+        var random = SeededRandom(seed: 4)
+        let ride = flying()
+        var feast = DragonFeast(ride: ride, using: &random)
+        let events = feed(&feast, ride: ride, kind: .pomegranate, isPoisoned: true, random: &random)
+        #expect(events == [.poisoned(.pomegranate, lost: 0), .failed] && feast.phase == .failed)
     }
 
     @Test func inAHardSkyTheFruitDodge() {
@@ -219,7 +228,7 @@ struct DragonFeastTests {
         var feast = DragonFeast(ride: ride, using: &random)
         let events = feed(&feast, ride: ride, kind: .banana, random: &random)
         #expect(events == [.refused(.banana)])
-        #expect(feast.disgust > 0.9 && feast.hearts == DragonFeast.Settings.hearts && feast.bananas == 1)
+        #expect(feast.disgust > 0.9 && feast.phase == .playing && feast.eaten == 0 && feast.bananas == 1)
         if case .spat = feast.plants[0].state {} else { Issue.record("the banana was not spat out") }
     }
 
@@ -288,8 +297,9 @@ struct DragonFeastTests {
         story.skipToRide()
         story.rideArrived()
         #expect(story.step == .secondChapter)
-        // Named while the ride loaded (`rideTitle`): its page is only the goal.
+        // Named before the ride set off (`rideTitle`): its page is only the goal.
         #expect(story.step.page?.title == "" && StoryStep.rideTitle.title == "Chapter II")
+        #expect(story.step.page?.lines == ["Feed the dragon the right plants."])
         story.advance()
         #expect(story.step == .feast)
         story.showFeast(progress)
@@ -299,6 +309,21 @@ struct DragonFeastTests {
         let firstTake = story.takeFireRequest()
         let secondTake = story.takeFireRequest()
         #expect(firstTake && !secondTake)
+
+        // Lost only once the feast says so; tried again, a new tally.
+        story.feastFailed()
+        #expect(story.step == .feast)
+        var failed = progress
+        failed.phase = .failed
+        story.showFeast(failed)
+        story.feastFailed()
+        #expect(story.step == .feastFailed && story.step.isFullyImmersed)
+        #expect(story.step.page?.advance == .answer("Try Again"))
+        story.showFeast(progress)
+        #expect(story.feast == failed)
+        story.advance()
+        #expect(story.step == .feast && story.feast == FeastProgress())
+        story.showFeast(progress)
 
         // Not full yet: no finale.
         story.feastCelebrated()

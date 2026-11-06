@@ -127,9 +127,41 @@ struct Shamseh {
         colours.append(fruit)
     }
 
-    /// The last `count` petals lose their colour (the dragon, exhausted, loses the fruit they stood for).
+    /// The last `count` petals lose their colour (a poisoned fruit takes back the fruit they stood for).
     mutating func uncolour(last count: Int) {
         colours.removeLast(min(max(count, 0), colours.count))
+    }
+
+    /// `shape` broken into irregular shards of glass, together covering it: each triangle of its fan
+    /// (`fill`) split around a point inside it, so the shards meet at cracks running from the rim to the centre and
+    /// across. Shard corners are around the shard's own centre; shard centres around `shape.centre` (like the tile's
+    /// mesh, so a shard drawn at its centre sits exactly where its glass was).
+    static func shards(of shape: Shape, using random: inout some RandomNumberGenerator) -> [Shape] {
+        var shards: [Shape] = []
+        let corners = shape.corners.map { $0 - shape.centre }
+        for (index, first) in corners.enumerated() {
+            let second = corners[(index + 1) % corners.count]
+            // A crack from the centre to a point on the rim edge, and a point along it the other cracks meet at.
+            let rim = simd_mix(first, second, SIMD2(repeating: Float.random(in: 0.3...0.7, using: &random)))
+            let knot = rim * Float.random(in: 0.35...0.65, using: &random)
+            for triangle in [[SIMD2<Float>.zero, first, knot], [first, rim, knot], [rim, second, knot],
+                             [second, .zero, knot]] {
+                let centre = triangle.reduce(.zero, +) / 3
+                shards.append(Shape(centre: centre, corners: triangle.map { $0 - centre }))
+            }
+        }
+        return shards
+    }
+
+    /// The area of a star-shaped `shape` (its fan from the centre).
+    static func area(of shape: Shape) -> Float {
+        var area: Float = 0
+        for (index, corner) in shape.corners.enumerated() {
+            let next = shape.corners[(index + 1) % shape.corners.count]
+            let (start, end) = (corner - shape.centre, next - shape.centre)
+            area += abs(start.x * end.y - start.y * end.x) / 2
+        }
+        return area
     }
 
     /// `shape` filled, around its centre (the tiles light up and pop about it).

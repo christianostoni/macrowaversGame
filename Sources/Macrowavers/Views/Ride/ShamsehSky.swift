@@ -6,7 +6,8 @@ import UIKit
 /// Chapter II's shamseh (`Shamseh`) drawn far away in the sky, in front of the dome, in the game's colours
 /// (`RidePalette`): its hair-thin strapwork faint at first, a petal glazed for each fruit the dragon eats, its
 /// colour from a wheel of the game's colours around the medallion (pulled a little towards the fruit's own), so
-/// the finished shamseh reads as one rainbow; a poisoned fruit darkens the last petal for a moment. Once they all
+/// the finished shamseh reads as one rainbow; a petal a poisoned fruit takes back shatters like glass, its shards
+/// falling out of the medallion (`shatter`). Once they all
 /// are lit, the central star lights up in the dragon's blue, the kites and the strapwork are gilded, the whole
 /// glass warms towards gold, and the medallion swells for a moment. Rays, orbs and a ring of dots circle it like an
 /// astrolabe's. It stays where it appeared, over the way ahead at the start of the feast; in the finale the dragon
@@ -40,10 +41,12 @@ struct ShamsehSky {
         RidePalette.teal, RidePalette.dragonBlue, RidePalette.violet, RidePalette.pink,
     ]
     static let fruitPull: Float = 0.2
-    /// A poisoned fruit darkens the last lit petal (how much, towards a sickly dark, and for how long, s).
-    static let poisonDarkening: Float = 0.8
-    static let poisonColour = SIMD3<Float>(0.05, 0.015, 0.04)
-    static let poisonTime: Float = 3
+    /// A petal shattering (s): it cracks (its shards drawn apart, `crackGap`), then they fall out of the medallion
+    /// (unit disc: thrown outwards and towards the player, pulled down by `shardFall`, per s²), fading away.
+    static let crackTime: Float = 0.18
+    static let shatterTime: Float = 1.7
+    static let crackGap: Float = 0.86
+    static let shardFall: Float = 0.9
     /// Complete, the whole medallion's glass warms towards gold over the celebration (how far).
     static let goldWarmth: Float = 0.7
 
@@ -62,10 +65,9 @@ struct ShamsehSky {
         return simd_mix(wheel[index], wheel[(index + 1) % wheel.count], SIMD3(repeating: smooth))
     }
 
-    /// `colour` darkened by poison (`sickness` 0...1) and warmed towards gold once complete (`warmth` 0...1).
-    static func shown(_ colour: SIMD3<Float>, sickness: Float, warmth: Float) -> SIMD3<Float> {
-        let sick = simd_mix(colour, poisonColour, SIMD3(repeating: poisonDarkening * min(max(sickness, 0), 1)))
-        return simd_mix(sick, RidePalette.gold, SIMD3(repeating: goldWarmth * min(max(warmth, 0), 1)))
+    /// `colour` warmed towards gold once complete (`warmth` 0...1).
+    static func shown(_ colour: SIMD3<Float>, warmth: Float) -> SIMD3<Float> {
+        simd_mix(colour, RidePalette.gold, SIMD3(repeating: goldWarmth * min(max(warmth, 0), 1)))
     }
 
     /// The fruit's own colour (it pulls its petal's a little).
@@ -87,6 +89,15 @@ struct ShamsehSky {
     let kites: [ModelEntity]
     let strapwork: ModelEntity
     let ornaments: ModelEntity
+    /// Each petal's glass in shards (`Shamseh.shards`), made with the medallion so nothing is built mid-flight,
+    /// hidden until the petal shatters; where each shard sits in the whole petal, and how it flies.
+    let shards: [[ModelEntity]]
+    let shardSpots: [[SIMD3<Float>]]
+    var shardFlights: [[ShardFlight]]
+    /// Seconds since each petal shattered (nil while it is not shattering).
+    var shatteredFor: [Float?]
+    /// The petals lit at the last frame: fewer now, the lost ones shatter.
+    var litCount = 0
     /// The airbrush material to glaze the tiles with (flat unlit colours without it).
     let airbrush: RideAirbrush?
     /// The stained glass the tiles are made of (`RideGlass`; airbrushed tiles without it), and the time its light
@@ -101,9 +112,6 @@ struct ShamsehSky {
     /// since it was completed (nil before).
     var glazes: [FruitKind?]
     var completedFor: Float?
-    /// The petal darkened by a poisoned fruit, and how long it stays dark (s).
-    var poisonedPetal: Int?
-    var poisonLeft: Float = 0
     /// 0...1 through the finale's flight into its heart.
     var approach: Float = 0
 
@@ -155,6 +163,28 @@ struct ShamsehSky {
         }
         strapwork = lines(shamseh.strapwork(width: Self.strapWidth), name: "ShamsehStrapwork")
         ornaments = lines(shamseh.ornaments(width: Self.rayWidth), name: "ShamsehOrnaments")
+
+        // Each petal's shards, just in front of its glass, hidden.
+        var random = SystemRandomNumberGenerator()
+        var shards: [[ModelEntity]] = []
+        var spots: [[SIMD3<Float>]] = []
+        for petal in shamseh.petals {
+            let pieces = Shamseh.shards(of: petal, using: &random)
+            spots.append(pieces.map { SIMD3(petal.centre + $0.centre, 0.001) })
+            shards.append(pieces.map { piece in
+                let shape = Shamseh.Shape(centre: .zero, corners: piece.corners)
+                let entity = ModelEntity(mesh: Self.mesh(shamseh.fill(shape), name: "ShamsehShard"),
+                                         materials: [materials.blank])
+                entity.isEnabled = false
+                entity.components.set(ModelSortGroupComponent(group: sortGroup, order: 2))
+                medallion.addChild(entity)
+                return entity
+            })
+        }
+        self.shards = shards
+        shardSpots = spots
+        shardFlights = Array(repeating: [], count: shards.count)
+        shatteredFor = Array(repeating: nil, count: shards.count)
     }
 
     /// Hangs it over the way ahead the first time the feast is on, and lights the tiles of `shamseh`.
@@ -176,6 +206,12 @@ struct ShamsehSky {
             petals[index].model?.materials = [Self.tileMaterial(colour, airbrush: airbrush, glass: glass)]
             glazes[index] = fruit
         }
+        // Petals a poisoned fruit took back shatter (the kites at their sides fade).
+        if shamseh.colours.count < litCount {
+            for index in shamseh.colours.count..<min(litCount, petals.count) { shatter(index) }
+        }
+        litCount = shamseh.colours.count
+        fly(deltaTime: deltaTime)
         for index in petals.indices {
             let isLit = index < shamseh.colours.count
             light(petals[index], isLit: isLit, deltaTime: deltaTime)
@@ -203,34 +239,24 @@ struct ShamsehSky {
         let filled = Float(shamseh.colours.count) / Float(max(shamseh.folds, 1))
         strapwork.components.set(OpacityComponent(opacity: Self.faintStrap + (1 - Self.faintStrap) * filled))
         lightTime += deltaTime
-        poisonLeft = max(poisonLeft - deltaTime, 0)
         shine(shamseh)
     }
 
-    /// A poisoned fruit: the last lit petal darkens for a moment (`shamseh`: the petals lit now).
-    mutating func poison(_ shamseh: Shamseh) {
-        guard !shamseh.colours.isEmpty else { return }
-        poisonedPetal = shamseh.colours.count - 1
-        poisonLeft = Self.poisonTime
-    }
-
     /// The light behind the medallion, where it has wandered to, seen through every glass tile; the petals' and the
-    /// star's glass darkened by poison or warmed to gold.
+    /// star's glass warmed to gold.
     @MainActor
     private func shine(_ shamseh: Shamseh) {
         guard glass != nil else { return }
         let warmth = min((completedFor ?? 0) / Self.celebration, 1)
-        let sickness = poisonLeft / Self.poisonTime
         // Each tile's glaze (the kites keep theirs), then the light: one material written a tile a frame (each
         // write copies the material and replaces the tile's model, ~20 of them every frame of the feast).
         var colours: [ObjectIdentifier: SIMD3<Float>] = [:]
         for (index, fruit) in zip(petals.indices, glazes) {
             guard let fruit else { continue }
             colours[ObjectIdentifier(petals[index])] = Self.shown(
-                Self.glaze(petal: index, of: fruit, folds: shamseh.folds),
-                sickness: index == poisonedPetal ? sickness : 0, warmth: warmth)
+                Self.glaze(petal: index, of: fruit, folds: shamseh.folds), warmth: warmth)
         }
-        colours[ObjectIdentifier(star)] = Self.shown(RidePalette.dragonBlue, sickness: 0, warmth: warmth)
+        colours[ObjectIdentifier(star)] = Self.shown(RidePalette.dragonBlue, warmth: warmth)
         let spot = RideGlass.lightSpot(time: lightTime)
         let light = medallion.convert(position: SIMD3(spot, -RideGlass.depth), to: nil)
         // From the unit disc to metres in the world: the medallion swells and comes at the player.
@@ -314,4 +340,72 @@ struct ShamsehSky {
     }
 
     private func smoothstep(_ x: Float) -> Float { x * x * (3 - 2 * x) }
+}
+
+// MARK: - Shattering
+
+extension ShamsehSky {
+    /// How a shard of a shattered petal flies (unit disc, the medallion's axes).
+    struct ShardFlight {
+        var velocity: SIMD3<Float>
+        var spinAxis: SIMD3<Float>
+        var spinRate: Float
+    }
+
+    /// Petal `index` breaks like glass: its tile goes at once, its shards take its place in its own glass (the glaze
+    /// it shows now), crack apart, then fall out of the medallion, each its own way.
+    @MainActor
+    mutating func shatter(_ index: Int) {
+        let petal = petals[index]
+        let glass = petal.model?.materials ?? []
+        petal.components.set(OpacityComponent(opacity: 0))
+        petal.scale = .one
+        var random = SystemRandomNumberGenerator()
+        shardFlights[index] = zip(shards[index], shardSpots[index]).map { shard, spot in
+            shard.model?.materials = glass
+            shard.position = spot
+            shard.orientation = simd_quatf(angle: 0, axis: SIMD3(0, 0, 1))
+            shard.scale = .one
+            shard.components.set(OpacityComponent(opacity: 1))
+            shard.isEnabled = true
+            // Out from the medallion's heart and from the petal's own, towards the player.
+            let outwards = simd_length(SIMD2(spot.x, spot.y)) > 1e-4 ? simd_normalize(SIMD2(spot.x, spot.y)) : .zero
+            let fromPetal = spot - petal.position
+            let burst = simd_length(fromPetal) > 1e-4 ? simd_normalize(fromPetal) : .zero
+            let across = outwards * Float.random(in: 0.1...0.28, using: &random)
+            let axis = SIMD3(Float.random(in: -1...1, using: &random), Float.random(in: -1...1, using: &random),
+                             Float.random(in: -1...1, using: &random))
+            return ShardFlight(velocity: SIMD3(across, Float.random(in: 0.03...0.1, using: &random))
+                                   + burst * Float.random(in: 0.05...0.16, using: &random),
+                               spinAxis: simd_length(axis) > 1e-3 ? simd_normalize(axis) : SIMD3(0, 0, 1),
+                               spinRate: Float.random(in: 3...9, using: &random))
+        }
+        shatteredFor[index] = 0
+    }
+
+    /// The shards of the petals shattering: cracked apart for a moment, then thrown out, falling and spinning,
+    /// fading away; hidden once they have.
+    @MainActor
+    mutating func fly(deltaTime: Float) {
+        for index in shatteredFor.indices {
+            guard let before = shatteredFor[index] else { continue }
+            let time = before + deltaTime
+            guard time < Self.shatterTime else {
+                shards[index].forEach { $0.isEnabled = false }
+                shatteredFor[index] = nil
+                continue
+            }
+            shatteredFor[index] = time
+            let flight = max(time - Self.crackTime, 0)
+            let fade = 1 - smoothstep(min(max((time / Self.shatterTime - 0.35) / 0.65, 0), 1))
+            // Cracking, each shard shrinks about its own centre: the cracks open between them.
+            let crack = 1 - (1 - Self.crackGap) * smoothstep(min(time / Self.crackTime, 1))
+            for (shard, (spot, motion)) in zip(shards[index], zip(shardSpots[index], shardFlights[index])) {
+                shard.position = spot + motion.velocity * flight + SIMD3(0, -0.5 * Self.shardFall, 0) * flight * flight
+                shard.orientation = simd_quatf(angle: motion.spinRate * flight, axis: motion.spinAxis)
+                shard.scale = SIMD3(repeating: crack)
+                shard.components.set(OpacityComponent(opacity: fade))
+            }
+        }
+    }
 }
