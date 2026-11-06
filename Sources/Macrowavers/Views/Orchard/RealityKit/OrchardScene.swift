@@ -350,12 +350,14 @@ struct OrchardSystem: System {
         stage.orientation = simd_quatf(angle: atan2(-direction.x, -direction.z), axis: SIMD3(0, 1, 0))
     }
 
-    /// Off while a fruit is close. Back on only where it belongs: the island's rock always, the dragon's
-    /// colliders only while they are tap targets (the dragon still on the island).
+    /// Off while a fruit is close. Back on only where it belongs: the island's rock and grab bar always, the
+    /// dragon's colliders only while they are tap targets (the dragon still on the island).
     @MainActor
     private static func suspendBackground(_ background: [Entity], _ isSuspended: Bool) {
         for entity in background {
-            let isActive = entity.components.has(IslandHandleComponent.self) || entity.components.has(DragonTapTargetComponent.self)
+            let isActive = entity.components.has(IslandHandleComponent.self)
+                || entity.components.has(IslandGrabberComponent.self)
+                || entity.components.has(DragonTapTargetComponent.self)
             entity.components[InputTargetComponent.self]?.isEnabled = !isSuspended && isActive
         }
     }

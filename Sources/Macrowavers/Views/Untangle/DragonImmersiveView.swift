@@ -2,10 +2,11 @@
 import RealityKit
 import SwiftUI
 
-/// Immersive space in mixed reality: a floating island (the player spins it) with the dragon captive
-/// around the tree and fruit on its branches. Every fruit hides an ingredient that joins an orbit around the
-/// player: three of them and a snap of the fingers brew the elixir that soothes the dragon: it flies to
-/// the player and settles tangled in front of them; untangled, it thanks them and offers to take them along.
+/// Immersive space in mixed reality: a floating island (the player spins it and carries it by its grab bar, like
+/// a window) with the dragon captive around the tree and fruit on its branches. Every fruit hides an ingredient
+/// that joins an orbit around the player: three of them and a snap of the fingers brew the elixir that soothes the
+/// dragon: it flies to the player and settles tangled in front of them; untangled, it thanks them and offers to
+/// take them along.
 /// The story (`StoryViewModel`) frames it: its scroll and the chapter's title in a darkened room before the island fades in,
 /// the dragon's words above it once it is free. When the player is ready the room darkens, the island fades and
 /// this space hands over to the ride's (`DragonRideView`, full immersion).
@@ -22,6 +23,8 @@ struct DragonImmersiveView: View {
     @State private var islandSpinStart: (yaw: Float, location: SIMD3<Float>)?
     /// Rotation of the island when the current two-hand rotation started (nil: not rotating).
     @State private var islandRotateYawStart: Float?
+    /// The current carry of the island by its grab bar (nil: not carried).
+    @State private var islandCarry: IslandCarry?
     /// Subscriptions to the grab events on the dragon: they must stay alive as long as the view exists.
     @State private var subscriptions: [EventSubscription] = []
     /// Position of the player's head: the dragon looks at the knight.
@@ -64,16 +67,18 @@ struct DragonImmersiveView: View {
                                                                  orbitAnchor: island.treeAnchor)
             // Focus mode: with a fruit close the island and the dragon fade back; while the dragon is untangled
             // or speaks only the island does. Both start invisible: they fade in when the story reveals them.
-            for (entity, part) in [(island.root, SceneFocus.Part.island), (playArea, .dragon)] {
+            // The island's grab bar (carry it like a window) comes and goes with the island.
+            let grabber = IslandGrabberBuilder.makeGrabber(untangle: viewModel, viewer: viewer)
+            for (entity, part) in [(island.root, SceneFocus.Part.island), (grabber, .island), (playArea, .dragon)] {
                 entity.components.set(FocusDimmingComponent(untangle: viewModel, orchard: orchard, story: story,
                                                             part: part, opacity: 0))
                 entity.components.set(OpacityComponent(opacity: 0))
             }
-            world.entities = [island.root, island.floorOccluder, playArea]
+            world.entities = [island.root, island.floorOccluder, grabber, playArea]
             // The elixir flies to the dragon's head (node 0).
             let dragonHead = playArea.findEntity(named: "DragonNode0") ?? playArea
             // While a fruit is close, what is behind it (island rock, dragon) must not take the pinch.
-            let background = [island.root.findEntity(named: IslandSceneBuilder.rockName)].compactMap { $0 }
+            let background = [island.root.findEntity(named: IslandSceneBuilder.rockName), grabber].compactMap { $0 }
                 + Self.descendants(of: playArea).filter { $0.components.has(DragonNodeComponent.self) }
             let orchardRoot = await OrchardSceneBuilder.makeOrchard(
                 viewModel: orchard, player: .init(viewer: viewer, hands: hands), island: island,
@@ -114,10 +119,20 @@ struct DragonImmersiveView: View {
             // Reading `story.step` here re-runs this block when the story moves on.
             if story.step.revealsWorld { world.reveal(in: content) }
             // Reading `placement`/`islandPlacement` here re-runs this block on every change.
+            let islandPlacement = viewModel.islandPlacement
             if let island = content.entities.first(where: { $0.name == IslandSceneBuilder.islandName }),
-               var turntable = island.components[TurntableComponent.self] {
-                turntable.targetYaw = viewModel.islandPlacement.yaw
+               var turntable = island.components[TurntableComponent.self],
+               var floating = island.components[FloatingComponent.self] {
+                turntable.targetYaw = islandPlacement.yaw
                 island.components.set(turntable)
+                // Carried by its grab bar: the island bobs around its new spot (the float sets the position).
+                if floating.base != islandPlacement.position {
+                    floating.base = islandPlacement.position
+                    island.components.set(floating)
+                }
+            }
+            if let occluder = content.entities.first(where: { $0.name == IslandSceneBuilder.floorOccluderName }) {
+                occluder.position = SIMD3(islandPlacement.position.x, occluder.position.y, islandPlacement.position.z)
             }
             let placement = viewModel.placement
             guard let playArea = content.entities.first(where: { $0.name == DragonSceneBuilder.playAreaName }) else { return }
@@ -153,6 +168,7 @@ struct DragonImmersiveView: View {
         .orchardInteractions()
         .simultaneousGesture(spinIslandGesture)
         .simultaneousGesture(rotateIslandGesture)
+        .simultaneousGesture(carryIslandGesture)
         .simultaneousGesture(scrollDragGesture)
         .simultaneousGesture(scrollTapGesture)
         // The narrator's pages and the dragon's words darken the room (passthrough) around them.
@@ -297,6 +313,25 @@ struct DragonImmersiveView: View {
             }
             .onEnded { _ in
                 islandSpinStart = nil
+            }
+    }
+
+    /// Pinch the island's grab bar and move the hand: the island goes where the hand points, like a window
+    /// (see `IslandPlacement.carried`).
+    private var carryIslandGesture: some Gesture {
+        DragGesture()
+            .targetedToEntity(where: .has(IslandGrabberComponent.self))
+            .onChanged { value in
+                let carry = islandCarry
+                    ?? IslandCarry(start: viewModel.islandPlacement,
+                                   hand: value.convert(value.startLocation3D, from: .local, to: .scene),
+                                   viewer: viewer.viewerPosition())
+                islandCarry = carry
+                let hand = value.convert(value.location3D, from: .local, to: .scene)
+                viewModel.moveIsland(to: carry.placement(handAt: hand), viewer: carry.viewer)
+            }
+            .onEnded { _ in
+                islandCarry = nil
             }
     }
 

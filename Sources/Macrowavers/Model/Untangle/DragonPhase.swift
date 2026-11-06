@@ -33,9 +33,10 @@ enum DragonPhase: Equatable {
     /// and the elixir used; the dragon flies in the island's space.
     var isOnIsland: Bool { self == .captive || self == .alerted || self == .receivingElixir }
 
-    /// The dragon is the centre of attention (settling into the knot, being untangled): the island and the
-    /// fruit around it fade back so the player's eyes stay on the knot.
-    var focusesOnDragon: Bool { self == .landing || self == .untangling }
+    /// The dragon is the centre of attention (settling into the knot, being untangled, freed): the island and the
+    /// fruit around it fade back so the player's eyes stay on it. Freed, it speaks at once (`StoryStep.gratitude`), but
+    /// the story hears of it a frame later: without `.free` here the island started to come back for that frame.
+    var focusesOnDragon: Bool { self == .landing || self == .untangling || self == .free }
 
     var interaction: Interaction {
         switch self {

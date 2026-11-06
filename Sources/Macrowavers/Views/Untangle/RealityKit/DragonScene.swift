@@ -40,6 +40,7 @@ struct DragonBodySystem: System {
         IslandHandleComponent.registerComponent()
         TurntableComponent.registerComponent()
         TurntableSystem.registerSystem()
+        IslandGrabberSystem.registerAll()
         FocusDimmingComponent.registerComponent()
         FocusDimmingSystem.registerSystem()
         StoryPanelComponent.registerComponent()
@@ -73,6 +74,7 @@ struct DragonBodySystem: System {
                             grabTargets: body.rig.grabTargets)
                 state.prepareGrab(phase: viewModel.phase, colliders: body.colliders, config: viewModel.config,
                                   grabTargets: body.rig.grabTargets)
+                if viewModel.phase == .approaching || viewModel.phase == .landing { body.markers.prepare() }
                 state.fade(dragonOpacity: viewModel.dragonOpacity, dragon: entity, deltaTime: deltaTime)
                 entity.components.set(state)
             }
@@ -200,18 +202,36 @@ final class CrossingMarkers {
         entity.name = "CrossingMarkers"
     }
 
+    /// Markers made ahead, one a frame while the dragon flies to the player and settles (`prepare()`): made in the
+    /// puzzle's first frame, with their mesh and material drawn for the first time, they added to that frame's stutter.
+    static let preparedCount = 8
+    /// Markers not in use stay enabled, shrunk to nothing at the knot's centre: still drawn (their mesh and material
+    /// stay ready on the GPU), never seen.
+    private static let hiddenScale = SIMD3<Float>(repeating: 1e-4)
+
+    /// One more marker, until `preparedCount`.
+    func prepare() {
+        guard pool.count < Self.preparedCount else { return }
+        addMarker()
+    }
+
     func update(points: [SIMD3<Float>], time: Float) {
-        while pool.count < points.count {
-            let marker = ModelEntity(mesh: mesh, materials: [material])
-            entity.addChild(marker)
-            pool.append(marker)
-        }
-        let pulse = 1 + 0.2 * sin(time * 6)
+        while pool.count < points.count { addMarker() }
+        let pulse = SIMD3<Float>(repeating: 1 + 0.2 * sin(time * 6))
         for (index, marker) in pool.enumerated() {
-            marker.isEnabled = index < points.count
-            guard index < points.count else { continue }
-            marker.position = points[index]
-            marker.scale = SIMD3(repeating: pulse)
+            if index < points.count {
+                marker.position = points[index]
+                marker.scale = pulse
+            } else if marker.scale != Self.hiddenScale {
+                marker.scale = Self.hiddenScale
+            }
         }
+    }
+
+    private func addMarker() {
+        let marker = ModelEntity(mesh: mesh, materials: [material])
+        marker.scale = Self.hiddenScale
+        entity.addChild(marker)
+        pool.append(marker)
     }
 }

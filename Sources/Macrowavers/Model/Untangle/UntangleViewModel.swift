@@ -223,6 +223,19 @@ final class UntangleViewModel {
         islandPlacement.yaw = atan2(sin(yaw), cos(yaw))
     }
 
+    /// The player carries the island by its grab bar, like a window: where it stands and the way it faces
+    /// (see `IslandPlacement.carried`). While the dragon is still on the island, the play area where it will coil
+    /// moves with it, between the player (`viewer`, scene space) and the island; once it has been called its knot is
+    /// already decided (`callDragon`), so the play area stays.
+    func moveIsland(to placement: IslandPlacement, viewer: SIMD3<Float>) {
+        guard placement != islandPlacement else { return }
+        islandPlacement.position = placement.position
+        setIslandYaw(placement.yaw)
+        guard phase.isOnIsland else { return }
+        let playArea = self.placement.facing(island: islandPlacement, viewer: viewer)
+        if playArea != self.placement { self.placement = playArea }
+    }
+
     func resetIslandRotation() {
         islandPlacement.yaw = IslandPlacement.standard.yaw
     }

@@ -19,7 +19,9 @@ placeholder is used when it is not in the bundle.
    Then the floating island (real size, ~2.5 m wide) fades in ~2.8 m in front of you, its grass at table height
    (0.6 m), with the dragon circling its tree.
 3. Spin the island by dragging its rock (or with both hands): the dragon turns with it. The side of the island
-   facing you follows your hand, wherever you look on the rock.
+   facing you follows your hand, wherever you look on the rock. To put the island somewhere else, pinch its
+   **grab bar** (the white pill on the floor in front of it, like a window's bar) and move your hand: the island
+   goes where your hand points, farther when you push, nearer when you pull.
 4. Look at the dragon and pinch (tap): it gets angry for ~3 s. It won't come near you until it is soothed.
 5. Pick fruit on the tree and open them: each frees an **ingredient** that joins a small orbit on your right (see
    [The tree's fruit](../apple-artifact/README.md)). With three in orbit, snap your fingers (or tap one): they
@@ -70,12 +72,14 @@ Sources/Macrowavers/
 │   ├── StoneDragonLayout.swift         Where each stone sits on the body, which node holds it
 │   └── UntangleViewModel.swift         @Observable @MainActor view model shared by the launch window and the space
 └── Views/Untangle/
-    ├── DragonImmersiveView.swift       RealityView, HiddenWorld reveal, story panel, music, island spin, grab events, dragon tap
+    ├── DragonImmersiveView.swift       RealityView, HiddenWorld reveal, story panel, music, island spin and carry, grab events, dragon tap
     └── RealityKit/                     Draws, never decides
         ├── DragonScene.swift             Components, System, scene building, grabbable colliders, crossing markers
         ├── DragonJourney.swift           Story ECS: OrbitComponent, DetanglingStateComponent, DragonTapTargetComponent
         ├── IslandScene.swift             Floating island (asset), tree anchor, floor occluder, FloatingComponent/System,
         │                                 TurntableComponent/System, FocusDimmingComponent/System (applies `SceneFocus`)
+        ├── IslandGrabber.swift           The island's grab bar (carry it like a window): IslandGrabberComponent/System,
+        │                                 IslandCarry
         ├── DragonRig.swift               DragonRig protocol, DragonFrame, DragonPose, DragonLifeAnimator
         ├── DragonEffects.swift           Smoke, fire (one emitter for the roar and the ride's breath), the dragon's
         │                                 spatial sounds (via GameAudio), placeholder wings
@@ -141,16 +145,36 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
   trunk the angle jumped. Now only the hand's movement across the player's view counts (towards the island or up
   does nothing): 0.4 m (`IslandPlacement.spinDistance`) turns it by one radian, from any side of the island.
   While both hands rotate it, the two-hand rotation drives the island and the drag resumes from there.
+- **The island is carried by its grab bar like a window (`IslandGrabber.swift`, `IslandPlacement.carried`).** A
+  white pill (0.24 m, `UnlitMaterial` at 60 %) stands on the floor (0.14 m up) 1.5 m in front of the trunk, on
+  the player's side, turned to their eyes (`IslandGrabberSystem`); it lives outside the island's root, so it
+  neither spins nor bobs, and it fades with the island (`FocusDimmingComponent`, part `.island`). Pinch and drag
+  it: across the view the island follows the angle the hand turns around the player (it sweeps around them, and
+  its yaw turns as much, so the same side keeps facing them); pushed or pulled, it moves 3× the hand's way
+  (`pushGain`), between 1.8 and 6 m from the player's eyes (`distanceRange`); the grass keeps its height. The
+  view model only stores the placement (`moveIsland(to:viewer:)`); the view moves the float's rest point
+  (`FloatingComponent.base`) and the floor occluder. The dragon circling the tree, the fruit and the elixir's
+  target follow by themselves (they hang from the island or read its transform every frame). While the dragon is
+  still on the island, the play area where it will coil moves too (`PlayAreaPlacement.facing`): 0.6 m from the
+  player on the line to the island, its far edge towards it, so the dragon lands between the player and the island
+  wherever it stands (before, it flew back to the spot in front of where the island used to be). Once called, its
+  knot is decided (`callDragon`) and the play area stays. `resetGame()` puts both back.
 
 - **Story chapters (`DragonPhase`) drive the entities through `DetanglingStateComponent`.** RealityKit does not
   observe the view model, so the system compares the chapter with the one already applied and reconfigures
   only on change: *tap* (no `ManipulationComponent`, larger 9 cm colliders tagged `DragonTapTargetComponent`,
   which is what the `SpatialTapGesture` targets, so it never steals the pinch from grabbing), *grab*
   (`ManipulationComponent` on the rig's `grabTargets`: the head and one node per stone, the nodes in between get no
-  shape; every node, head included, with the placeholder), *none* while it receives the elixir or flies. While the
-  dragon settles into the knot (`.landing`), `prepareGrab` sets up the grab colliders 4 per frame with their input
-  off, so the puzzle's first frame only turns it on: set up all at once there, they made the frame the dragon lands
-  in stutter.
+  shape; every node, head included, with the placeholder), *none* while it receives the elixir or flies (the tap
+  spheres lose their shape and highlight as it leaves the tree). While the dragon flies to the player and settles
+  into the knot (`.approaching`, `.landing`), `prepareGrab` sets up the grab colliders one per frame with their
+  input off, and `CrossingMarkers.prepare()` makes the blue spheres one per frame (unused ones stay enabled, shrunk
+  to nothing, so their mesh and material are already drawn), so the puzzle's first frame only turns the input on:
+  set up all at once there, they made the frame the flight ends in stutter (started at `.landing`, four a frame,
+  the last colliders could still be left for it; the markers were all made in it). The same holds for the way out: once the dragon is free (*none*) the grab colliders only lose their
+  input and keep their shapes, manipulation and hover effect (back to the tree, *tap* replaces them): tearing all of
+  them down was the same all-at-once work, in the frame the puzzle is solved, the one the story page, the darkened
+  room and the farewell music start in.
 - **No visible platform.** The knot lies on an invisible plane (`y = 0` of the play area): a floor appearing
   in the room when the dragon arrives looked out of place. The play area cannot be dragged by hand, and since the
   dragon panel was removed it is not rotated or tilted from a panel either: it stays at `PlayAreaPlacement.seated`
@@ -246,8 +270,10 @@ Grab start/end comes from `ManipulationEvents.WillBegin/DidHandOff/WillRelease/W
 - **Focus mode** (`SceneFocus`, applied by `FocusDimmingComponent`). A small state machine in the Model:
   - **fruit** (a fruit is close): the island root (rock, terrain, tree, floating rocks and every fruit still
     hanging on it) **and the dragon** (the play area, body, head, wings and effects) fade to 25%;
-  - **dragon** (landing and untangling, `DragonPhase.focusesOnDragon`, and while the freed dragon speaks,
-    `StoryStep.focusesOnDragon`): the island, tree and fruit fade, only the dragon stays at 100%;
+  - **dragon** (landing, untangling and free, `DragonPhase.focusesOnDragon`, and while the freed dragon speaks,
+    `StoryStep.focusesOnDragon`): the island, tree and fruit fade, only the dragon stays at 100%. `.free` is in
+    `DragonPhase.focusesOnDragon` because the story hears that the dragon is free a frame after the dragon's system
+    frees it: for that frame the island began to come back, then faded again;
   - **none** (exploring, or the elixir flying to the dragon, so the player can follow it): everything at 100%.
 
   Each part eases in ~0.6 s; at 100% its `OpacityComponent` is removed, so it is drawn opaque again. Opacity
@@ -453,10 +479,14 @@ puzzle), tilt clamping, restart and play again.
 `TangleInterpolationTests.swift` covers the body drawn between two 60 Hz ticks (it moves on every 90 Hz frame and
 turns with the body).
 `SceneFocusTests.swift` covers focus mode (what fades with a fruit close, while untangling, while the
-elixir flies, when exploring, only landing and untangling focusing on the dragon) and the island's transform (at
+elixir flies, when exploring, only landing, untangling and the freed dragon focusing on the dragon, the island
+staying back the moment the dragon is freed) and the island's transform (at
 least the original size, grass at 0.6 m whatever the scale, positive uniform scale), the island's spin (the side
 facing the player follows the hand from any side of the island, movement towards it or up does not turn it, no
-jump with the player above the trunk), and the speaking dragon keeping only itself visible.
+jump with the player above the trunk), the island's carry (a still hand leaves it, it follows the hand's angle
+around the player keeping its face to them, a push moves it 3× farther on the floor, it stays within 1.8–6 m, the
+view model takes it and `resetGame()` puts it back; the play area follows it onto the line between the player and
+the island until the dragon is called, and the standard island keeps the seated play area), and the speaking dragon keeping only itself visible.
 `StoneDragonTests.swift` covers the stone dragon's layout (stones along the whole body in the asset's
 proportions, each held by its own node next to it, increasing and never the head, even when crowded; grab spheres
 never reaching the next stone).
