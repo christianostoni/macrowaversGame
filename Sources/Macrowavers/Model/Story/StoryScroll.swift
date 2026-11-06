@@ -38,10 +38,13 @@ final class StoryScroll {
     private(set) var isNarrating = false
     /// What the narrator is saying (nil: nothing).
     private(set) var subtitle: String?
-    /// Seconds into the narration (nil: not started). Not observed: it changes every frame, `subtitle` with it.
-    @ObservationIgnored private var narrationTime: TimeInterval?
+    /// When the narration started, on `now` (nil: not started).
+    @ObservationIgnored private var narrationStart: TimeInterval?
     /// The paper moves with the voice until the player drags it.
     @ObservationIgnored private var followsNarration = true
+    /// The clock the narration keeps to (s). The voice plays on in real time, so the subtitles read the time from
+    /// a clock: added up frame by frame, it fell behind the voice on slow frames.
+    private let now: () -> TimeInterval
 
     /// The scroll's shape (nil until the page is loaded: it cannot be opened yet).
     var roll: ScrollRoll?
@@ -69,6 +72,11 @@ final class StoryScroll {
     /// Opening or closing on its own, towards this.
     private var openTarget: Float?
 
+    /// `now`: the system's clock; tests move their own.
+    init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.now = now
+    }
+
     /// The story reaches the scroll: it appears, closed.
     func present() {
         phase = .closed
@@ -80,7 +88,7 @@ final class StoryScroll {
         openTarget = nil
         isNarrating = false
         subtitle = nil
-        narrationTime = nil
+        narrationStart = nil
         followsNarration = true
     }
 
@@ -151,7 +159,7 @@ final class StoryScroll {
             fade = min(1, fade + deltaTime / Self.fadeDuration)
         case .reading:
             fade = min(1, fade + deltaTime / Self.fadeDuration)
-            narrate(deltaTime: deltaTime)
+            narrate()
         case .closing:
             // Rolled up, it fades away.
             if open < 0.02 { fade = max(0, fade - deltaTime / Self.fadeDuration) }
@@ -168,10 +176,13 @@ final class StoryScroll {
 
     /// The narration goes on (it starts with the scroll's opening): its subtitle, and the paper following the voice
     /// once the scroll is open, only ever forwards.
-    private func narrate(deltaTime: Float) {
-        let time = narrationTime.map { $0 + TimeInterval(deltaTime) } ?? 0
-        if narrationTime == nil { isNarrating = true }
-        narrationTime = time
+    private func narrate() {
+        let start = narrationStart ?? now()
+        if narrationStart == nil {
+            narrationStart = start
+            isNarrating = true
+        }
+        let time = now() - start
         let said = StoryNarration.subtitle(at: time)
         if said != subtitle { subtitle = said }
         if isNarrating && time >= StoryNarration.duration { isNarrating = false }

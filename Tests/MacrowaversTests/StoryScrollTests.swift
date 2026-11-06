@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Macrowavers
 
@@ -5,15 +6,25 @@ import Testing
 /// painting, then rolled up and gone; skipping works at any time, even without its page.
 @MainActor
 struct StoryScrollTests {
+    /// The narration's clock: it moves only when the tests move it.
+    private final class ManualClock {
+        var now: TimeInterval = 0
+    }
+
+    private let clock = ManualClock()
+
     private func makeScroll() -> StoryScroll {
-        let scroll = StoryScroll()
+        let scroll = StoryScroll { [clock] in clock.now }
         scroll.roll = ScrollRoll(width: 0.45, pageLength: 1.45)
         scroll.present()
         return scroll
     }
 
     private func play(_ scroll: StoryScroll, seconds: Float) {
-        for _ in 0..<Int(seconds * 60) { scroll.update(deltaTime: 1.0 / 60) }
+        for _ in 0..<Int(seconds * 60) {
+            clock.now += 1.0 / 60
+            scroll.update(deltaTime: 1.0 / 60)
+        }
     }
 
     @Test func itFadesInClosed() {
@@ -94,6 +105,16 @@ struct StoryScrollTests {
         #expect(scroll.scroll == 1 && scroll.hasReachedEnd)
         play(scroll, seconds: 6)
         #expect(!scroll.isNarrating && scroll.subtitle == nil)
+    }
+
+    @Test func aSlowFrameDoesNotHoldTheSubtitlesBack() {
+        let scroll = makeScroll()
+        scroll.tap()
+        play(scroll, seconds: 0.1)
+        // Half a minute goes by in a frame that says it lasted 1/60 s: the voice played on all the same.
+        clock.now += 30
+        scroll.update(deltaTime: 1.0 / 60)
+        #expect(scroll.subtitle == StoryNarration.subtitle(at: 30))
     }
 
     @Test func draggedThePaperStopsFollowingTheVoice() {
