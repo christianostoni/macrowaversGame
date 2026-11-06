@@ -69,10 +69,10 @@ enum StoryStep: Equatable, CaseIterable {
             Page(title: "Chapter I", lines: ["Patience is bitter, but its fruit is sweet."],
                  anchor: .viewer, advance: .tap)
         case .gratitude:
-            Page(title: "Thank you", lines: ["You freed me from the curse of the Black Div.", "You don't need to be afraid."],
+            Page(title: "Thank you", lines: ["You freed me from the demon's curse.", "You don't need to be afraid."],
                  anchor: .dragon, advance: .tap)
         case .safety:
-            Page(title: "Thank you", lines: ["Child of the Shah, I will take you to safety.", "Are you ready?"],
+            Page(title: "Thank you", lines: ["Child of the King, I will take you to safety.", "Are you ready?"],
                  anchor: .dragon, advance: .answer("I'm Ready"))
         case .secondChapter:
             // Named while the ride loaded (`rideTitle`): only its goal, without a title.
