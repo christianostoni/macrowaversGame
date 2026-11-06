@@ -14,13 +14,14 @@ struct ElixirPanelView: View {
             VStack(spacing: 6) {
                 Text("Elixir \(orchard.orbitingCount)/\(Elixir.ingredientCount)")
                     .font(.caption.bold().monospacedDigit())
+                    .foregroundStyle(.primary)
                     .contentTransition(.numericText())
                 Text(text)
-                    .font(.caption2)
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                 if orchard.elixirState == .ready && !orchard.isHandTrackingAvailable {
                     // No hand tracking (simulator, permission denied): there is no snap to read.
-                    Button("Brew the Elixir", systemImage: "sparkles") {
+                    Button("Create the Elixir", systemImage: "sparkles") {
                         orchard.brewElixir()
                     }
                     .font(.caption)
@@ -42,10 +43,10 @@ struct ElixirPanelView: View {
             let missing = Elixir.ingredientCount - orchard.orbitingCount
             return orchard.orbitingCount == 0
                 ? nil
-                : "Every fruit hides an ingredient. Find \(missing) more."
+                : "Every fruit hides a gem. Find \(missing) more."
         case .ready:
             // The hologram hand shows the snap: no words.
-            return orchard.isHandTrackingAvailable ? nil : "Tap an ingredient to brew the elixir."
+            return orchard.isHandTrackingAvailable ? nil : "Tap a gem to create the elixir."
         case .fusing, .brewed, .flying, .delivered, .poured:
             // The snap is done: the brew speaks for itself.
             return nil

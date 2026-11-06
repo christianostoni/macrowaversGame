@@ -22,10 +22,11 @@ struct TreeHintView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "hand.pinch.fill")
                         .font(.largeTitle)
-                    Text("Look at a fruit on the tree and pinch to pick it")
+                    Text("Pinch to pick a fruit")
                         .font(.title3.bold())
-                    Text("Every fruit hides an ingredient. Find three to brew the elixir that soothes the dragon.")
-                        .font(.body)
+                        .foregroundStyle(.primary)
+                    Text("Every fruit hides a gem. Find three to create the elixir for the dragon.")
+                        .font(.body.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
                 .multilineTextAlignment(.center)

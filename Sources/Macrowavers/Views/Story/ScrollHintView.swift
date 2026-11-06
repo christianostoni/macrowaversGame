@@ -31,10 +31,10 @@ struct ScrollHintView: View {
                         switch hint {
                         case .open:
                             Label("Pull the scroll down to open it", systemImage: "hand.draw")
-                                .foregroundStyle(.white.opacity(0.75))
+                                .foregroundStyle(.secondary)
                         case .read:
                             Label("Drag the paper to read at your own pace", systemImage: "hand.point.up.left")
-                                .foregroundStyle(.white.opacity(0.75))
+                                .foregroundStyle(.secondary)
                         case .carryOn:
                             Button("Continue") { scroll.finish() }
                                 .buttonStyle(.borderedProminent)
@@ -43,11 +43,11 @@ struct ScrollHintView: View {
                         if hint != .carryOn {
                             Button("Skip the story") { scroll.finish() }
                                 .buttonStyle(.plain)
-                                .font(.callout)
-                                .foregroundStyle(.white.opacity(0.5))
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .font(.title3)
+                    .font(.title3.weight(.medium))
                     .transition(.opacity)
                 }
             }

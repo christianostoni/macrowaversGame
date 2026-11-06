@@ -46,7 +46,7 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     DragonLoadingView()
                     Text("Loading…")
-                        .font(.callout)
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)

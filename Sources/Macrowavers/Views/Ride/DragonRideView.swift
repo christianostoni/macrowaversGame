@@ -154,8 +154,8 @@ private struct RideLoadingView: View {
                 VStack(spacing: 12) {
                     DragonLoadingView()
                     Text("Loading…")
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
                 .padding(32)
                 .glassBackgroundEffect()
@@ -182,8 +182,8 @@ private struct RideTitleView: View {
                 } label: {
                     StoryPageCard(page: StoryStep.rideTitle, isChapter: true) {
                         Label("Tap to continue", systemImage: "hand.tap")
-                            .font(.callout)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(.plain)
@@ -225,10 +225,11 @@ private struct HornsHintView: View {
                         Image(systemName: "hand.pinch.fill")
                     }
                     .font(.largeTitle)
-                    Text("Pinch with both hands to hold the horns")
+                    Text("Ride the dragon by the horns")
                         .font(.title3.bold())
+                        .foregroundStyle(.primary)
                     Text("Raise or lower your arms to climb or dive.\nMove them to a side to turn.")
-                        .font(.body)
+                        .font(.body.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
                 .multilineTextAlignment(.center)
@@ -272,7 +273,7 @@ private struct FeastMessagesView: View {
             if story.step == .feast, let message = phaseMessage ?? flash ?? hint {
                 Text(message)
                     .font(.title3.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 560)
                     .shadow(color: .black.opacity(0.6), radius: 6)
@@ -303,18 +304,17 @@ private struct FeastMessagesView: View {
         switch feast.phase {
         case .playing: nil
         case .failed: "The poison shattered the shamseh!"
-        case .finished: "The dragon is full!"
+        case .finished: "The dragon is full! Congrats"
         }
     }
 
     /// What each stage of the sky brings.
     private static func hint(stage: Int) -> String {
         switch stage {
-        case 0: "Fly into the fruit to feed the dragon. Push the horns forward to fly faster."
-        case 1: "Bananas! The dragon spits them out: don't waste your time."
-        case 2: "Poisoned fruit break two pieces of the shamseh! Avoid them, or let go of a horn and snap your "
-            + "fingers to breathe fire."
-        default: "The last stretch: the fruit dodge and less help aiming. Keep the poison away!"
+        case 0: "Eat the fruits. Push the horns forward to fly faster."
+        case 1: "No Bananas! The dragon spits them: don't waste your time."
+        case 2: "Poisoned fruit break two pieces of the shamseh! Avoid them, or snap your fingers to destroy them."
+        default: "The last: the fruits are running away!"
         }
     }
 

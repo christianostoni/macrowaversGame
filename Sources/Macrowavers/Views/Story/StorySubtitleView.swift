@@ -13,8 +13,8 @@ struct StorySubtitleView: View {
         ZStack {
             if let subtitle = scroll.subtitle {
                 Text(subtitle)
-                    .font(.title3)
-                    .foregroundStyle(.white)
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     // Its full height: wrapped on two lines, the background covers both.
