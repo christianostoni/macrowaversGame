@@ -367,7 +367,7 @@ preloaded (`DragonEffects`, `OrchardSounds`).
 |---|---|---|
 | `StoryStep.page` | text | every word of the story |
 | `StoryPanelComponent` | `viewerDistance`, `viewerDrop`, `lookAwayAngle`, `driftTolerance` | where the narrator's pages float, when they follow the gaze or a player who stands up / walks |
-| `StoryPanelComponent` | `dragonClearance`, `responsiveness` | how high above the dragon its words float, how fast the page glides |
+| `StoryPanelComponent` | `dragonDistance`, `dragonLift`, `responsiveness` | how far and how high the dragon's words glide after the gaze, how fast the narrator's page glides back |
 | `DragonImmersiveView` | `.preferredSurroundingsEffect(.dark)` | how dark the room gets (`.semiDark`, `.ultraDark`, `.dim(intensity:)`) |
 | `DragonFeast.Settings` | `totalGoal`, `levels` (shares, `pullRadius`, `sway`), `poisonCost`, `failurePause`, `biteRadius`, `count` | how long and how hard chapter II is |
 | `DragonFeast.Settings` | `rise`, `streakBonus`, `longestStreakBonus`, `poisonRelief`, `reliefDelay`, `reliefRate`, `swayPeriod` | how fast the sky grows harder, how it eases for a player who struggles |

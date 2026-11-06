@@ -53,6 +53,7 @@ struct DragonRideView: View {
             // on a head anchor, so it takes the tap that starts the ride.
             if isLoaded, let title = attachments.entity(for: Self.titleID), title.parent == nil {
                 content.add(Self.inFrontOfEyes(title, viewer: viewer))
+                Self.glideAfterGaze(title, at: SIMD3(0, 0, -Self.loadingDistance), viewer: viewer)
             }
             guard let ride, ride.parent == nil else { return }
             content.add(ride)
@@ -62,6 +63,7 @@ struct DragonRideView: View {
                                (Self.hintID, DragonRideSceneBuilder.hintSpot)] {
                 guard let attachment = attachments.entity(for: id) else { continue }
                 attachment.position = spot
+                Self.glideAfterGaze(attachment, at: spot, viewer: viewer)
                 // Drawn after the ride's see-through sky (the shamseh's glass, the lanterns, the clouds), in their
                 // sort group: outside it they fell behind the medallion.
                 ride.addChild(attachment)
@@ -128,6 +130,16 @@ struct DragonRideView: View {
             untangle.immersiveSpaceState = .closed
             openWindow(id: ContentView.windowID)
         }
+    }
+
+    /// `entity` glides after the player's gaze like the tree's hint (`StorySubtitleComponent`), keeping `spot`'s
+    /// distance and height from the eyes (looking ahead), so the ride's windows keep their places among themselves.
+    private static func glideAfterGaze(_ entity: Entity, at spot: SIMD3<Float>, viewer: ViewerTracker) {
+        let distance = simd_length(SIMD2(spot.x, spot.z))
+        // `GazeFollow` sets it this far below the line of sight: raised back to `spot`'s own height.
+        let lift = spot.y + distance * sin(GazeFollow.drop)
+        entity.components.set(StorySubtitleComponent(viewer: viewer, distance: distance, lift: lift))
+        entity.components.set(BillboardComponent())
     }
 
     /// `entity` in the world `loadingDistance` in front of the player's eyes, level, facing them (the room's

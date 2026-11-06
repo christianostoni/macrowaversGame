@@ -5,7 +5,7 @@ import simd
 /// Where the story's page floats (see `StoryStep.Anchor`):
 /// - the narrator's pages in front of the player's eyes, world-locked; when the player looks away they glide
 ///   back in front of them (lazy follow), never stuck to the head;
-/// - the dragon's words just above its body, following it as it breathes.
+/// - the dragon's words glide after the player's gaze, like the tree's hint (`GazeFollow`), a little below it.
 /// The entity also has a `BillboardComponent`, so the text always faces the player.
 struct StoryPanelComponent: Component {
     let story: StoryViewModel
@@ -18,6 +18,8 @@ struct StoryPanelComponent: Component {
     var placedAnchor: StoryStep.Anchor?
     /// Where the narrator's page rests, in scene space.
     var viewerSpot: SIMD3<Float> = .zero
+    /// The dragon's words, gliding after the gaze.
+    var follow = GazeFollow()
 
     /// The narrator's page: this far in front of the eyes and a little below them.
     static let viewerDistance: Float = 1.3
@@ -27,8 +29,10 @@ struct StoryPanelComponent: Component {
     /// The page also comes back when the eyes move this far from where it expects them (the player stands
     /// up or walks; the first frames, before head tracking starts, assume a seated player).
     static let driftTolerance: Float = 0.3
-    /// Gap between the top of the dragon's body and the centre of its words.
-    static let dragonClearance: Float = 0.2
+    /// The dragon's words: this far from the eyes, raised from `GazeFollow`'s drop to sit just below the line of
+    /// sight, above the subtitles (0.8 m).
+    static let dragonDistance: Float = 1.3
+    static let dragonLift: Float = 0.25
     /// How fast the page glides to its spot (1/s).
     static let responsiveness: Float = 3
 }
@@ -52,10 +56,12 @@ struct StoryPanelSystem: System {
             let isNew = panel.placedAnchor != anchor
             let target: SIMD3<Float> = switch anchor {
             case .viewer: Self.viewerSpot(for: &panel, recentre: isNew)
-            case .dragon: Self.dragonSpot(for: panel)
+            case .dragon: Self.gazeSpot(for: &panel, deltaTime: deltaTime, recentre: isNew)
             }
             let current = entity.position(relativeTo: nil)
-            let next = isNew ? target : current + (target - current) * (1 - exp(-deltaTime * StoryPanelComponent.responsiveness))
+            // The dragon's words glide already (`GazeFollow`): no second easing.
+            let easing = 1 - exp(-deltaTime * StoryPanelComponent.responsiveness)
+            let next = isNew || anchor == .dragon ? target : current + (target - current) * easing
             if simd_distance(next, current) > 0.0005 { entity.setPosition(next, relativeTo: nil) }
             if isNew { panel.placedAnchor = anchor }
             entity.components.set(panel)
@@ -82,18 +88,14 @@ struct StoryPanelSystem: System {
         return panel.viewerSpot
     }
 
-    /// Above the highest point of the dragon's body, over its middle.
+    /// After the gaze, a little below it: in front of the eyes at once on a new page.
     @MainActor
-    private static func dragonSpot(for panel: StoryPanelComponent) -> SIMD3<Float> {
-        let positions = panel.untangle.displayPositions
-        let worldFromDragon = panel.playArea.transformMatrix(relativeTo: nil)
-        let points = positions.map { point in
-            let world = worldFromDragon * SIMD4(point, 1)
-            return SIMD3(world.x, world.y, world.z)
-        }
-        guard !points.isEmpty else { return panel.playArea.position(relativeTo: nil) }
-        let centre = points.reduce(.zero, +) / Float(points.count)
-        let top = points.map(\.y).max() ?? centre.y
-        return SIMD3(centre.x, top + StoryPanelComponent.dragonClearance, centre.z)
+    private static func gazeSpot(for panel: inout StoryPanelComponent, deltaTime: Float,
+                                 recentre: Bool) -> SIMD3<Float> {
+        if recentre { panel.follow = GazeFollow() }
+        let eyes = panel.viewer.viewerPose()
+        let direction = panel.follow.update(forward: eyes.forward, deltaTime: deltaTime)
+        return eyes.position + direction * StoryPanelComponent.dragonDistance
+            + SIMD3(0, StoryPanelComponent.dragonLift, 0)
     }
 }
