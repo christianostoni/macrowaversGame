@@ -13,6 +13,24 @@ private func sample(_ time: Float, at timestamp: TimeInterval) -> HandSample {
                       littleKnuckle: knuckles[3], ringTip: pose.fingers[2][2], littleTip: pose.fingers[3][2])
 }
 
+/// How far apart two round cones are (m; negative: one inside the other), sampling the first along its axis.
+private func gap(_ first: HandSurface.Cone, _ second: HandSurface.Cone) -> Float {
+    (0...40).map { step in
+        let along = Float(step) / 40
+        let point = simd_mix(first.start, first.end, SIMD3(repeating: along))
+        return second.distance(point) - simd_mix(first.startRadius, first.endRadius, along)
+    }.min() ?? 0
+}
+
+/// How far a round cone is from the palm (m; negative: sunk into it).
+private func palmGap(_ cone: HandSurface.Cone) -> Float {
+    (0...40).map { step in
+        let along = Float(step) / 40
+        let point = simd_mix(cone.start, cone.end, SIMD3(repeating: along))
+        return HandSurface.palmDistance(point) - simd_mix(cone.startRadius, cone.endRadius, along)
+    }.min() ?? 0
+}
+
 @Suite struct SnapHintTests {
     @Test func theThumbPressesOnTheMiddleFingersPadWhenLoaded() {
         let pose = SnapHint.pose(at: 1.1)
@@ -31,11 +49,48 @@ private func sample(_ time: Float, at timestamp: TimeInterval) -> HandSample {
     }
 
     @Test func everyPoseIsFinite() {
-        for step in 0...56 {
+        for step in 0...Int(SnapHint.period / 0.05) {
             let pose = SnapHint.pose(at: Float(step) * 0.05)
             let points = pose.fingers.flatMap { $0 } + [pose.thumb.base, pose.thumb.joint, pose.thumb.tip]
             #expect(points.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite })
         }
+    }
+
+    /// No digit passes through another at any moment of the loop, the release included (the thumb leaves before the
+    /// middle finger sweeps past), and no fingertip sinks into the palm. Touching is fine: the thumb on the pad, the
+    /// curled fingers on the palm (half a millimetre of slack for the sampling).
+    @Test func noDigitPassesThroughAnother() {
+        let slack: Float = -0.0005
+        for step in 0...Int(SnapHint.period * 120) {
+            let time = Float(step) / 120
+            let skin = HandSurface(pose: SnapHint.pose(at: time))
+            for (finger, cones) in skin.fingers.enumerated() {
+                let thumb = skin.thumb.flatMap { bone in cones.map { gap(bone, $0) } }.min() ?? 0
+                #expect(thumb > slack, "thumb through finger \(finger) at \(time) s: \(thumb * 1000) mm")
+                let palm = cones.dropFirst().map(palmGap).min() ?? 0
+                #expect(palm > slack, "finger \(finger) in the palm at \(time) s: \(palm * 1000) mm")
+                guard finger < 3 else { continue }
+                let neighbour = cones.flatMap { bone in skin.fingers[finger + 1].map { gap(bone, $0) } }.min() ?? 0
+                #expect(neighbour > slack, "fingers \(finger) and \(finger + 1) at \(time) s: \(neighbour * 1000) mm")
+            }
+        }
+    }
+
+    /// Set up slowly, released in a flash: the hand holds the loaded pose for a while, and the snap itself is quick.
+    @Test func theWindUpIsSlowAndTheReleaseFast() {
+        let release = SnapHint.keys.first { $0.curve == .strike }
+        #expect(release?.time == SnapHint.snapTime)
+        let before = SnapHint.keys.last { $0.time < SnapHint.snapTime }
+        #expect((SnapHint.snapTime - (before?.time ?? 0)) <= 0.12)
+        // In contact from the loaded pose until the release.
+        for time in stride(from: Float(0.85), through: SnapHint.snapTime - 0.1, by: 0.05) {
+            let pose = SnapHint.pose(at: time)
+            #expect(abs(simd_distance(pose.thumbTip, pose.middlePad) - SnapHint.thumbTipRadius) < 0.001)
+        }
+        // The wrist turns the snap towards the viewer and back.
+        #expect(SnapHint.wrist(at: 0.1) == 0)
+        #expect(SnapHint.wrist(at: 1.1) > 0.3)
+        #expect(SnapHint.wrist(at: SnapHint.period) == 0)
     }
 
     /// The hologram teaches the snap the game reads: its loaded and snapped poses, a frame apart at hand-tracking
