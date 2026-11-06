@@ -9,6 +9,8 @@ import UIKit
 @MainActor
 @Observable
 final class RideStatus {
+    /// Chapter II's title has been tapped (`DragonRideView`): the ride sets off out of the dark.
+    var isChapterOpened = false
     /// Out of the dark: the player can steer.
     var isFlying = false
     /// The hands are tracked (otherwise the autopilot flies, and there is nothing to explain).
@@ -78,6 +80,8 @@ struct DragonRideComponent: Component {
     let fireBreath: Entity
     let embers: [Entity]
     var nextEmber = 0
+    /// Without hand tracking, a tap on the sky in front of the player breathes fire (`RideFireTarget`).
+    let fireTarget: Entity
     /// The snap that breathes fire, and the steering kept still while a hand makes it.
     var snap = SnapDetector(settings: .whileSteering)
     var steeringHold = SteeringHold()
@@ -160,6 +164,7 @@ struct DragonRideSystem: System {
     @MainActor
     static func registerAll() {
         DragonRideComponent.registerComponent()
+        RideFireTarget.registerComponent()
         registerSystem()
     }
 
@@ -168,9 +173,11 @@ struct DragonRideSystem: System {
         for root in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
             guard var state = root.components[DragonRideComponent.self] else { continue }
             if !state.isStarted {
-                // The ride starts at the player's eyes: wait for the head tracking (a moment at most).
+                // The ride starts at the player's eyes once chapter II's title has been tapped: wait for the head
+                // tracking too (a moment at most).
                 state.waitedForViewer += deltaTime
-                guard state.viewer.isTracking || state.waitedForViewer > Self.viewerWait else {
+                guard state.status.isChapterOpened,
+                      state.viewer.isTracking || state.waitedForViewer > Self.viewerWait else {
                     root.components.set(state)
                     continue
                 }
@@ -182,7 +189,7 @@ struct DragonRideSystem: System {
             state.ride.holdHorns(left: left, right: right)
             state.ride.update(deltaTime: deltaTime, left: left, right: right,
                               isHandTrackingAvailable: state.hands.isTracking, weakness: state.feast?.weakness ?? 0)
-            // A snap, or the tally's fire button (without hand tracking).
+            // A snap, or a tap on the sky (without hand tracking).
             if state.story.takeFireRequest() || !snapped.isEmpty { Self.breatheFire(&state) }
 
             Self.report(state)
@@ -195,6 +202,7 @@ struct DragonRideSystem: System {
             Self.drawArrival(state)
             Self.followStory(&state)
             Self.feed(&state, mouth: mouth, deltaTime: deltaTime)
+            Self.enableFireTap(state)
             Self.drawFire(state, root: root)
             Self.flyIntoShamseh(&state, deltaTime: deltaTime)
             state.shamsehSky.draw(state.shamseh, ride: state.ride, isFeasting: Self.showsShamseh(state.story.step),
@@ -312,18 +320,6 @@ struct DragonRideSystem: System {
         }
     }
 
-    /// Chapter II's title once the dragon has flown out of the dark for a moment; the fruit once the player has
-    /// read it.
-    @MainActor
-    private static func followStory(_ state: inout DragonRideComponent) {
-        if state.story.step == .ride, state.ride.time > DragonRide.Settings.arrivalDuration + titleDelay {
-            state.story.rideArrived()
-        }
-        if state.story.step == .feast, state.feast == nil {
-            state.feast = DragonFeast(ride: state.ride, using: &state.random)
-        }
-    }
-
     /// The rush of air (dB): grows from silence during the arrival, louder the faster the dragon flies.
     private static func windGain(_ ride: DragonRide) -> Double {
         let speed = (ride.speed - DragonRide.Settings.cruiseSpeed)
@@ -415,6 +411,8 @@ enum DragonRideSceneBuilder {
             sounds[sound] = await GameAudio.load(sound.rawValue)
         }
         let (fireBreath, embers) = addFire(root: root, sky: sky)
+        let fireTarget = makeFireTarget()
+        root.addChild(fireTarget)
         let fruitModels = await makeFruitModels()
         let poisonedModels = poisoned(fruitModels)
         let spareFruit = makeSpareFruit(models: fruitModels, poisoned: poisonedModels, sky: sky)
@@ -427,7 +425,7 @@ enum DragonRideSceneBuilder {
                                                 fruitModels: fruitModels,
                                                 poisonedModels: poisonedModels, spareFruit: spareFruit,
                                                 fireBreath: fireBreath,
-                                                embers: embers, sounds: sounds,
+                                                embers: embers, fireTarget: fireTarget, sounds: sounds,
                                                 wind: await GameAudio.load("RideWind", loops: true)))
         return root
     }

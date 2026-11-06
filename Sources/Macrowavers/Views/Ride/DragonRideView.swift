@@ -10,10 +10,11 @@ import SwiftUI
 /// launch window.
 struct DragonRideView: View {
     static let spaceID = "DragonRideSpace"
-    private static let tallyID = "FeastTally"
+    private static let messagesID = "FeastMessages"
     private static let hintID = "HornsHint"
     private static let loadingID = "RideLoading"
-    /// Chapter II's name and the loading animation: their distance in front of the eyes (m).
+    private static let titleID = "RideTitle"
+    /// The loading animation and chapter II's name: their distance in front of the eyes (m).
     private static let loadingDistance: Float = 1.2
 
     @Environment(UntangleViewModel.self) private var untangle
@@ -27,31 +28,37 @@ struct DragonRideView: View {
     @State private var hands = HandTracker()
     /// Whether the hands hold the horns, for the hint.
     @State private var status = RideStatus()
-    /// The ride's world is built (the dragon, the sky, the fruit): the loading animation goes.
+    /// The ride's world is built (the dragon, the sky, the fruit): the loading animation gives way to chapter II's
+    /// name.
     @State private var isLoaded = false
+    /// The ride's world once built (`update` adds it to the scene).
+    @State private var ride: Entity?
     /// The ride's music, in the player's ears (the island's closed with its space).
     @State private var music = GameMusic()
 
     var body: some View {
+        // `make` returns at once: nothing it adds shows before it returns, so building the ride in it kept the
+        // loading animation from ever being seen. The ride is built in a task and added by `update`.
         RealityView { content, attachments in
             content.add(music.entity)
-            // Chapter II's name in the dark while the ride's assets load, placed once in front of the eyes.
+            // The loading animation in the dark while the ride's assets load, placed once in front of the eyes.
             if let loading = attachments.entity(for: Self.loadingID) {
                 let anchor = AnchorEntity(.head, trackingMode: .once)
                 loading.position = SIMD3(0, 0, -Self.loadingDistance)
                 anchor.addChild(loading)
                 content.add(anchor)
             }
-            guard let ride = await DragonRideSceneBuilder.makeRide(story: story, status: status, viewer: viewer,
-                                                                    hands: hands) else {
-                isLoaded = true
-                return
+        } update: { content, attachments in
+            // Chapter II's name once the ride is built, in front of the eyes where they are then: in the world, not
+            // on a head anchor, so it takes the tap that starts the ride.
+            if isLoaded, let title = attachments.entity(for: Self.titleID), title.parent == nil {
+                content.add(Self.inFrontOfEyes(title, viewer: viewer))
             }
+            guard let ride, ride.parent == nil else { return }
             content.add(ride)
-            isLoaded = true
-            // Chapter II's title, the fruit tally and how to hold the horns ride along, in front of the eyes.
+            // Chapter II's goal, the feast's words and how to hold the horns ride along, in front of the eyes.
             for (id, spot) in [(StoryPanelView.attachmentID, DragonRideSceneBuilder.panelSpot),
-                               (Self.tallyID, DragonRideSceneBuilder.tallySpot),
+                               (Self.messagesID, DragonRideSceneBuilder.tallySpot),
                                (Self.hintID, DragonRideSceneBuilder.hintSpot)] {
                 guard let attachment = attachments.entity(for: id) else { continue }
                 attachment.position = spot
@@ -63,8 +70,8 @@ struct DragonRideView: View {
             Attachment(id: StoryPanelView.attachmentID) {
                 StoryPanelView(hasBackdrop: true)
             }
-            Attachment(id: Self.tallyID) {
-                FeastTallyView()
+            Attachment(id: Self.messagesID) {
+                FeastMessagesView()
             }
             Attachment(id: Self.hintID) {
                 HornsHintView(status: status)
@@ -72,10 +79,27 @@ struct DragonRideView: View {
             Attachment(id: Self.loadingID) {
                 RideLoadingView(isLoaded: isLoaded)
             }
+            Attachment(id: Self.titleID) {
+                RideTitleView(isLoaded: isLoaded, status: status)
+            }
         }
+        // Without hand tracking, a tap on the sky breathes fire (the snap's alternative).
+        .gesture(SpatialTapGesture().targetedToEntity(where: .has(RideFireTarget.self)).onEnded { _ in
+            story.requestFire()
+        })
         // The music fades in out of the dark, follows the story and fades out as the space closes.
         .onChange(of: MusicTrack.riding(story: story.step), initial: true) { _, track in
             music.play(track)
+        }
+        // The ride's world, built while the loading animation plays (without the dragon, no ride: the space just
+        // waits for the Digital Crown).
+        .task {
+            guard ride == nil, !isLoaded else { return }
+            let built = await DragonRideSceneBuilder.makeRide(story: story, status: status, viewer: viewer,
+                                                              hands: hands)
+            ride = built
+            isLoaded = true
+            if built == nil { status.isChapterOpened = true }
         }
         .task { await music.load(MusicTrack.ridingTracks) }
         .task { await viewer.start() }
@@ -89,6 +113,12 @@ struct DragonRideView: View {
             guard isOver else { return }
             Task { await dismissImmersiveSpace() }
         }
+        #if DEBUG
+        // `-StorySkipsChapterTitle`: the ride sets off as soon as it is built.
+        .onChange(of: isLoaded) { _, isLoaded in
+            if isLoaded && StoryViewModel.skipsChapterTitle { status.isChapterOpened = true }
+        }
+        #endif
         .onDisappear {
             viewer.stop()
             hands.stop()
@@ -99,41 +129,72 @@ struct DragonRideView: View {
             openWindow(id: ContentView.windowID)
         }
     }
+
+    /// `entity` in the world `loadingDistance` in front of the player's eyes, level, facing them (the room's
+    /// default eye height without head tracking).
+    private static func inFrontOfEyes(_ entity: Entity, viewer: ViewerTracker) -> Entity {
+        let (eyes, forward) = viewer.viewerPose()
+        let holder = Entity()
+        holder.transform = Transform(rotation: simd_quatf(angle: atan2(-forward.x, -forward.z), axis: SIMD3(0, 1, 0)),
+                                     translation: eyes)
+        entity.position = SIMD3(0, 0, -loadingDistance)
+        holder.addChild(entity)
+        return holder
+    }
 }
 
-/// Chapter II's name (`StoryStep.rideTitle`) in the dark while the ride's world loads, the dragon tangling and
-/// untangling under it (`DragonLoadingView`): the wait opens the chapter, as chapter I's title does. It stays at
-/// least `readingTime`, so it is read even when the sky is built at once; the loading animation goes as soon as it is
-/// built. Hidden in SwiftUI (its attachment entity is never disabled).
+/// The ride's loading animation in the dark while its world is built (`DragonLoadingView`), as the launch window
+/// shows it while the island is built. Hidden in SwiftUI once built (its attachment entity is never disabled).
 private struct RideLoadingView: View {
-    /// The least time chapter II's name stays in front of the eyes.
-    private static let readingTime: Duration = .seconds(3)
-
     let isLoaded: Bool
-    @State private var isRead = false
 
     var body: some View {
         ZStack {
-            if !isLoaded || !isRead {
-                StoryPageCard(page: StoryStep.rideTitle, isChapter: true) {
-                    HStack(spacing: 10) {
-                        DragonLoadingView(size: 52)
-                        Text("Loading…")
-                            .font(.callout)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                    .opacity(isLoaded ? 0 : 1)
+            if !isLoaded {
+                VStack(spacing: 12) {
+                    DragonLoadingView()
+                    Text("Loading…")
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.7))
                 }
+                .padding(32)
+                .glassBackgroundEffect()
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
             }
         }
         .animation(.easeInOut(duration: 0.6), value: isLoaded)
-        .animation(.easeInOut(duration: 0.6), value: isRead)
-        .task {
-            try? await Task.sleep(for: Self.readingTime)
-            isRead = true
+    }
+}
+
+/// Chapter II's name (`StoryStep.rideTitle`) once the ride's world is built, as chapter I's title opens the island:
+/// tapped (look at it and pinch), it goes and the ride sets off out of the dark. Hidden in SwiftUI (its attachment
+/// entity is never disabled).
+private struct RideTitleView: View {
+    let isLoaded: Bool
+    let status: RideStatus
+
+    var body: some View {
+        ZStack {
+            if isLoaded && !status.isChapterOpened {
+                Button {
+                    status.isChapterOpened = true
+                } label: {
+                    StoryPageCard(page: StoryStep.rideTitle, isChapter: true) {
+                        Label("Tap to continue", systemImage: "hand.tap")
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+                .buttonStyle(.plain)
+                .contentShape(.hoverEffect, .rect(cornerRadius: StoryPageCardStyle.cornerRadius))
+                .hoverEffect(.highlight)
+                .accessibilityHint("Begins chapter II")
+                .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.6), value: isLoaded)
+        .animation(.easeInOut(duration: 0.6), value: status.isChapterOpened)
     }
 }
 
@@ -193,11 +254,11 @@ private struct HornsHintView: View {
     }
 }
 
-/// Chapter II's tally while the player feeds the dragon: its hearts and whether its fire is ready, the fruit eaten,
-/// a hint when the sky reaches a harder stage, and a word when something happens (a banana spat out, a poisoned
-/// fruit eaten, the dragon exhausted). Hidden in SwiftUI outside the feast (its attachment entity is never
-/// disabled).
-private struct FeastTallyView: View {
+/// Chapter II's words while the player feeds the dragon, over its head: a hint when the sky reaches a harder stage,
+/// and a word when something happens (a banana spat out, a poisoned fruit eaten, the feast lost or won). No bar:
+/// the medallion in the sky shows how far the feast has come. Hidden in SwiftUI outside the feast (its attachment
+/// entity is never disabled).
+private struct FeastMessagesView: View {
     @Environment(StoryViewModel.self) private var story
     /// A word for a moment after something happens.
     @State private var flash: String?
@@ -207,54 +268,25 @@ private struct FeastTallyView: View {
     private var feast: FeastProgress { story.feast }
 
     var body: some View {
-        VStack(spacing: 8) {
-            if story.step == .feast {
-                // No panel behind it: the flask of the dragon's life (`LifeFlaskView`) floats in the sky, the
-                // icons beside it as big as its bulb.
-                let iconSize = LifeFlaskView.bulbDiameter
-                HStack(spacing: 32) {
-                    LifeFlaskView(hearts: feast.hearts, maxHearts: feast.maxHearts)
-                    // The flame shows whether the fire is ready; pressed, it breathes fire like a snap (the way to do
-                    // it without hand tracking).
-                    Button {
-                        story.requestFire()
-                    } label: {
-                        FlameIcon(isLit: feast.isFireReady, size: iconSize)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!feast.isFireReady)
-                    .accessibilityLabel(feast.isFireReady ? "Breathe fire" : "Fire recharging")
-                    HStack(spacing: 14) {
-                        AppleIcon(size: iconSize)
-                        Text("\(feast.eaten)/\(feast.goal)")
-                            .font(.system(size: iconSize * 1.05, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                    }
+        ZStack {
+            if story.step == .feast, let message = phaseMessage ?? flash ?? hint {
+                Text(message)
+                    .font(.title3.bold())
                     .foregroundStyle(.white)
-                    .accessibilityElement(children: .combine)
-                }
-                .shadow(color: .black.opacity(0.6), radius: 8)
-                .contentTransition(.numericText())
-                .transition(.opacity)
-                if let message = phaseMessage ?? flash ?? hint {
-                    Text(message)
-                        .font(.title3.bold())
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 560)
-                        .shadow(color: .black.opacity(0.6), radius: 6)
-                        .transition(.scale.combined(with: .opacity))
-                        .id(message)
-                }
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 560)
+                    .shadow(color: .black.opacity(0.6), radius: 6)
+                    .transition(.scale.combined(with: .opacity))
+                    .id(message)
             }
         }
         .animation(.easeInOut(duration: 0.4), value: story.step)
-        .animation(.spring(duration: 0.3), value: feast)
         .animation(.spring(duration: 0.3), value: flash)
         .animation(.easeInOut(duration: 0.4), value: hint)
+        .animation(.easeInOut(duration: 0.4), value: feast.phase)
         .task(id: feast.bananas) { await show(feast.bananas > 0 ? "Yuck! No bananas." : nil) }
         .task(id: feast.poisoned) {
-            await show(feast.poisoned > 0 ? "Poisoned! The dragon lost a heart." : nil)
+            await show(feast.poisoned > 0 ? "Poisoned! The shamseh lost two pieces of glass." : nil)
         }
         // Each stage's hint, the first one too (when the feast begins).
         .task(id: StageHintKey(isFeeding: story.step == .feast, stage: feast.stage)) {
@@ -270,7 +302,7 @@ private struct FeastTallyView: View {
     private var phaseMessage: String? {
         switch feast.phase {
         case .playing: nil
-        case .exhausted: "The dragon is exhausted: it lost some fruit. It rests, then flies on."
+        case .failed: "The poison shattered the shamseh!"
         case .finished: "The dragon is full!"
         }
     }
@@ -280,7 +312,8 @@ private struct FeastTallyView: View {
         switch stage {
         case 0: "Fly into the fruit to feed the dragon. Push the horns forward to fly faster."
         case 1: "Bananas! The dragon spits them out: don't waste your time."
-        case 2: "Poisoned fruit! Avoid them, or let go of a horn and snap your fingers to breathe fire."
+        case 2: "Poisoned fruit break two pieces of the shamseh! Avoid them, or let go of a horn and snap your "
+            + "fingers to breathe fire."
         default: "The last stretch: the fruit dodge and less help aiming. Keep the poison away!"
         }
     }

@@ -70,12 +70,31 @@ struct ShamsehTests {
         shamseh.colour(with: .pineapple)
         #expect(shamseh.colours == [.pomegranate, .orange, .apple])
         #expect(shamseh.isComplete)
-        // The dragon exhausted: the petals of the fruit it lost lose their colour, and take the next fruit's.
+        // A poisoned fruit: the petals of the fruit it took back lose their colour, and take the next fruit's.
         shamseh.uncolour(last: 2)
         #expect(shamseh.colours == [.pomegranate] && !shamseh.isComplete)
         shamseh.uncolour(last: 5)
         #expect(shamseh.colours.isEmpty)
         shamseh.colour(with: .apple)
         #expect(shamseh.colours == [.apple])
+    }
+
+    @Test func aPetalShattersIntoShardsThatCoverIt() {
+        var random = SeededRandom(seed: 6)
+        let shamseh = Shamseh(folds: 10)
+        for petal in shamseh.petals {
+            let shards = Shamseh.shards(of: petal, using: &random)
+            #expect(shards.count == 4 * petal.corners.count)
+            // Together they cover the petal, each counter-clockwise around its own centre.
+            let area = shards.map { Shamseh.area(of: Shamseh.Shape(centre: .zero, corners: $0.corners)) }.reduce(0, +)
+            #expect(abs(area - Shamseh.area(of: petal)) < 1e-5)
+            for shard in shards {
+                #expect(simd_length(shard.corners.reduce(.zero, +)) < 1e-5)
+                let (first, second) = (shard.corners[1] - shard.corners[0], shard.corners[2] - shard.corners[0])
+                #expect(first.x * second.y - first.y * second.x > 0)
+                // Inside the petal's reach.
+                #expect(simd_length(petal.centre + shard.centre) < Shamseh.Settings.petalTip)
+            }
+        }
     }
 }

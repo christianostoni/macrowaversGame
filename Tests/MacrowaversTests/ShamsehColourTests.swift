@@ -32,12 +32,10 @@ struct ShamsehColourTests {
         #expect(simd_distance(ShamsehSky.wheelColour(at: 0), RidePalette.red) < 1e-5)
     }
 
-    @Test func poisonDarkensAndTheFinaleGilds() {
+    @Test func theFinaleGilds() {
         let colour = RidePalette.teal
-        #expect(ShamsehSky.shown(colour, sickness: 0, warmth: 0) == colour)
-        let sick = ShamsehSky.shown(colour, sickness: 1, warmth: 0)
-        #expect(simd_reduce_add(sick) < simd_reduce_add(colour) * 0.4)
-        let gilded = ShamsehSky.shown(colour, sickness: 0, warmth: 1)
+        #expect(ShamsehSky.shown(colour, warmth: 0) == colour)
+        let gilded = ShamsehSky.shown(colour, warmth: 1)
         #expect(simd_distance(gilded, RidePalette.gold) < simd_distance(colour, RidePalette.gold) * 0.35)
     }
 }

@@ -7,7 +7,7 @@ import UIKit
 extension DragonRideSystem {
     /// The medallion shows from the feast to the story's last page.
     static func showsShamseh(_ step: StoryStep) -> Bool {
-        step == .feast || step == .finale || step == .epilogue
+        step == .feast || step == .feastFailed || step == .finale || step == .epilogue
     }
 
     /// The finale: once the full medallion has swelled, the dragon roars and turns to it on its own, then flies

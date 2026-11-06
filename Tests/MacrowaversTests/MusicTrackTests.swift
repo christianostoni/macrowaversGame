@@ -28,7 +28,7 @@ struct MusicTrackTests {
     }
 
     @Test func theRideTrackFromTheArrivalToTheMedallion() {
-        for step in [StoryStep.ride, .secondChapter, .feast, .finale] {
+        for step in [StoryStep.ride, .secondChapter, .feast, .feastFailed, .finale] {
             #expect(MusicTrack.riding(story: step) == .ride)
         }
         #expect(MusicTrack.ride.loops)
