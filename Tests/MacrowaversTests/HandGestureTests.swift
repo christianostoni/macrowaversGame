@@ -10,36 +10,6 @@ private func hand(at time: TimeInterval, knuckle: SIMD3<Float> = SIMD3(0, 1, -0.
                middleDistal: knuckle + SIMD3(0, 0, -0.065), middleTip: knuckle + SIMD3(0, 0, -0.085))
 }
 
-/// The poses of a finger snap, relative to the middle knuckle.
-private enum SnapPose {
-    /// Thumb pressed on the middle finger's pad, the finger half bent.
-    case loaded
-    /// Right after the snap: the middle finger flexed into the palm, the thumb away from it.
-    case snapped
-    /// The fingers simply opened again: the middle finger stretches, the thumb leaves it.
-    case opened
-}
-
-private func snapHand(_ pose: SnapPose, at time: TimeInterval,
-                      chirality: HandSample.Chirality = .right) -> HandSample {
-    var sample = hand(at: time)
-    sample.chirality = chirality
-    let knuckle = sample.knuckle
-    switch pose {
-    case .loaded:
-        sample.middleDistal = knuckle + SIMD3(0, -0.02, -0.06)
-        sample.middleTip = knuckle + SIMD3(0.012, -0.035, -0.055)
-        sample.thumbTip = knuckle + SIMD3(0.02, -0.03, -0.06)
-    case .snapped:
-        sample.middleDistal = knuckle + SIMD3(0, -0.035, -0.02)
-        sample.middleTip = knuckle + SIMD3(0, -0.04, 0)
-        sample.thumbTip = knuckle + SIMD3(0.04, 0.01, -0.06)
-    case .opened:
-        sample.thumbTip = knuckle + SIMD3(0.04, 0.01, -0.06)
-    }
-    return sample
-}
-
 struct ChopDetectorTests {
     private let target = ChopDetector.Target(center: SIMD3(0, 1, -0.4), baseY: 0.92, radius: 0.1, heightWindow: 0.3)
 
@@ -75,86 +45,6 @@ struct ChopDetectorTests {
         var detector = ChopDetector()
         let result = chops([1.1, 1.02, 1.1, 1.02], detector: &detector)
         #expect(result == [false, true, false, false])
-    }
-}
-
-struct SnapDetectorTests {
-    /// Loaded at 0, then `pose` `after` seconds later.
-    private func snap(_ pose: SnapPose = .snapped, after: TimeInterval, detector: inout SnapDetector) -> [Bool] {
-        [detector.process(snapHand(.loaded, at: 0)), detector.process(snapHand(pose, at: after))]
-    }
-
-    @Test func thumbOffTheMiddleFingerIntoThePalmSnaps() {
-        var detector = SnapDetector()
-        // One reading apart at 90 Hz, or two at 30 Hz (a late frame): both the speed of a real snap.
-        let fast = snap(after: 1.0 / 90, detector: &detector)
-        #expect(fast == [false, true])
-        var late = SnapDetector()
-        let lateResult = snap(after: 2.0 / 30, detector: &late)
-        #expect(lateResult == [false, true])
-        #expect(late.lastAttempt?.isSnap == true)
-    }
-
-    @Test func thumbOnThePadLoadsEvenWithTheTipsApart() {
-        // Pressing the pad, the two tip joints are ~2.8 cm apart: tip to tip alone would never see it loaded.
-        var sample = snapHand(.loaded, at: 0)
-        sample.middleTip = sample.middleDistal + SIMD3(0.03, 0, 0)
-        // 1.2 cm off the pad, near the DIP joint.
-        sample.thumbTip = sample.middleDistal + SIMD3(0.004, -0.012, 0)
-        #expect(sample.snapGap > 0.025)
-        #expect(sample.thumbToMiddlePad < SnapDetector.Settings().contactDistance)
-        var detector = SnapDetector()
-        _ = detector.process(sample)
-        #expect(detector.isLoaded)
-    }
-
-    @Test func slowLateOrOpeningFingersDoNotSnap() {
-        var slow = SnapDetector()
-        let slowResult = snap(after: 0.25, detector: &slow)
-        #expect(slowResult == [false, false])
-        var late = SnapDetector()
-        let lateResult = snap(after: 0.5, detector: &late)
-        #expect(lateResult == [false, false])
-        // Opening the fingers stretches the middle finger instead of flexing it.
-        var open = SnapDetector()
-        let openResult = snap(.opened, after: 1.0 / 90, detector: &open)
-        #expect(openResult == [false, false])
-        #expect(open.lastAttempt.map { !$0.isSnap && $0.curl < 0 } == true)
-    }
-
-    @Test func aPinchIsNotLoadingASnap() {
-        var detector = SnapDetector()
-        var pinch = snapHand(.loaded, at: 0)
-        // Thumb on the index (the system's tap), the middle finger just as close.
-        pinch.indexTip = pinch.thumbTip + SIMD3(0.005, 0, 0)
-        let loaded = detector.process(pinch)
-        let released = detector.process(snapHand(.snapped, at: 1.0 / 90))
-        #expect(!loaded && !released && !detector.isLoaded)
-    }
-
-    @Test func repeatedReadingsAndCooldown() {
-        var detector = SnapDetector()
-        let first = snapHand(.loaded, at: 0)
-        let second = snapHand(.snapped, at: 1.0 / 90)
-        // Every reading arrives twice (the frame is faster than the tracking): one snap only.
-        let fired = [detector.process(first), detector.process(first), detector.process(second), detector.process(second)]
-        #expect(fired == [false, false, true, false])
-        // A second snap right away is in the cooldown; later it counts.
-        let again = [detector.process(snapHand(.loaded, at: 0.2)), detector.process(snapHand(.snapped, at: 0.21))]
-        #expect(again == [false, false])
-        let later = [detector.process(snapHand(.loaded, at: 1.0)), detector.process(snapHand(.snapped, at: 1.01))]
-        #expect(later == [false, true])
-    }
-
-    @Test func eachHandSnapsOnItsOwnAndTheLabelSeesTheLoadedPose() {
-        var detector = SnapDetector()
-        let left = detector.process(snapHand(.loaded, at: 0, chirality: .left))
-        #expect(detector.isLoaded)
-        // The right hand only shows the snapped pose: no snap.
-        let right = detector.process(snapHand(.snapped, at: 1.0 / 90, chirality: .right))
-        #expect(!left && !right && detector.isLoaded)
-        let leftSnap = detector.process(snapHand(.snapped, at: 2.0 / 90, chirality: .left))
-        #expect(leftSnap && !detector.isLoaded)
     }
 }
 
