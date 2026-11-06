@@ -19,8 +19,9 @@ as they were:
   from the bottom of its trunk to the top of its canopy (island ~2.5 m wide): both on the file's root, after its
   Z-up → Y-up turn. The tree alone sets the scale: a designer reshaping the rock or the grass must not resize the
   whole island.
-- Empty prims `fruit_01` ... `fruit_07` on the outside of the canopy, found by casting rays at the foliage: the
-  code hangs the fruit there.
+- Empty prims `fruit_01` ... `fruit_15` on the outside of the canopy, found by casting rays at the foliage: the
+  code hangs the fruit there, in order (one of each kind, three times over). The first seven are where the design
+  team placed them, in front of the player (`FRONT_RAYS`), so one of each kind is in front.
 - The source's meshes are already double-sided (RealityKit draws their inner walls), so no faces are turned.
 """
 import math
@@ -37,8 +38,27 @@ os.makedirs(OUTPUT, exist_ok=True)
 
 # Height of the tree, bottom of the trunk to top of the canopy, in metres: the scale the code is tuned for.
 TARGET_TREE_HEIGHT = 1.8415
-# Fruit hang points: (angle in degrees around the canopy, height as a fraction of the canopy, 0 = its bottom).
-FRUIT_SPOTS = [(20, 0.3), (95, 0.42), (160, 0.26), (230, 0.38), (290, 0.32), (340, 0.45), (260, 0.36)]
+# Fruit hang points. The first ones where the design team circled them on a picture of the tree seen from the
+# player's seat (2026-11-06): rays from that viewpoint (`FRONT_VIEW`, game coordinates, metres, from the base of the
+# trunk) through each circle (`FRONT_RAYS`, directions), in the fruit's order (`OrchardViewModel.kinds`, one of each
+# kind in turn): the first foliage each ray meets. The others out of the player's sight from that seat, among spots
+# sampled all round the canopy (angle in
+# degrees around it, every `SAMPLE_STEP`; height as a fraction of it, 0 = its bottom), each as far from the ones
+# already picked as it can be, never closer than `FRUIT_GAP` (metres, game scale).
+FRUIT_COUNT = 15
+FRONT_VIEW = (0.574, 0.947, 2.822)
+FRONT_RAYS = [
+    (-0.2014, 0.1035, -0.974),   # apple: the middle
+    (-0.4395, 0.1403, -0.8872),  # pomegranate: left
+    (-0.0381, 0.1363, -0.9899),  # banana: right
+    (-0.3125, 0.2203, -0.924),   # orange: top left
+    (-0.3803, 0.0657, -0.9225),  # pineapple: low on the left
+    (-0.0584, 0.2267, -0.9722),  # apple: top right
+    (-0.3197, -0.0177, -0.9474),  # pomegranate: bottom
+]
+SAMPLE_STEP = 6
+SAMPLE_HEIGHTS = (0.26, 0.32, 0.38, 0.44, 0.5)
+FRUIT_GAP = 0.24
 # Distance of the fruit centre from the foliage surface, and how far below the hit it hangs (metres, game scale).
 FRUIT_OFFSET = 0.045
 FRUIT_DROP = 0.02
@@ -159,24 +179,89 @@ def ray_hit(start, direction):
 
 
 def foliage_hit(degrees, fraction):
-    """First point of the foliage seen from outside the canopy, towards its centre; None between the blobs."""
+    """First point of the foliage seen from outside the canopy, towards its centre; None between the blobs (or deep
+    inside them)."""
     angle = math.radians(degrees)
     outward = Gf.Vec3d(math.cos(angle), math.sin(angle), 0)
     height = canopy_bottom + fraction * (canopy_top - canopy_bottom)
     start = Gf.Vec3d(canopy_centre[0], canopy_centre[1], height) + outward * (canopy_reach + 0.5 / scale)
     hit = ray_hit(start, -outward)
-    return (hit, outward) if hit is not None else None
+    # Through a gap between the blobs, the first foliage is deep inside the canopy, hidden: look elsewhere.
+    if hit is None or math.hypot(hit[0] - canopy_centre[0], hit[1] - canopy_centre[1]) < 0.5 * canopy_reach:
+        return None
+    return hit, outward
 
 
-for index, (degrees, fraction) in enumerate(FRUIT_SPOTS, start=1):
-    # The canopy is made of separate blobs: a ray may pass between them, so look around the wanted spot.
-    tries = [(degrees + turn, fraction + rise) for turn in (0, 8, -8, 16, -16, 24, -24) for rise in (0, 0.08, -0.08)]
-    found = next((result for result in (foliage_hit(*spot) for spot in tries) if result), None)
-    if found is None:
-        print(f"Warning: no foliage around {degrees}° / {fraction:.2f}, fruit_{index:02d} skipped")
-        continue
+def hang_point(found):
     location, outward = found
-    position = location + outward * (FRUIT_OFFSET / scale) - Gf.Vec3d(0, 0, FRUIT_DROP / scale)
+    return location + outward * (FRUIT_OFFSET / scale) - Gf.Vec3d(0, 0, FRUIT_DROP / scale)
+
+
+samples = []  # (degrees, height fraction, hang point)
+for degrees in range(0, 360, SAMPLE_STEP):
+    for fraction in SAMPLE_HEIGHTS:
+        found = foliage_hit(degrees, fraction)
+        if found:
+            samples.append((degrees, fraction, hang_point(found)))
+
+
+def gap(point, picked):
+    return min(((point - other).GetLength() * scale for other in picked), default=math.inf)
+
+
+def pick(candidates, picked, count, first):
+    """`count` more spots from `candidates`: the first by `first` (if nothing is picked yet), then each the farthest
+    from all the picked."""
+    picked = list(picked)
+    start = len(picked)
+    for _ in range(count):
+        usable = [spot for spot in candidates if gap(spot[2], picked) >= FRUIT_GAP]
+        if not usable:
+            raise SystemExit(f"Only {len(picked)} fruit spots {FRUIT_GAP} m apart: lower FRUIT_GAP")
+        best = min(usable, key=first) if not picked else max(usable, key=lambda spot: gap(spot[2], picked))
+        picked.append(best[2])
+    return picked[start:]
+
+
+
+
+def to_source(game):
+    """A game point (Y-up, metres from the base of the trunk) in the source's Z-up units."""
+    return origin + Gf.Vec3d(game[0], -game[2], game[1]) / scale
+
+
+view = to_source(FRONT_VIEW)
+spots = []
+for index, ray in enumerate(FRONT_RAYS, start=1):
+    aim = (to_source(Gf.Vec3d(*FRONT_VIEW) + Gf.Vec3d(*ray)) - view).GetNormalized()
+    # A circle on the canopy's outline may miss it by a hair: nudge the ray, a little more each ring, until it meets
+    # the foliage.
+    side = Gf.Cross(aim, Gf.Vec3d(0, 0, 1)).GetNormalized()
+    up = Gf.Cross(side, aim)
+    nudges = [(0, 0)] + [(radius * math.cos(turn * math.pi / 6), radius * math.sin(turn * math.pi / 6))
+                         for radius in (0.005, 0.01, 0.02, 0.035) for turn in range(12)]
+    hit = None
+    for across, rise in nudges:
+        direction = (aim + side * across + up * rise).GetNormalized()
+        hit = ray_hit(view, direction)
+        if hit is not None:
+            break
+    if hit is None:
+        raise SystemExit(f"fruit_{index:02d}: its ray from the player's seat misses the canopy")
+    spots.append(hang_point((hit, -direction)))
+
+
+def seen_from_front(point):
+    """Nothing of the canopy between the player's seat and `point`."""
+    towards = point - view
+    hit = ray_hit(view, towards.GetNormalized())
+    return hit is None or (hit - view).GetLength() >= towards.GetLength() - 0.01 / scale
+
+
+# The others where the player doesn't see them from the seat: the front is as the design team drew it.
+hidden = [spot for spot in samples if not seen_from_front(spot[2])]
+spots += pick(hidden, spots, FRUIT_COUNT - len(FRONT_RAYS), first=None)
+for index, position in enumerate(spots, start=1):
     fruit = UsdGeom.Xform.Define(stage, ROOT.AppendChild(f"fruit_{index:02d}"))
     fruit.AddTranslateOp().Set(position)
     game = (position - origin) * scale
