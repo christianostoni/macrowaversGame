@@ -28,6 +28,7 @@ struct IslandGrabberSystem: System {
 
     init(scene: RealityKit.Scene) {}
 
+    @MainActor
     static func registerAll() {
         IslandGrabberComponent.registerComponent()
         registerSystem()

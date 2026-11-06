@@ -3,6 +3,7 @@ import SwiftUI
 
 /// The feast's icons in the game's style, like the life flask (`LifeFlaskView`): a lilac rim, a violet band inside
 /// it, a gradient in the game's colours, a glint of light and a speck of gold.
+@MainActor
 enum GameIcon {
     static var rim: Color { LifeFlaskView.rimLight }
     static var band: Color { LifeFlaskView.rim }

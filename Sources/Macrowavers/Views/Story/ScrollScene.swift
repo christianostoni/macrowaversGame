@@ -228,6 +228,7 @@ struct ScrollLooks {
 }
 
 /// Low-poly pieces in the game's faceted style: flat faces, each with its own vertices.
+@MainActor
 private enum Facets {
     /// A prism along x: `sides` long faces and two ends.
     static func prism(sides: Int, radius: Float, length: Float) -> MeshResource? {

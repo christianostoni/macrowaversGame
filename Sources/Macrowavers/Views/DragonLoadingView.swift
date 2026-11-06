@@ -11,12 +11,12 @@ import UIKit
 /// or without the file, the system spinner turns. With Reduce Motion on, the dragon rests in its ring.
 struct DragonLoadingView: View {
     /// The sheet's layout and rate: the script's `FRAMES`, `COLUMNS` and `FPS`.
-    static let frameCount = 72
-    static let columns = 9
+    nonisolated static let frameCount = 72
+    nonisolated static let columns = 9
     static let framesPerSecond: Double = 24
     /// The frame shown with Reduce Motion: the dragon untangled, in its ring.
     static let restingFrame = 40
-    static let resourceName = "DragonLoading"
+    nonisolated static let resourceName = "DragonLoading"
 
     /// Width and height (pt).
     var size: CGFloat = 96

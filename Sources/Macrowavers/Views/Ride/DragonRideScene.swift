@@ -431,6 +431,7 @@ enum DragonRideSceneBuilder {
     }
 
     /// Where sounds play in the player's ears wherever they look, like the music (channel audio).
+    @MainActor
     private static func makeEars() -> Entity {
         let ears = Entity()
         ears.name = "RideEars"
