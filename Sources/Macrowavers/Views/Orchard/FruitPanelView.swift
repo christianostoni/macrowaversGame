@@ -16,19 +16,16 @@ struct FruitPanelView: View {
 
     private var panel: some View {
         VStack(spacing: 10) {
-            Text(isEmpty ? "No ingredient left in this one" : title)
-                .font(.headline)
+            Text(isEmpty ? "No gem left" : title)
+                .font(.headline.bold())
+                .foregroundStyle(.primary)
             Text(hint)
-                .font(.subheadline)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
-            if orchard.isHandTrackingAvailable {
-                Text("Cup a hand next to it and turn your hand to turn the fruit.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
             if orchard.focusedFruit?.kind == .apple && orchard.focusedOrb == .sealed {
                 Text("Worms caught: \(orchard.caughtWorms)/\(orchard.wormCount)")
-                    .font(.subheadline.monospacedDigit())
+                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.primary)
                     .contentTransition(.numericText())
                     .animation(.default, value: orchard.caughtWorms)
             }
@@ -57,11 +54,11 @@ struct FruitPanelView: View {
 
     private var title: String {
         switch orchard.focusedFruit?.kind {
-        case .apple: "An apple from the tree"
-        case .pomegranate: "A pomegranate from the tree"
-        case .banana: "A banana from the tree"
-        case .orange: "An orange from the tree"
-        case .pineapple: "A pineapple from the tree"
+        case .apple: "The Apple"
+        case .pomegranate: "The Pomegranate"
+        case .banana: "The Banana"
+        case .orange: "The Orange"
+        case .pineapple: "The Pineapple"
         case nil: ""
         }
     }
@@ -70,10 +67,10 @@ struct FruitPanelView: View {
         switch orchard.focusedOrb {
         case .revealed:
             return orchard.elixirState == .gathering
-                ? "An ingredient for the elixir! It's joining the others around you."
-                : "Three ingredients already orbit you: brew the elixir first."
+                ? "A gem for the elixir!"
+                : "You already have three gems: brew the elixir first."
         case .orbiting, .spent:
-            return isEmpty ? "Its ingredient already orbits you. Put it back on the tree." : openHint
+            return isEmpty ? "You already took this gem. Put it back on the tree." : openHint
         case .sealed, nil:
             return openHint
         }
@@ -83,21 +80,21 @@ struct FruitPanelView: View {
     private var openHint: String {
         switch orchard.focusedFruit?.kind {
         case .apple:
-            if !orchard.isAppleOpen { return "Pull the stem up to open the apple." }
+            if !orchard.isAppleOpen { return "Pull to open the apple." }
             return orchard.focusedOrb == .sealed
-                ? "Catch the worms! They burrow now and then, and get faster after each catch."
+                ? "Catch the worms! They are sneaky, and get fast."
                 : "Only worms in this one. Put it back on the tree."
         case .pomegranate:
             return orchard.pomegranateBurst ? "Drag the seeds around for fun." : "Pull it apart with both hands."
         case .banana:
-            return "Pinch a strip of the peel and pull it outwards and down. Peel all four."
+            return "Pinch a strip and peel the whole banana."
         case .orange:
             return orchard.orangeOpened
                 ? "Fresh orange wedges!"
-                : "Pull it apart with both hands: into halves, then into wedges."
+                : "Pull it apart with both hands."
         case .pineapple:
             return orchard.isHandTrackingAvailable
-                ? "Chop down through it with the edge of your hand, or tap it."
+                ? "Chop the pineapple with an open hand."
                 : "Tap it to cut it open."
         case nil:
             return ""

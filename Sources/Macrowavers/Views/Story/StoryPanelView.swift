@@ -38,8 +38,8 @@ private struct StoryPageView: View {
         Button(action: advance) {
             StoryPageCard(page: page, isChapter: isChapter) {
                 Label(hint, systemImage: "hand.tap")
-                    .font(.callout)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
         }
         .buttonStyle(.plain)
@@ -91,22 +91,22 @@ struct StoryPageCard<Footer: View>: View {
             if !page.title.isEmpty {
                 if isChapter {
                     Text(page.title.uppercased())
-                        .font(.system(size: 13, design: .serif))
+                        .font(.system(size: 13, weight: .bold, design: .serif))
                         .tracking(4.4)
                         .foregroundStyle(StoryPageCardStyle.gold)
                 } else {
                     Text(page.title)
-                        .font(.system(size: 30, design: .serif))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 30, weight: .bold, design: .serif))
+                        .foregroundStyle(.primary)
                 }
             }
             VStack(spacing: 2) {
                 ForEach(page.lines, id: \.self) { line in
                     Text(line)
                         // One line, a proverb, is bigger than a page of two.
-                        .font(.system(size: page.lines.count > 1 ? 26 : 30, weight: .semibold, design: .serif)
+                        .font(.system(size: page.lines.count > 1 ? 26 : 30, weight: .medium, design: .serif)
                             .italic())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                 }

@@ -56,7 +56,7 @@ Full documentation, one README per feature:
 - Git LFS and SwiftLint: `brew install git-lfs swiftlint` (the GitHub CLI, `gh`, is optional)
 - A Vision Pro in Developer Mode, paired in Xcode, for anything with hands or comfort. The simulator has no hand
   tracking: there hold Option to pull the pomegranate and the orange apart with two hands, a tap chops the
-  pineapple, and a tap on an ingredient or **Brew the Elixir** replaces the finger snap; turning a fruit with a
+  pineapple, and a tap on an ingredient or **Create the Elixir** replaces the finger snap; turning a fruit with a
   cupped hand needs the headset
 
 ## Quick start
