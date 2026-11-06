@@ -14,8 +14,8 @@ dragon is full it flies into the medallion's heart, where the story ends.
 | 2 | `scroll` | In front of the player's eyes | The story's scroll: the chapter's story in Persian Nastaliq, down to its painting of the tree and the dragon (see [The story's scroll](#the-storys-scroll)) | Pull it open (or pinch it), drag the paper up to the painting, **Continue** (or **Skip the story**): it rolls up and fades away |
 | 3 | `chapter` | Same spot | **Chapter I** / Patience is bitter, but its fruit is sweet. | Tap the text: the island fades in |
 | – | `adventure` | A little below the gaze, like the subtitles | No story text: the island, its fruit, the dragon and its puzzle. Until the first ingredient is found, a hint says what to do: **Look at a fruit on the tree and pinch to pick it** / Every fruit hides an ingredient. Find three to brew the elixir that soothes the dragon. (`TreeHintView`; hidden while a fruit is close) | The dragon is freed |
-| 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the curse of the Black Div. / You don't need to be afraid. | Tap the text |
-| 5 | `safety` | Above the dragon | **Thank you** / Child of the Shah, I will take you to safety. / Are you ready? | Tap the text (its hint says **I'm Ready**): the room goes dark, the ride's space takes over |
+| 4 | `gratitude` | Above the dragon | **Thank you** / You freed me from the demon's curse. / You don't need to be afraid. | Tap the text |
+| 5 | `safety` | Above the dragon | **Thank you** / Child of the King, I will take you to safety. / Are you ready? | Tap the text (its hint says **I'm Ready**): the room goes dark, the ride's space takes over |
 | – | `ride` | Full immersion | While the ride's world loads (the dragon, the sky, the clouds, the fruit, the sounds: a few seconds in the dark), a loading screen placed once 1.2 m in front of the eyes: the loading animation and "Loading…" on glass (`RideLoadingView`, like the launch window's while the island is built; the ride is built in a task, not in the `RealityView`'s `make`, whose entities show only once it returns). Once it is built, chapter II's name in its page's frame, in the world where the eyes are then: **Chapter II** / Havā-tō dāram: I have your back (`StoryStep.rideTitle`, `RideTitleView`), "Tap to continue". The ride waits for that tap (`RideStatus.isChapterOpened`; debug `-StorySkipsChapterTitle` skips it). Then no page: out of the dark, on the dragon's back; while the hands don't hold the horns, a hint over its head shows how (pinch with both hands) | Tap chapter II's name; then the dragon arrives (3.5 s) |
 | 6 | `secondChapter` | In front of the eyes, above the dragon's head | Feed the dragon the right plants. (no title: chapter II was named before the ride; the bananas get their own hint when the sky first has them) | Tap the text |
 | – | `feast` | Above the dragon's head | No page and no bar: fruit in the sky, harder as the player does well; the medallion in the sky shows how far the feast has come, and a few words over the dragon's head say what happens (stage hints, a banana, poison); see [Chapter II: the feast](#chapter-ii-the-feast) | The 10th fruit eaten ("The dragon is full!") and the medallion complete, swelled for 2.5 s; or a poisoned fruit taking back the last petal (`feastFailed`) |
@@ -25,8 +25,8 @@ dragon is full it flies into the medallion's heart, where the story ends.
 | – | `ended` | – | No text: the ride's space closes and the launch window comes back | – |
 
 Text changes from the wireframes: "ti safety" → "to safety", "Dont need to be afraid" → "You don't need to be
-afraid.", and the curse is named after the scroll's story ("the curse of XXX" → "the curse of the Black Div"); the
-player is the Shah's lost child. The narrator's "What are you searching for?" page became the scroll. All the
+afraid.", and the curse is named after the scroll's story ("the curse of XXX" → "the demon's curse"); the
+player is the king's lost child. The narrator's "What are you searching for?" page became the scroll. All the
 pages' text lives in `StoryStep.page` (chapter II's name, shown once the ride is built, in `StoryStep.rideTitle`); the scroll's, in `Assets/Scroll/make_scroll_page.swift`.
 
 ## How it works
@@ -71,7 +71,7 @@ pages' text lives in `StoryStep.page` (chapter II's name, shown once the ride is
 
 ## The story's scroll
 
-The chapter's story, *The Shah's Tree* (درخت شاه), on a Persian scroll (*tumār*), in the game's low-poly airbrush
+The chapter's story, *The King's Tree* (درخت شاه), on a Persian scroll (*tumār*), in the game's low-poly airbrush
 style: a paper with an ornamental border, the story in Nastaliq and, at its end, a painting of the island, the tree
 and the dragon. It floats closed in front of the player in the darkened room; they pull its bottom roll down to
 open it (or pinch it), drag the paper up to read, and once the painting is in sight **Continue** rolls it up and
@@ -79,16 +79,15 @@ it fades away: the chapter's title comes next. **Skip the story** does the same 
 
 The story, in English: the narrator reads it when the scroll opens (below), with these words as subtitles:
 
-> Once there was, once there was not. Long ago, a Shah planted a tree on an island floating between earth and
-> sky. Its fruit held the light of fallen stars, and only royal hands could pick it. To guard it, the Shah called
-> on an old friend: a dragon of the sky.
-> But the Black Div wanted that light. He could not take the fruit, so he cursed its guardian: circle the tree
-> forever, guard it forever, and never touch a single fruit. He left his worms inside the fruit, then hunted the
-> Shah's family until the world forgot them. With every circle, the dragon's body knots tighter and its heart
-> grows angrier.
+> Once there was, once there was not. Long ago, a king planted a tree on an island floating between earth and
+> sky. Its fruit held the light of fallen stars. And curative powers. To guard it, the king called on an old
+> friend: a dragon of the sky.
+> But a demon wanted that light. He could not take the fruits, so he put a curse on the dragon: circle the tree
+> forever, if you leave it you will not be able to move. He hunted the king's family until the world forgot them.
+> If the dragon leaves, its body knots tighter, and its heart grows angrier.
 > Only an elixir brewed from the tree's own fruit can soften the curse, and only patient hands can untie what it
-> has knotted. But no royal hands were left to pick the fruit.
-> So the div believed. One child of the Shah's line survived and never knew it. The tree remembers you.
+> has knotted. The demon believed no hands were left to pick the fruit.
+> But one child of the king's line survived, and never knew it. The tree remembers you.
 > Patience is bitter, but its fruit is sweet.
 
 - **The page** (`ScrollPage.jpg`, 1536 px wide) is made by `Assets/Scroll/make_scroll_page.swift` from two
@@ -127,10 +126,9 @@ The story, in English: the narrator reads it when the scroll opens (below), with
   **Continue** or **Skip the story**.
 - **The narration** (`StoryNarration`, `StoryNarrator`): the English story read by an ElevenLabs voice (Eleven
   Multilingual v2, made in Pika's Speech Studio; source `Assets/Audio/story_narration.mp3`, in the game
-  `StoryNarration.m4a`, 59 s). It starts when the scroll opens, in the player's ears like the music, which steps back
-  under it (`GameMusic.duck`); Continue or Skip fades it out. "Div" is written "Deev" in the text given to the
-  voice, so it is not said like "divide". The subtitles are one cue a sentence (the long one in two), their times
-  the pauses in the recording: its 29 spoken phrases match the story's 29 clauses one for one, so a new recording
+  `StoryNarration.m4a`, 55 s). It starts when the scroll opens, in the player's ears like the music, which steps back
+  under it (`GameMusic.duck`); Continue or Skip fades it out. The subtitles are one cue a sentence (the long one in
+  two), each starting where the voice starts that sentence after a pause in the recording, so a new recording
   needs new times (`StoryNarration.cues`). The subtitles (`StorySubtitleView`) float a little below wherever the
   player looks, like visionOS's Live Captions, so they are read without bending the neck (under the scroll they
   were too low): 15° below the gaze, 0.8 m away (in front of the scroll), on a dark background over the scroll's
@@ -474,4 +472,7 @@ layers in the middle, and the document's fill behind (`automatic` light, `system
 - Above the dragon, the words sit ~0.6 m from a seated player's eyes: font sizes need checking on device.
 - The darkened room is the system's effect: how dark it looks depends on the real room's lighting.
 - The scroll is in Persian, the narration and subtitles in English only.
+- The English story and its narration were rewritten (a king for the Shah and a demon for the Black Div, words not
+  every player knows; no worms; the curse holds the dragon to the tree), but the Persian story on the scroll
+  (`Assets/Scroll/make_scroll_page.swift`) is still the old one.
 - In the simulator the scroll opens with a click (no hand to pull it) and the paper is dragged with the pointer.
