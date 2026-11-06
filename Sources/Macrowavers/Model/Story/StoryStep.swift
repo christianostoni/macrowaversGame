@@ -12,7 +12,8 @@ enum StoryStep: Equatable, CaseIterable {
     case scroll
     /// Screen 3: the chapter's title and its proverb.
     case chapter
-    /// No story text: the island, its fruit and the dragon's puzzle.
+    /// No story text: the island, its fruit and the dragon's puzzle. Until the first ingredient is found, a hint
+    /// says how to pick a fruit (`TreeHintView`).
     case adventure
     /// Screen 4: the freed dragon thanks the player.
     case gratitude

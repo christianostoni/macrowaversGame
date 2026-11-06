@@ -49,6 +49,12 @@ struct DragonImmersiveView: View {
                 subtitles.components.set(BillboardComponent())
                 content.add(subtitles)
             }
+            // Once the island is there, how to pick its fruit: a little below the gaze too.
+            if let treeHint = attachments.entity(for: TreeHintView.attachmentID) {
+                treeHint.components.set(StorySubtitleComponent(viewer: viewer))
+                treeHint.components.set(BillboardComponent())
+                content.add(treeHint)
+            }
             if let scroll = await ScrollSceneBuilder.makeScroll(scroll: storyScroll, viewer: viewer, hint: scrollHint) {
                 content.add(scroll)
             }
@@ -135,6 +141,11 @@ struct DragonImmersiveView: View {
             }
             Attachment(id: ElixirPanelView.attachmentID) {
                 ElixirPanelView()
+                    .environment(orchard)
+            }
+            Attachment(id: TreeHintView.attachmentID) {
+                TreeHintView()
+                    .environment(story)
                     .environment(orchard)
             }
         }
