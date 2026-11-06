@@ -35,11 +35,11 @@ struct ContentView: View {
                     } label: {
                         Text("Start")
                             .frame(maxWidth: .infinity)
+                            .ringLight(aroundButtonOf: .large)
                     }
                     .buttonBorderShape(.capsule)
                     .controlSize(.large)
                     .frame(width: Self.titleWidth)
-                    .ringLight()
                     .accessibilityHint("Opens the floating island and begins the story")
                     AppIconMenu()
                         .controlSize(.small)
