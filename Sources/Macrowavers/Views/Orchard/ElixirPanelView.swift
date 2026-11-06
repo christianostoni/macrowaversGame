@@ -29,8 +29,19 @@ struct ElixirPanelView: View {
             }
             .multilineTextAlignment(.center)
             .frame(width: 190)
-            .padding(10)
-            .glassBackgroundEffect()
+            // Clear of the capsule's round ends.
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            // A glass capsule with the name's ring light, like Start: the ring follows its edge exactly.
+            .glassBackgroundEffect(in: .capsule)
+            // Looked at, it lights up (the ring): the system's own highlight takes the capsule too, not the label's
+            // rectangle (a button gets it from its border shape).
+            .contentShape(.capsule)
+            .contentShape(.hoverEffect, .capsule)
+            .ringLight()
+            // Room round it for the ring's glow: an attachment cuts off what spills past its bounds, and the glow
+            // was cut square there (a window has room round Start).
+            .padding(16)
             .animation(.default, value: orchard.orbitingCount)
         }
     }

@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Small panel under the fruit in front of the player (a RealityView attachment, not a window):
-/// what to do now, how many worms are left, back to the tree.
+/// The words under the fruit in front of the player (a RealityView attachment, not a window): what to do now, how to
+/// turn the fruit, how many worms are caught. A story page to read (`StoryPageCard`'s clear glass in the tile frame,
+/// serif words), with nothing to press: a fruit goes back to the tree by itself, once its ingredient is out or once it
+/// is found empty (`OrchardViewModel.emptyReturnDelay`).
 struct FruitPanelView: View {
     static let attachmentID = "FruitPanel"
 
@@ -9,58 +11,58 @@ struct FruitPanelView: View {
 
     var body: some View {
         // Hidden in SwiftUI, not by disabling its entity (see DragonImmersiveView).
-        if orchard.focusedFruitID != nil { panel }
+        ZStack {
+            if orchard.focusedFruitID != nil {
+                card
+                    .id(hint)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: hint)
     }
 
     private var isEmpty: Bool { orchard.isFocusedFruitEmpty && orchard.isFocusedFruitExplored }
 
-    private var panel: some View {
-        VStack(spacing: 10) {
-            Text(isEmpty ? "No gem left" : title)
-                .font(.headline.bold())
-                .foregroundStyle(.primary)
-            Text(hint)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-            if orchard.focusedFruit?.kind == .apple && orchard.focusedOrb == .sealed {
-                Text("Worms caught: \(orchard.caughtWorms)/\(orchard.wormCount)")
-                    .font(.subheadline.weight(.medium).monospacedDigit())
-                    .foregroundStyle(.primary)
+    /// Drawn as a story page (`StoryPageCard`): the hint in its italic lines, one or two, at the story's one size; under
+    /// it, like the story's "Tap to continue", the worms caught or how to turn the fruit.
+    private var card: some View {
+        StoryPageCard(page: StoryStep.Page(title: "", lines: Self.lines(of: hint), anchor: .viewer, advance: .tap),
+                      isChapter: false) {
+            if let detail {
+                Label(detail.text, systemImage: detail.icon)
+                    .font(.callout.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
                     .animation(.default, value: orchard.caughtWorms)
             }
-            HStack(spacing: 12) {
-                Button("Close It Again", systemImage: "arrow.counterclockwise") {
-                    orchard.restartFruit()
-                }
-                if isEmpty {
-                    Button("Back to the Tree", systemImage: "arrow.uturn.backward") {
-                        orchard.back()
-                    }
-                    .buttonStyle(.borderedProminent)
-                } else {
-                    Button("Back to the Tree", systemImage: "arrow.uturn.backward") {
-                        orchard.back()
-                    }
-                }
-            }
-            .disabled(orchard.elixirState == .flying)
         }
-        .multilineTextAlignment(.center)
-        .frame(width: 360)
-        .padding(20)
-        .glassBackgroundEffect()
+        .allowsHitTesting(false)
     }
 
-    private var title: String {
-        switch orchard.focusedFruit?.kind {
-        case .apple: "The Apple"
-        case .pomegranate: "The Pomegranate"
-        case .banana: "The Banana"
-        case .orange: "The Orange"
-        case .pineapple: "The Pineapple"
-        case nil: ""
+    /// The small line under the hint: the worms caught, or how to turn the fruit with its ring of light (`TurnRing`).
+    private var detail: (text: String, icon: String)? {
+        if orchard.focusedFruit?.kind == .apple && orchard.focusedOrb == .sealed && orchard.isAppleOpen {
+            return ("Worms caught: \(orchard.caughtWorms)/\(orchard.wormCount)", "ant")
         }
+        return isEmpty ? nil : ("Pinch the ring of light and slide round it to turn the fruit", "hand.pinch")
+    }
+
+    /// A story page's lines are each one line long: a long hint is cut in two, at the sentence's break nearest its
+    /// middle (else the space nearest it).
+    nonisolated static func lines(of text: String) -> [String] {
+        guard text.count > 44 else { return [text] }
+        let words = text.split(separator: " ")
+        let middle = text.count / 2
+        var best: (cut: Int, score: Int)?
+        var length = 0
+        for index in words.indices.dropLast() {
+            length += words[index].count + 1
+            let breaks = [".", ":", "!", ","].contains(words[index].last.map(String.init) ?? "")
+            let score = abs(length - middle) - (breaks ? 12 : 0)
+            if best.map({ score < $0.score }) ?? true { best = (index + 1, score) }
+        }
+        guard let cut = best?.cut else { return [text] }
+        return [words[..<cut].joined(separator: " "), words[cut...].joined(separator: " ")]
     }
 
     private var hint: String {
@@ -70,7 +72,7 @@ struct FruitPanelView: View {
                 ? "A gem for the elixir!"
                 : "You already have three gems: brew the elixir first."
         case .orbiting, .spent:
-            return isEmpty ? "You already took this gem. Put it back on the tree." : openHint
+            return isEmpty ? "You already took this gem. Back to the tree it goes." : openHint
         case .sealed, nil:
             return openHint
         }
@@ -83,7 +85,7 @@ struct FruitPanelView: View {
             if !orchard.isAppleOpen { return "Pull to open the apple." }
             return orchard.focusedOrb == .sealed
                 ? "Catch the worms! They are sneaky, and get fast."
-                : "Only worms in this one. Put it back on the tree."
+                : "Only worms in this one."
         case .pomegranate:
             return orchard.pomegranateBurst ? "Drag the seeds around for fun." : "Pull it apart with both hands."
         case .banana:

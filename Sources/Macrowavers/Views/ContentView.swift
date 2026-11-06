@@ -13,7 +13,8 @@ import SwiftUI
 struct ContentView: View {
     static let windowID = "IslandWindow"
     private static let titleHeight: CGFloat = 200
-    private static let titleWidth = titleHeight * ToranjTitleView.viewBox.width / ToranjTitleView.viewBox.height
+    /// The name's width, and Start's (the scroll's Continue matches it, `ScrollHintView`).
+    static let titleWidth = titleHeight * ToranjTitleView.viewBox.width / ToranjTitleView.viewBox.height
 
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(StoryViewModel.self) private var story
@@ -26,7 +27,8 @@ struct ContentView: View {
                 VStack(spacing: 16) {
                     ToranjTitleView()
                         .frame(height: Self.titleHeight)
-                        .padding(.bottom, 12)
+                        // Room to breathe between the name and Start.
+                        .padding(.bottom, 64)
                     // As wide as the name above it.
                     Button {
                         Task { await start() }
@@ -95,67 +97,6 @@ struct ContentView: View {
             story.reset()
         }
     }
-}
-
-/// A ring light around Start's capsule, in the colours of the game's name (`ToranjTitleView`: orange, rose, the
-/// leaf's green): dim and still, it lights up and its colours go round the edge while the player looks at the
-/// button. Where the eyes are is private, so the system runs it (hover effects, grouped with the button's own);
-/// with Reduce Motion it only lights up.
-private struct RingLight: ViewModifier {
-    private static let colors = [
-        // Mostly the fruit's oranges, a touch of the dots' rose and the leaf's green.
-        Color(red: 1, green: 0.69, blue: 0.41), // light orange
-        Color(red: 1, green: 0.43, blue: 0), // orange
-        Color(red: 0.88, green: 0.32, blue: 0.49).opacity(0.7), // rose
-        Color(red: 1, green: 0.43, blue: 0),
-        Color(red: 0.80, green: 0.88, blue: 0.32).opacity(0.6), // leaf green
-        Color(red: 1, green: 0.69, blue: 0.41),
-    ]
-    /// Once round every 8 s while looked at: a long animation, far longer than any look.
-    private static let laps = 60.0
-    private static let lapDuration = 8.0
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                GeometryReader { proxy in
-                    ZStack {
-                        // The glow: a soft blurred band, only while looked at.
-                        ring(in: proxy.size, lineWidth: 6)
-                            .blur(radius: 6)
-                            .hoverEffect { effect, isActive, _ in
-                                effect.animation(.easeInOut(duration: 0.4)) { $0.opacity(isActive ? 0.55 : 0) }
-                            }
-                        ring(in: proxy.size, lineWidth: 1.5)
-                            .hoverEffect { effect, isActive, _ in
-                                effect.animation(.easeInOut(duration: 0.4)) { $0.opacity(isActive ? 0.85 : 0.35) }
-                            }
-                    }
-                }
-                .allowsHitTesting(false)
-            }
-            .hoverEffectGroup()
-    }
-
-    /// The colours on a square wide enough to cover the capsule whichever way it turns, seen through its edge.
-    private func ring(in size: CGSize, lineWidth: CGFloat) -> some View {
-        let side = hypot(size.width, size.height)
-        return AngularGradient(colors: Self.colors, center: .center)
-            .frame(width: side, height: side)
-            .hoverEffect { effect, isActive, _ in
-                effect.animation(isActive ? .linear(duration: Self.laps * Self.lapDuration) : .easeOut(duration: 0.6)) {
-                    $0.rotationEffect(.degrees(isActive && !reduceMotion ? Self.laps * 360 : 0))
-                }
-            }
-            .frame(width: size.width, height: size.height)
-            .mask { Capsule().stroke(lineWidth: lineWidth) }
-    }
-}
-
-private extension View {
-    func ringLight() -> some View { modifier(RingLight()) }
 }
 
 #Preview(windowStyle: .plain) {

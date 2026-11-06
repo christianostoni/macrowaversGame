@@ -2,6 +2,7 @@ import SwiftUI
 
 /// The game's name, ترنج (toranj, the citron), in the design team's lettering (`Assets/Title/toranj.svg`), written
 /// above Start as by a pen: ت, then ر, ن and ج, then their dots, then the leaf grows from the fruit.
+/// The letters and dots wear the pomegranate's skin, the leaf the fruits' leaf (`ToranjSkin.metal`).
 /// The letters are filled shapes: each is revealed along a hand-traced pen line (`Stroke`), thick enough to
 /// cover it. With Reduce Motion the name simply fades in.
 /// The pen starts once the window is in view, a moment after it opens (visionOS fades it in), and writes the name
@@ -65,8 +66,12 @@ struct ToranjTitleView: View {
 
     // MARK: - The drawing, `time` seconds into the writing
 
-    /// The SVG's canvas; its shapes sit 5 units to the right in it (the group's `translate(5, 0)`).
-    static let viewBox = CGSize(width: 958, height: 1118)
+    /// The canvas, in the SVG's units: as tall as the SVG's (958 × 1118), a little wider, so the name can sit
+    /// centred to the eye. Its big fruit, low on the left, carries most of the ink: centred by its outline
+    /// (x -5…949), the name looks pushed left over Start. So it sits halfway between that centre and its ink's
+    /// centre of mass (x 420): `inkShift` puts x 446 in the middle.
+    static let viewBox = CGSize(width: 1010, height: 1118)
+    private static let inkShift: CGFloat = 1010 / 2 - 446
     static let duration: TimeInterval = 3.8
     /// How long the window takes to fade in before the pen starts.
     private static let delay: TimeInterval = 1
@@ -74,12 +79,14 @@ struct ToranjTitleView: View {
     static func draw(in context: inout GraphicsContext, size: CGSize, at time: TimeInterval) {
         let scale = min(size.width / viewBox.width, size.height / viewBox.height)
         context.scaleBy(x: scale, y: scale)
-        context.translateBy(x: 5, y: 0)
+        context.translateBy(x: inkShift, y: 0)
 
+        // The letters and dots wear the pomegranate's skin (`ToranjSkin.metal`).
+        let skin = Skin.pomegranate
         // ت and ر, one shape: the bowl from its right horn round to the left one, then the tail down to its drop.
-        write(Shapes.teReh, with: Shapes.orange, along: [Stroke.te, Stroke.reh], in: context, at: time)
+        write(Shapes.teReh, with: skin, along: [Stroke.te, Stroke.reh], in: context, at: time)
         // ن and ج, one shape: the stem down into the fruit, then round the fruit.
-        write(Shapes.noonJim, with: Shapes.orange, along: [Stroke.noon, Stroke.jim], in: context, at: time)
+        write(Shapes.noonJim, with: skin, along: [Stroke.noon, Stroke.jim], in: context, at: time)
 
         // The dots, right to left along the top, then ج's inside the fruit: each pops in.
         for (index, dot) in Shapes.dots.enumerated() {
@@ -89,7 +96,7 @@ struct ToranjTitleView: View {
             layer.translateBy(x: dot.x, y: dot.y)
             layer.scaleBy(x: grown, y: grown)
             let circle = Path(ellipseIn: CGRect(x: -31.5, y: -31.5, width: 63, height: 63))
-            layer.fill(circle, with: gradient(Shapes.rose, in: circle.boundingRect))
+            paint(circle, with: skin.scaled(grown), in: layer)
         }
 
         // Last, the leaf unfurls from where it joins the fruit.
@@ -100,29 +107,73 @@ struct ToranjTitleView: View {
             layer.rotate(by: .degrees(-25 * (1 - leaf)))
             layer.scaleBy(x: leaf, y: leaf)
             layer.translateBy(x: -Shapes.leafBase.x, y: -Shapes.leafBase.y)
-            layer.fill(Shapes.leaf, with: gradient(Shapes.green, in: Shapes.leaf.boundingRect, radius: 0.85))
+            paint(Shapes.leaf, with: .leaf, in: layer)
         }
     }
 
-    /// Fills `shape` where the pen has been: each stroke in turn, over its own stretch of time.
-    private static func write(_ shape: Path, with colors: [Color], along strokes: [Stroke], in context: GraphicsContext,
+    /// An `Airbrush_*` material for a flat shape (`ToranjSkin.metal`): how deep its rim reaches into the shape (SVG
+    /// units, about a stroke's half width), its grain's cell (points) and strength, its EdgePower and its ramp
+    /// (linear sRGB).
+    private struct Skin {
+        let rim: CGFloat
+        let grain: Float
+        var grainAmount: Float = 0.1
+        let edgePower: Float
+        let stops: [Float]
+
+        /// The pomegranate's `Airbrush_Skin`: a wine core, crimson, wine, a pink rim.
+        static let pomegranate = Skin(rim: 60, grain: 0.3, edgePower: 0.2, stops: [
+            0.2283, 0.0614, 0.09, 0.372, 0.048, 0.096, 0.199, 0.0354, 0.0603, 0.791, 0.3758, 0.7811])
+        /// The fruits' `Airbrush_Leaf` (the apple's, the orange's): bright green, deep green, green, a pale lime rim.
+        static let leaf = Skin(rim: 45, grain: 0.3, edgePower: 0.4, stops: [
+            0.42, 0.8, 0.16, 0.03, 0.2, 0.03, 0.1, 0.48, 0.06, 0.7, 0.9, 0.35])
+
+        /// The same, on a shape drawn `factor` times its size (a dot popping in).
+        func scaled(_ factor: CGFloat) -> Skin {
+            Skin(rim: rim * factor, grain: grain, grainAmount: grainAmount, edgePower: edgePower, stops: stops)
+        }
+
+        var shader: Shader {
+            ShaderLibrary.airbrush(.float(grain), .float(grainAmount), .float(edgePower), .floatArray(stops))
+        }
+    }
+
+    /// Paints `shape` with the pomegranate's skin: the shape in white, blurred by the rim's depth, turned into the
+    /// skin's colours by `pomegranateSkin` (the blur's alpha says how deep each point lies), cut to the shape.
+    private static func paint(_ shape: Path, with skin: Skin, in context: GraphicsContext) {
+        var layer = context
+        layer.clip(to: shape)
+        layer.drawLayer { colored in
+            colored.addFilter(.colorShader(skin.shader))
+            colored.drawLayer { depth in
+                depth.addFilter(.blur(radius: skin.rim))
+                depth.fill(shape, with: .color(.white))
+            }
+        }
+    }
+
+    /// Paints `shape` where the pen has been: each stroke in turn, over its own stretch of time.
+    /// The strokes are joined into one outline and the shape is painted once through it: painted once per stroke,
+    /// two strokes' soft edges left thin seams where they met (dark notches in ت's bowl, where ر begins).
+    private static func write(_ shape: Path, with skin: Skin, along strokes: [Stroke], in context: GraphicsContext,
                               at time: TimeInterval) {
-        let fill = gradient(colors, in: shape.boundingRect)
+        // Written: the whole letter, with nothing to clip.
+        if let last = strokes.last, time >= last.start + last.length {
+            paint(shape, with: skin, in: context)
+            return
+        }
+        var pen: Path?
         for stroke in strokes {
             let written = easeInOut(progress(at: time, from: stroke.start, length: stroke.length))
             guard written > 0 else { continue }
-            var layer = context
-            layer.clip(to: stroke.line.trimmedPath(from: 0, to: written)
-                .strokedPath(StrokeStyle(lineWidth: stroke.width, lineCap: .round, lineJoin: .round)))
-            layer.fill(shape, with: fill)
+            let line = stroke.line.trimmedPath(from: 0, to: written)
+                .strokedPath(StrokeStyle(lineWidth: stroke.width, lineCap: .round, lineJoin: .round))
+            pen = pen.map { $0.union(line) } ?? line
         }
-    }
-
-    /// The SVG's radial gradients, light at 79 % across and 61 % down the shape, without their slight skew.
-    private static func gradient(_ colors: [Color], in bounds: CGRect, radius: CGFloat = 0.71) -> GraphicsContext.Shading {
-        let center = CGPoint(x: bounds.minX + 0.79 * bounds.width, y: bounds.minY + 0.615 * bounds.height)
-        let endRadius = radius * sqrt((bounds.width * bounds.width + bounds.height * bounds.height) / 2)
-        return .radialGradient(Gradient(colors: colors), center: center, startRadius: 0, endRadius: endRadius)
+        guard let pen else { return }
+        var layer = context
+        layer.clip(to: pen)
+        paint(shape, with: skin, in: layer)
     }
 
     private static func progress(at time: TimeInterval, from start: TimeInterval, length: TimeInterval) -> Double {
@@ -148,7 +199,8 @@ private struct Stroke {
     let start: TimeInterval
     let length: TimeInterval
 
-    /// ت: down the right horn, round the bowl's bottom, up the left horn.
+    /// ت: down the right horn, round the bowl's bottom, up the left horn. Wide enough to fill the bowl into its
+    /// corners: narrower, it left dark bites in the bowl (inside its top, and where ر joins) until ر was written.
     static let te = Stroke(line: Path { path in
         path.move(to: CGPoint(x: 906, y: 140))
         path.addLine(to: CGPoint(x: 906, y: 290))
@@ -156,7 +208,7 @@ private struct Stroke {
         path.addLine(to: CGPoint(x: 790, y: 346))
         path.addQuadCurve(to: CGPoint(x: 711, y: 280), control: CGPoint(x: 711, y: 346))
         path.addLine(to: CGPoint(x: 711, y: 140))
-    }, width: 110, start: 0, length: 0.8)
+    }, width: 170, start: 0, length: 0.8)
 
     /// ر: from the bowl down the tail to its drop.
     static let reh = Stroke(line: Path { path in
@@ -187,9 +239,6 @@ private struct Stroke {
 // MARK: - The design team's shapes (from Assets/Title/toranj.svg)
 
 private enum Shapes {
-    static let orange = [Color(red: 1, green: 0.69, blue: 0.41), Color(red: 1, green: 0.43, blue: 0)]
-    static let rose = [Color(red: 0.88, green: 0.32, blue: 0.49), Color(red: 1, green: 0.43, blue: 0)]
-    static let green = [Color(red: 0.80, green: 0.88, blue: 0.32), Color(red: 0.11, green: 0.24, blue: 0.19)]
 
     /// ت's two dots, right to left, ن's, then ج's inside the fruit.
     static let dots = [CGPoint(x: 917.5, y: 31.5), CGPoint(x: 700.5, y: 31.5), CGPoint(x: 483.4, y: 31.5),

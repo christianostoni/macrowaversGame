@@ -91,13 +91,13 @@ struct DragonImmersiveView: View {
                 storyPanel.components.set(BillboardComponent())
                 content.add(storyPanel)
             }
-            // Instructions under the fruit in front of the player.
+            // Instructions under the fruit in front of the player, clear of the ring of light that turns it.
             // Attachments are never disabled (`isEnabled`): deactivating a SwiftUI-hosting entity while its
             // content changes makes RealityKit abort ("new parent is currently being removed"). The panels hide
             // themselves in SwiftUI instead.
             if let panel = attachments.entity(for: FruitPanelView.attachmentID),
                let stage = orchardRoot.findEntity(named: OrchardSceneBuilder.stageName) {
-                panel.position = SIMD3(0, -0.2, 0.02)
+                panel.position = SIMD3(0, -0.25, 0.02)
                 stage.addChild(panel)
             }
             // The elixir's label, under the ingredients' orbit (it follows the player with the orbit).
