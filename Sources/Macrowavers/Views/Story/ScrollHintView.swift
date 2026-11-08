@@ -42,19 +42,21 @@ struct ScrollHintView: View {
                             } label: {
                                 Text("Continue")
                                     .frame(maxWidth: .infinity)
+                                    .ringLight(aroundButtonOf: .large)
                             }
                             .buttonBorderShape(.capsule)
                             .controlSize(.large)
                             .frame(width: ContentView.titleWidth)
-                            .ringLight()
                         }
                         if hint != .carryOn {
                             // The same, smaller and quieter: it is not the way on.
-                            Button("Skip the story") { scroll.finish() }
-                                .font(.callout.weight(.medium))
-                                .buttonBorderShape(.capsule)
-                                .controlSize(.small)
-                                .ringLight()
+                            Button { scroll.finish() } label: {
+                                Text("Skip the story")
+                                    .ringLight(aroundButtonOf: .small)
+                            }
+                            .font(.callout.weight(.medium))
+                            .buttonBorderShape(.capsule)
+                            .controlSize(.small)
                         }
                     }
                     .font(.title3.weight(.medium))
