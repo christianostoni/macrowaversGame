@@ -33,9 +33,13 @@ struct StorySubtitleView: View {
     }
 }
 
-/// The subtitles' place, and the tree's hint's (`TreeHintView`): `GazeFollow` from the tracked eyes.
+/// The subtitles' place, the tree's hint's (`TreeHintView`) and every window that glides after the gaze (the
+/// dragon's words, the ride's): `GazeFollow` from the tracked eyes, `distance` away, raised by `lift` (m) so windows
+/// that glide together keep their own heights.
 struct StorySubtitleComponent: Component {
     let viewer: ViewerTracker
+    var distance = GazeFollow.distance
+    var lift: Float = 0
     var follow = GazeFollow()
 }
 
@@ -56,7 +60,7 @@ struct StorySubtitleSystem: System {
             guard var state = entity.components[StorySubtitleComponent.self] else { continue }
             let eyes = state.viewer.viewerPose()
             let direction = state.follow.update(forward: eyes.forward, deltaTime: deltaTime)
-            entity.setPosition(eyes.position + direction * GazeFollow.distance, relativeTo: nil)
+            entity.setPosition(eyes.position + direction * state.distance + SIMD3(0, state.lift, 0), relativeTo: nil)
             entity.components.set(state)
         }
     }
