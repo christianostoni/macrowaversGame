@@ -30,6 +30,9 @@ final class ElixirRig {
     /// Particles per second of the stream and of the splash at full flow.
     static let streamRate: Float = 520
     static let splashRate: Float = 300
+    /// The liquid's own material (`make_liquid_material.py`): the designers' whole liquid, cut by a level surface.
+    static let liquidAssetName = "ElixirLiquid"
+    static let liquidMaterialPath = "/ElixirLiquid/Looks/Liquid"
 
     /// Placed, sized and turned by `OrchardSystem.updateElixir`.
     let elixir: Entity
@@ -64,6 +67,9 @@ final class ElixirRig {
     /// Light intensity already applied, in steps of `lightStep` (0 = no light component).
     private var appliedLight: Int?
     private var appliedLightColor: SIMD4<Int32>?
+    /// The liquid's level material, its surface moved every frame (`level`); nil without its asset: then the liquid
+    /// is built for its level (`LiquidLevels`) instead.
+    private var levelMaterial: ShaderGraphMaterial?
 
     /// The liquid: built for its level (`LiquidLevels`), filling the inside of the glass up to it, and sloshing around
     /// the centre of the flask's round body, so it never leaves the glass.
@@ -89,7 +95,7 @@ final class ElixirRig {
         let side: SIMD3<Float>
     }
 
-    private init(flask: Entity, model: Entity?) {
+    private init(flask: Entity, model: Entity?, levelMaterial: ShaderGraphMaterial?) {
         elixir = Entity()
         elixir.name = Self.elixirName
         elixir.isEnabled = false
@@ -120,21 +126,30 @@ final class ElixirRig {
         if let liquid {
             liquid.model.components.set(ModelSortGroupComponent(group: Self.sortGroup, order: 0))
         }
+        if let liquid, liquid.levels != nil, var levelMaterial {
+            // Seen through the cut, the inside reads as the surface; what is cut away hides nothing behind it.
+            levelMaterial.faceCulling = .none
+            levelMaterial.writesDepth = false
+            liquid.model.model?.materials = [levelMaterial]
+            self.levelMaterial = levelMaterial
+        }
     }
 
     /// Loads the flask; without its asset, a glowing orb stands in for it (the brew still plays).
     static func make() async -> ElixirRig {
         let flask = Entity()
+        let levelMaterial = try? await ShaderGraphMaterial(named: liquidMaterialPath, from: liquidAssetName, in: .main)
         do {
             let model = try await Entity(named: flaskAssetName, in: .main)
             flask.addChild(model)
-            let rig = ElixirRig(flask: flask, model: model)
-            await rig.liquid?.levels?.prepare()
+            let rig = ElixirRig(flask: flask, model: model, levelMaterial: levelMaterial)
+            // Its level meshes only without the level material.
+            if rig.levelMaterial == nil { await rig.liquid?.levels?.prepare() }
             return rig
         } catch {
             print("⚠️ \(flaskAssetName).usdz not found: a glowing orb stands in for the flask (\(error))")
             flask.addChild(makeStandIn())
-            return ElixirRig(flask: flask, model: nil)
+            return ElixirRig(flask: flask, model: nil, levelMaterial: nil)
         }
     }
 
@@ -214,7 +229,9 @@ final class ElixirRig {
         let glowLevel = state.liquidGlow
         flask.orientation = simd_quatf(angle: state.wobble, axis: SIMD3(1, 0, 0)) * pourRotation(state.pourTilt)
 
-        if let liquid {
+        if let liquid, levelMaterial != nil {
+            level(liquid, fill: fill, slosh: state.slosh, color: state.liquidColor, glow: glowLevel)
+        } else if let liquid {
             Self.fill(liquid, to: fill, slosh: state.slosh)
             let key = Self.materialKey(state.liquidColor, glowLevel)
             if key != appliedLiquid {
@@ -371,6 +388,61 @@ final class ElixirRig {
         core.roughness = 0.15
         orb.addChild(ModelEntity(mesh: .generateSphere(radius: 0.05), materials: [core]))
         return orb
+    }
+}
+
+// MARK: - The liquid's level
+
+extension ElixirRig {
+    /// The liquid as the website draws it: the designers' whole liquid (the inside of the glass) cut by a surface
+    /// level with the world, `fill` of it below. As the flask wobbles and tips to pour, the surface stays level and
+    /// the liquid falls to the glass's low side; it sloshes by `slosh` (radians, about the flask's width). Built level
+    /// by level and turned with the glass instead, it looked like a solid stuck to the bottom of the flask.
+    private func level(_ liquid: LiquidPart, fill: Float, slosh: Float, color: SIMD3<Float>, glow: Float) {
+        liquid.entity.isEnabled = fill > 0.002
+        guard fill > 0.002, var material = levelMaterial, let volume = liquid.levels?.volume else { return }
+        // The round body as a sphere: how much of it lies below a level surface depends only on how far the surface
+        // is from its centre, however the flask is turned.
+        let radius = volume.profile.map(\.y).max() ?? 0
+        let bottom = liquid.model.convert(position: volume.base, to: nil)
+        let metre = simd_distance(liquid.model.convert(position: volume.base + volume.up, to: nil), bottom)
+        let centre = liquid.model.convert(position: volume.base + volume.up * radius, to: nil)
+        var width = flask.convert(direction: SIMD3(1, 0, 0), to: nil)
+        width.y = 0
+        let axis = simd_length(width) > 1e-4 ? simd_normalize(width) : SIMD3<Float>(1, 0, 0)
+        let normal = simd_quatf(angle: slosh, axis: axis).act(SIMD3(0, 1, 0))
+        let height = Self.surfaceHeight(fill: fill, radius: radius, full: volume.height)
+        let surface = centre + normal * ((height - radius) * metre)
+        try? material.setParameter(name: "LevelNormal", value: .simd3Float(normal))
+        try? material.setParameter(name: "LevelOffset", value: .float(-simd_dot(normal, surface)))
+        if let colour = Self.linear(color) {
+            try? material.setParameter(name: "Color", value: .color(colour))
+        }
+        try? material.setParameter(name: "Glow", value: .float(glow))
+        liquid.model.model?.materials = [material]
+        levelMaterial = material
+    }
+
+    /// How high above the bottom of a round body of `radius` its surface stands with `fill` (0…1) of the full liquid
+    /// (`full` high) below it: a sphere's cap, filled by volume, so it rises slower where the body is wide.
+    static func surfaceHeight(fill: Float, radius: Float, full: Float) -> Float {
+        let top = min(full, 2 * radius)
+        func cap(_ height: Float) -> Float { height * height * (3 * radius - height) }
+        let wanted = min(max(fill, 0), 1) * cap(top)
+        var low: Float = 0
+        var high = top
+        for _ in 0..<16 {
+            let middle = (low + high) / 2
+            if cap(middle) < wanted { low = middle } else { high = middle }
+        }
+        return (low + high) / 2
+    }
+
+    /// The elixir's colours are sRGB (as UIColor takes them); the liquid's material wants linear ones.
+    private static func linear(_ colour: SIMD3<Float>) -> CGColor? {
+        guard let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB) else { return nil }
+        return CGColor(colorSpace: space, components: [CGFloat(pow(colour.x, 2.2)), CGFloat(pow(colour.y, 2.2)),
+                                                       CGFloat(pow(colour.z, 2.2)), 1])
     }
 }
 
