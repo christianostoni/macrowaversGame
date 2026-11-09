@@ -8,10 +8,6 @@ the list up to date when an asset is added or replaced.
 | "bananas" (Poly Haven) | Base of the banana: `Banana.usdz` (cut into four peel strips, restyled by the design team) | Poly Haven | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) (no credit required) |
 | [Setar, Alireza Farrokhzadi](https://freesound.org/people/sonsbcnintercultural/sounds/256120/) (Freesound) | Intro music: `MusicIntro.m4a` (looped) | sonsbcnintercultural | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
 | [Persian](https://pixabay.com/music/world-persian-624218/) (Pixabay, downloaded 2026-10-28) | Ride music: `MusicRide.caf` (67 s of it, looped) | Echobrainz | [Pixabay Content License](https://pixabay.com/service/license-summary/) (free, commercial use allowed, no credit required) |
-| [GOREMisc_A Tumbling Flying Sword…](https://freesound.org/people/newlocknew/sounds/845871/) (Freesound) | Pineapple chop: `PineappleChop.m4a` (cut to 1 s) | newlocknew | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
-
-**Non-commercial only:** the pineapple chop's CC BY-NC license allows it in this academy project, not in a game that
-is sold or earns money. Replace it before any commercial release.
 
 **YouTube Content ID:** the ride music is registered with Content ID by its author. The game may use it, but a video
 of the game posted on YouTube (or Instagram, Facebook) can get an automatic claim. A claim is not a copyright strike:
