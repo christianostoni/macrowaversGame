@@ -109,20 +109,26 @@ struct FocusSystem: System {
         let deltaTime = Float(context.deltaTime)
         for entity in context.entities(matching: Self.query, updatingSystemWhen: .rendering) {
             guard let focus = entity.components[FocusComponent.self] else { continue }
-            let amount = 1 - exp(-deltaTime * focus.responsiveness)
-            var transform = entity.transform
-            transform.translation = simd_mix(transform.translation, focus.target.translation, SIMD3(repeating: amount))
-            transform.scale = simd_mix(transform.scale, focus.target.scale, SIMD3(repeating: amount))
-            transform.rotation = simd_slerp(transform.rotation, focus.target.rotation, amount)
-            let isThere = simd_distance(transform.translation, focus.target.translation) < 0.0005
-                && simd_distance(transform.scale, focus.target.scale) < 0.001
-            if isThere {
-                entity.transform = focus.target
-                entity.components.remove(FocusComponent.self)
-            } else {
-                entity.transform = transform
-            }
+            let (transform, isThere) = Self.step(entity.transform, towards: focus, deltaTime: deltaTime)
+            entity.transform = transform
+            if isThere { entity.components.remove(FocusComponent.self) }
         }
+    }
+
+    /// One frame of the easing: where `transform` gets to, and whether it is there (then exactly at the target).
+    static func step(_ transform: Transform, towards focus: FocusComponent,
+                     deltaTime: Float) -> (transform: Transform, isThere: Bool) {
+        let amount = 1 - exp(-deltaTime * focus.responsiveness)
+        var transform = transform
+        transform.translation = simd_mix(transform.translation, focus.target.translation, SIMD3(repeating: amount))
+        transform.scale = simd_mix(transform.scale, focus.target.scale, SIMD3(repeating: amount))
+        transform.rotation = simd_slerp(transform.rotation, focus.target.rotation, amount)
+        // Its turn too: a fruit easing back to face the player (`settleBeforeOpening`) is already where it should
+        // be and as big; only its turn moves, which otherwise snapped at once.
+        let isThere = simd_distance(transform.translation, focus.target.translation) < 0.0005
+            && simd_distance(transform.scale, focus.target.scale) < 0.001
+            && abs(simd_dot(transform.rotation.vector, focus.target.rotation.vector)) > cos(Float(0.005))
+        return isThere ? (focus.target, true) : (transform, false)
     }
 }
 
@@ -175,6 +181,9 @@ struct OrchardComponent: Component {
     var time: Float = 0
     var chop = ChopDetector()
     var cup = CupTurn()
+    /// Whether the fruit in front of the player has started opening: it eases back to face them once, as it starts
+    /// (`settleBeforeOpening`).
+    var focusedIsOpening = false
     var snap = SnapDetector()
     var snapHint = SnapHint()
     /// The small ellipse at the player's side the ingredients go round on.
@@ -231,6 +240,7 @@ struct OrchardSystem: System {
             for fruit in orchard.fruits {
                 Self.applyOpening(fruit, viewModel: viewModel, time: orchard.time, deltaTime: deltaTime)
             }
+            Self.settleBeforeOpening(&orchard)
             Self.detectChop(&orchard)
             Self.detectCup(&orchard)
             Self.updateTurnRing(orchard, deltaTime: deltaTime)
