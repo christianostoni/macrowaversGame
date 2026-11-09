@@ -280,17 +280,62 @@ struct OrchardViewModelTests {
         #expect(orchard.focusedFruitID == nil)
     }
 
-    @Test func fullOrbitTakesNoMoreIngredients() {
+    /// With the three gems already in orbit, another fruit has none to give: it says so, and the player can still
+    /// play with it. It goes back to the tree only once they have finished it, saying so first. Before, its gem came
+    /// out and floated above it, and the fruit stayed in front of the player with nothing to send it back.
+    @Test func aFruitNotNeededGoesBackOnlyOnceFinished() {
         let orchard = OrchardViewModel()
         for fruit in 0..<Elixir.ingredientCount { harvest(fruit, into: orchard) }
         #expect(orchard.elixir.state == .ready)
         let pineapple = id(of: .pineapple, in: orchard)
         orchard.focus(fruit: pineapple)
-        open(orchard)
-        run(orchard, seconds: 3)
-        // It keeps floating above its fruit.
-        #expect(orchard.orbs[pineapple] == .revealed && orchard.focusedFruitID == pineapple)
+        #expect(orchard.isFocusedFruitNotNeeded)
+        // Left closed, it stays as long as the player likes.
+        run(orchard, seconds: 20)
+        #expect(orchard.focusedFruitID == pineapple)
+        #expect(!orchard.isFocusedFruitGoingBack)
+        orchard.chopPineapple()
+        // Its gem stays inside; the fruit says it is going back, then goes.
+        #expect(orchard.orbs[pineapple] == .sealed)
         #expect(!orchard.collectOrb(fruit: pineapple))
+        #expect(orchard.isFocusedFruitGoingBack)
+        run(orchard, seconds: OrchardViewModel.emptyReturnDelay - 0.5)
+        #expect(orchard.focusedFruitID == pineapple)
+        run(orchard, seconds: 1)
+        #expect(orchard.focusedFruitID == nil)
+        #expect(orchard.elixir.state == .ready)
+    }
+
+    /// An apple not needed stays while its worms are being caught (a fixed delay took one away mid-hunt); it goes
+    /// back once the last worm is caught.
+    @Test func anAppleNotNeededStaysWhileItsWormsAreCaught() {
+        let orchard = OrchardViewModel()
+        for fruit in 0..<Elixir.ingredientCount { harvest(fruit, into: orchard) }
+        let apple = orchard.fruits.filter { $0.kind == .apple }[1].id
+        orchard.focus(fruit: apple)
+        #expect(orchard.isFocusedFruitNotNeeded)
+        orchard.setAppleOpening(1)
+        run(orchard, seconds: 20)
+        #expect(orchard.focusedFruitID == apple, "open, its worms not all caught: it stays")
+        clearWorms(orchard)
+        #expect(orchard.orbs[apple] == .sealed)
+        #expect(orchard.isFocusedFruitGoingBack)
+        run(orchard, seconds: OrchardViewModel.emptyReturnDelay + 0.5)
+        #expect(orchard.focusedFruitID == nil)
+        // Back on the tree, nothing brews by itself: the elixir waits for the player's snap.
+        run(orchard, seconds: 10)
+        #expect(orchard.elixir.state == .ready)
+    }
+
+    /// Meanwhile a snap brews the elixir, and the fruit goes back at once.
+    @Test func snappingWithAFruitNotNeededBrewsAndSendsItBack() {
+        let orchard = OrchardViewModel()
+        for fruit in 0..<Elixir.ingredientCount { harvest(fruit, into: orchard) }
+        orchard.focus(fruit: id(of: .orange, in: orchard))
+        #expect(orchard.isFocusedFruitNotNeeded)
+        #expect(orchard.brewElixir())
+        #expect(orchard.focusedFruitID == nil)
+        #expect(orchard.elixir.state == .fusing)
     }
 
     @Test func elixirNeedsThreeIngredientsThenFliesToTheDragon() {

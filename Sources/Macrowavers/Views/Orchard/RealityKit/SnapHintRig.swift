@@ -199,7 +199,9 @@ extension OrchardSystem {
     static func updateSnapHint(_ orchard: inout OrchardComponent, deltaTime: Float) {
         let viewModel = orchard.viewModel
         orchard.snapRig.prepareIfNeeded()
-        let isShown = viewModel.elixir.state == .ready && viewModel.focusedFruitID == nil
+        // Also beside a fruit picked with the three gems already found: it shows what to do instead.
+        let isShown = viewModel.elixir.state == .ready
+            && (viewModel.focusedFruitID == nil || viewModel.isFocusedFruitNotNeeded)
         orchard.snapHint.update(deltaTime: deltaTime, isShown: isShown)
         let middle = orchard.orbit.center - orchard.orbit.across * SnapHintRig.side - SIMD3(0, SnapHintRig.drop, 0)
         let height = SnapHintRig.handHeight * SnapHintRig.scale * cos(SnapHintRig.lean)
