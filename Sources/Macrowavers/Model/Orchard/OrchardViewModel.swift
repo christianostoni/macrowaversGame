@@ -116,7 +116,7 @@ final class OrchardViewModel {
     /// Seconds an opened fruit whose ingredient already orbits stays in front of the player (they read that it is
     /// empty) before going back to the tree by itself: there is no button to send it back.
     static let emptyReturnDelay: Float = 2.5
-    /// How long the focused fruit has been open and empty.
+    /// How long the focused fruit has been done with: open and empty, or not needed and finished.
     @ObservationIgnored private var emptyTime: Float = 0
 
     /// Every kind of fruit on the tree, in the order they take the tree's hang points.
@@ -140,6 +140,29 @@ final class OrchardViewModel {
     var isFocusedFruitEmpty: Bool {
         guard let id = focusedFruitID else { return false }
         return orbs[id].isTaken
+    }
+
+    /// The focused fruit is not needed: the orbit already holds every ingredient (or the elixir is past them), so its
+    /// gem stays inside. It says so; the player can still play with it, and it goes back to the tree once they have
+    /// finished it, never in the middle; a snap brews meanwhile and sends it back. Before, its gem came out but could
+    /// not join, and the fruit stayed in front of the player with nothing to send it back.
+    var isFocusedFruitNotNeeded: Bool {
+        guard let id = focusedFruitID else { return false }
+        return orbs[id] == .sealed && elixirState != .gathering
+    }
+
+    /// The player is done with the focused fruit: where its gem would come out (every worm caught in the apple, the
+    /// pomegranate's seeds out, the banana peeled, the orange in wedges, the pineapple chopped).
+    var isFocusedFruitFinished: Bool {
+        switch focusedFruit?.kind {
+        case .apple: isAppleOpen && caughtWorms >= wormCount
+        default: isFocusedFruitExplored
+        }
+    }
+
+    /// The focused fruit is about to go back to the tree by itself: found empty, or not needed and finished.
+    var isFocusedFruitGoingBack: Bool {
+        (isFocusedFruitNotNeeded && isFocusedFruitFinished) || (isFocusedFruitEmpty && isFocusedFruitExplored)
     }
 
     /// The player has looked inside the focused fruit.
@@ -272,8 +295,8 @@ final class OrchardViewModel {
             // Found: after rising and floating for a moment it joins the others in orbit.
             if orbRevealTimes[index] >= Self.orbRiseDuration + Self.orbOrbitDelay { sendToOrbit(fruit: index) }
         }
-        // Opened and found empty: after a moment it goes back to the tree by itself.
-        if isFocusedFruitEmpty && isFocusedFruitExplored {
+        // Found empty, or not needed and finished: after a moment (the panel says so) it goes back to the tree.
+        if isFocusedFruitGoingBack {
             emptyTime += deltaTime
             if emptyTime >= Self.emptyReturnDelay { back() }
         } else {
@@ -303,8 +326,9 @@ final class OrchardViewModel {
         pineappleChopped = false
     }
 
+    /// Its gem comes out only while the orbit still takes one: otherwise it stays in the fruit, which goes back.
     private func revealFocusedOrb() {
-        guard let id = focusedFruitID, orbs[id] == .sealed else { return }
+        guard let id = focusedFruitID, orbs[id] == .sealed, elixirState == .gathering else { return }
         orbs[id] = .revealed
         orbRevealTimes[id] = 0
     }
