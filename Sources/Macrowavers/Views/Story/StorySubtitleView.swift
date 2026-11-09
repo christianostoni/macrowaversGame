@@ -14,15 +14,17 @@ struct StorySubtitleView: View {
             if let subtitle = scroll.subtitle {
                 Text(subtitle)
                     .font(.title3.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    // Solid white, not `.secondary`: that style is see-through, made for glass, and the scroll's
+                    // paper showed through the words while the player read along on it.
+                    .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     // Its full height: wrapped on two lines, the background covers both.
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 10)
-                    // Dark enough over the scroll's own writing.
-                    .background(.black.opacity(0.65), in: .rect(cornerRadius: 18))
+                    // Dark enough to read over the scroll's light paper and its painting.
+                    .background(.black.opacity(0.85), in: .rect(cornerRadius: 18))
                     .id(subtitle)
                     .transition(.opacity)
                     .accessibilityLabel("Narrator: \(subtitle)")
