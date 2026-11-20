@@ -23,7 +23,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSHandsTrackingUsageDescription</key>
-	<string>Your hands turn the fruit, chop the pineapple and snap their fingers to brew the elixir.</string>
+	<string>Your hands turn the fruit, chop the pineapple and snap their fingers to brew the elixir. On the ride, they steer the dragon, and a snap breathes its fire.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationPreferredDefaultSceneSessionRole</key>
