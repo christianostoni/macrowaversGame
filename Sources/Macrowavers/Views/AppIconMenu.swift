@@ -1,22 +1,21 @@
 import SwiftUI
 import UIKit
 
-/// The app icon picker under Start (`AppIconChoice`): the system changes the icon and tells the player. Hidden where
-/// the system does not support alternate icons.
+/// The app icon picker, a row of the Settings window (`AppIconChoice`): the system changes the icon and tells the
+/// player. Hidden where the system does not support alternate icons.
 struct AppIconMenu: View {
     @State private var selection = AppIconChoice(alternateIconName: UIApplication.shared.alternateIconName)
 
     var body: some View {
         if UIApplication.shared.supportsAlternateIcons {
-            Menu {
-                Picker("App Icon", selection: $selection) {
-                    ForEach(AppIconChoice.allCases) { choice in
-                        Text(choice.title).tag(choice)
-                    }
+            Picker(selection: $selection) {
+                ForEach(AppIconChoice.allCases) { choice in
+                    Text(choice.title).tag(choice)
                 }
             } label: {
                 Label("App Icon", systemImage: "app.badge")
             }
+            .pickerStyle(.menu)
             .accessibilityHint("Chooses the icon of the app on the Home View")
             .onChange(of: selection) { previous, choice in
                 Task { await apply(choice, otherwise: previous) }

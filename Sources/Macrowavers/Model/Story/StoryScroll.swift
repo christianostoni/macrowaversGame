@@ -72,7 +72,8 @@ final class StoryScroll {
     /// Opening or closing on its own, towards this.
     private var openTarget: Float?
 
-    /// `now`: the system's clock; tests move their own.
+    /// `now`: the system's clock; tests move their own. `systemUptime` is a "required reason" API: the app's
+    /// `PrivacyInfo.xcprivacy` declares it (System Boot Time, 35F9.1, timing events inside the app).
     init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.now = now
     }
