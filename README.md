@@ -11,8 +11,9 @@ team's devices. Tracker: Jira project AR126.
 
 The game plays in mixed reality, in the player's room:
 
-1. **Start.** A Start button floats in the room, with a small **App Icon** menu under it (Stone Dragon, Red
-   Dragon, Black Dragon). The room dims and a Persian scroll appears: pull it open, drag its paper up to read the
+1. **Start.** A Start button floats in the room, with a **Settings** button under it: music, the narrator's
+   voice, playing with taps instead of hand gestures, the app icon (Stone Dragon, Red Dragon, Black Dragon), and
+   the game's privacy policy, support and credits pages. The room dims and a Persian scroll appears: pull it open, drag its paper up to read the
    chapter's story, *The King's Tree*, down to its painting, and continue (or skip it). Then "Chapter I": tap the
    text to go on.
 2. **The island.** A floating island fades in, with a dragon bound to the tree at its centre, circling it. Tap the
@@ -47,7 +48,7 @@ Full documentation, one README per feature:
 |---|---|
 | The floating island and the dragon: orbit, flight, untangling puzzle | [docs/features/untangle-dragon](docs/features/untangle-dragon/README.md) |
 | The tree's fruit, the ingredients' orbit, the flask and the elixir | [docs/features/apple-artifact](docs/features/apple-artifact/README.md) |
-| The story screens: Start and the app icon menu, the narrator, the dragon's words, the music; the ride and chapter II | [docs/features/storytelling](docs/features/storytelling/README.md) |
+| The story screens: Start and its Settings window, the narrator, the dragon's words, the music; the ride and chapter II | [docs/features/storytelling](docs/features/storytelling/README.md) |
 
 ## Requirements
 

@@ -16,6 +16,7 @@ struct DragonImmersiveView: View {
     @Environment(UntangleViewModel.self) private var viewModel
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(StoryViewModel.self) private var story
+    @Environment(GameSettings.self) private var settings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
@@ -190,25 +191,27 @@ struct DragonImmersiveView: View {
         .onChange(of: storyScroll.isDone) { _, isDone in
             if isDone, story.step == .scroll { story.advance() }
         }
-        // The narrator tells the story while the scroll is open; the music steps back under the voice.
-        .onChange(of: storyScroll.isNarrating) { _, isNarrating in
-            if isNarrating { narrator.play() } else { narrator.stop() }
-            music.duck(isNarrating)
+        // The narrator tells the story while the scroll is open (unless the player turned the voice off: the
+        // subtitles still follow it); the music steps back under the voice.
+        .onChange(of: storyScroll.isNarrating && settings.isNarratorVoiceOn) { _, isVoiced in
+            if isVoiced { narrator.play() } else { narrator.stop() }
+            music.duck(isVoiced)
         }
         .onChange(of: viewModel.isSolved) { _, isSolved in
             // Free, the dragon speaks; back around the tree (Restart Scene), its words are still to come.
             if isSolved { story.dragonFreed() } else { story.dragonRecaptured() }
         }
-        // The music follows the story and steps back while the dragon roars.
+        // The music follows the story (unless the player turned it off) and steps back while the dragon roars.
         .onChange(of: MusicTrack.playing(story: story.step, dragon: viewModel.phase), initial: true) { _, track in
-            music.play(track)
+            music.play(settings.isMusicOn ? track : nil)
         }
         .onChange(of: viewModel.action == .rearUp) { _, roars in music.duck(roars) }
         .task { await music.load() }
         .task { await narrator.load() }
         .task { await viewer.start() }
+        // Play with Taps: the hands are never tracked (no permission asked), the taps take over.
         .task {
-            orchard.isHandTrackingAvailable = await hands.start()
+            orchard.isHandTrackingAvailable = settings.playsWithTaps ? false : await hands.start()
             await hands.track()
         }
         .onAppear { viewModel.immersiveSpaceState = .open }
@@ -411,5 +414,6 @@ final class HiddenWorld {
         .environment(UntangleViewModel())
         .environment(OrchardViewModel())
         .environment(story)
+        .environment(GameSettings())
 }
 #endif

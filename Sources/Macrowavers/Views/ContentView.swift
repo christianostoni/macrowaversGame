@@ -9,7 +9,7 @@ import SwiftUI
 /// Handing over to the ride, the app has no scene open for a moment and visionOS brings this window back on its
 /// own: it steps aside again as soon as the ride's space is open, or its loading animation would float in
 /// chapter II.
-/// Under Start, a small menu picks the app icon (`AppIconMenu`).
+/// Under Start, Settings opens the Settings window in this window's place (`SettingsView`).
 struct ContentView: View {
     static let windowID = "IslandWindow"
     private static let titleHeight: CGFloat = 200
@@ -20,6 +20,7 @@ struct ContentView: View {
     @Environment(StoryViewModel.self) private var story
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.pushWindow) private var pushWindow
 
     var body: some View {
         Group {
@@ -41,8 +42,18 @@ struct ContentView: View {
                     .controlSize(.large)
                     .frame(width: Self.titleWidth)
                     .accessibilityHint("Opens the floating island and begins the story")
-                    AppIconMenu()
-                        .controlSize(.small)
+                    // Start's twin, without its ring light: that stays Start's alone.
+                    Button {
+                        pushWindow(id: SettingsView.windowID)
+                    } label: {
+                        Text("Settings")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+                    .frame(width: Self.titleWidth)
+                    .padding(.top, 8)
+                    .accessibilityHint("Music, the narrator's voice, gestures, the app icon and the game's pages")
                 }
             } else {
                 VStack(spacing: 12) {

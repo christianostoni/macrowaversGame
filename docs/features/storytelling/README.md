@@ -10,7 +10,7 @@ dragon is full it flies into the medallion's heart, where the story ends.
 
 | # | Step (`StoryStep`) | Where | Text | Moves on |
 |---|---|---|---|---|
-| 1 | `start` | Launch window (plain, no glass) | The game's name, **ترنج**, written on (see [The title](#the-title)); **Start**, as wide as the name, with a ring light; under it a small **App Icon** menu (see below) | Start opens the immersive space; until it has built its world (island, dragon, fruit: a few seconds) the dragon tangles and untangles with "Loading…" in place of Start (see [The loading animation](#the-loading-animation)), then the window steps aside (`UntangleViewModel.isWorldLoaded`) |
+| 1 | `start` | Launch window (plain, no glass) | The game's name, **ترنج**, written on (see [The title](#the-title)); **Start**, as wide as the name, with a ring light; under it **Settings**, the same size without the ring light, which opens the Settings window in this window's place (see [Settings](#settings)) | Start opens the immersive space; until it has built its world (island, dragon, fruit: a few seconds) the dragon tangles and untangles with "Loading…" in place of Start (see [The loading animation](#the-loading-animation)), then the window steps aside (`UntangleViewModel.isWorldLoaded`) |
 | 2 | `scroll` | In front of the player's eyes | The story's scroll: the chapter's story in Persian Nastaliq, down to its painting of the tree and the dragon (see [The story's scroll](#the-storys-scroll)) | Pull it open (or pinch it), drag the paper up to the painting, **Continue** (or **Skip the story**): it rolls up and fades away |
 | 3 | `chapter` | Same spot | **Chapter I** / Patience is bitter, but its fruit is sweet. | Tap the text: the island fades in |
 | – | `adventure` | A little below the gaze, like the subtitles | No story text: the island, its fruit, the dragon and its puzzle. Until the first ingredient is found, a hint says what to do: **Look at a fruit on the tree and pinch to pick it** / Every fruit hides an ingredient. Find three to brew the elixir that soothes the dragon. (`TreeHintView`; hidden while a fruit is close) | The dragon is freed |
@@ -279,7 +279,9 @@ Sources/Macrowavers/
 ├── Views/ContentView.swift              Screen 1: the Start button and its ring light (launch window, plain style)
 ├── Views/ToranjTitleView.swift          Screen 1: the game's name, written on above Start (source Assets/Title/)
 ├── Views/DragonLoadingView.swift        The loading animation (sprite sheet DragonLoading.png, Assets/Blender/loading-dragon/)
-├── Views/AppIconMenu.swift              Screen 1: the app icon picker under Start
+├── Views/SettingsView.swift             Screen 1: the Settings window (pushed in place of the launch window)
+├── Model/GameSettings.swift             The player's settings, kept between launches (UserDefaults)
+├── Views/AppIconMenu.swift              The app icon picker, a row of the Settings window
 ├── Model/AppIconChoice.swift            The app icons (asset catalog names, titles)
 ├── Model/Story/MusicTrack.swift         Which track plays at each step (intro, puzzle, farewell, ride)
 ├── Views/GameMusic.swift                Plays it: channel audio, crossfades, ducks while the dragon roars
@@ -446,12 +448,33 @@ the subtitles spell "Div" as the scroll does, and the paper reaches the painting
 `GazeFollowTests.swift`: the subtitles float 15° below the gaze, stay still while the player reads, and glide under
 the new gaze after a bigger turn.
 
+`GameSettingsTests.swift`: a first launch has the music, the narrator's voice and the hand gestures on, and the
+settings are the same at the next launch.
+
 `AppIconTests.swift`: the stone dragon is the primary icon, every choice is found again from the system's icon
 name, and every alternate icon is declared in the app's Info.plist.
 
+## Settings
+
+**Settings**, under Start, opens the Settings window with `pushWindow`: it takes the launch window's place, and the
+launch window comes back when it closes (**Done**, or the window's close button), so it is never open with the game.
+The `Window` scene is suppressed at launch and never restored. Its rows (`SettingsView`, `GameSettings`, kept in
+`UserDefaults`, declared in `PrivacyInfo.xcprivacy` with reason CA92.1):
+
+| Setting | Default | What changes |
+|---|---|---|
+| **Music** | on | Off: `GameMusic` plays nothing, on the island and on the ride |
+| **Narrator's Voice** | on | Off: the scroll's story is not read aloud and the music does not step back; the subtitles show as usual |
+| **Play with Taps** | off | On: hand tracking is never started (no permission asked) and the game plays as when the player did not allow it: a tap chops the pineapple, a tap on a gem brews the elixir, the dragon flies itself and a tap on the sky breathes fire |
+| **App Icon** | Stone Dragon | See [The app icon](#the-app-icon); hidden where alternate icons are not supported (the simulator) |
+
+**About** shows the version and links to the game's pages on its website (`macrowavers.pages.dev`, opened in
+Safari; plain rows with an arrow at their end, `WebsiteLink`): the privacy policy (Apple asks for a link inside the app as well as on the App Store), support, and the
+credits (the CC BY assets of `CREDITS.md`).
+
 ## The app icon
 
-Three icons, picked in the **App Icon** menu under Start (`AppIconMenu`, `AppIconChoice`): **Stone Dragon** (the
+Three icons, picked in the **App Icon** row of the Settings window (`AppIconMenu`, `AppIconChoice`): **Stone Dragon** (the
 design team's 3D stone dragon on a dark fill, the default: `AppIcon`), **Red Dragon** (`AppIconRedDragon`) and
 **Black Dragon** (the first icon, `AppIconBlackDragon`), both coiled around an orange. The system changes the icon
 with `UIApplication.setAlternateIconName` and tells the player; the menu shows only where
