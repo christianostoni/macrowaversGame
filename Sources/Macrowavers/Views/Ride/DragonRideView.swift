@@ -20,6 +20,7 @@ struct DragonRideView: View {
     @Environment(UntangleViewModel.self) private var untangle
     @Environment(OrchardViewModel.self) private var orchard
     @Environment(StoryViewModel.self) private var story
+    @Environment(GameSettings.self) private var settings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     /// Where the player's eyes are: the ride starts there.
@@ -89,9 +90,10 @@ struct DragonRideView: View {
         .gesture(SpatialTapGesture().targetedToEntity(where: .has(RideFireTarget.self)).onEnded { _ in
             story.requestFire()
         })
-        // The music fades in out of the dark, follows the story and fades out as the space closes.
+        // The music fades in out of the dark, follows the story and fades out as the space closes (unless the player
+        // turned it off).
         .onChange(of: MusicTrack.riding(story: story.step), initial: true) { _, track in
-            music.play(track)
+            music.play(settings.isMusicOn ? track : nil)
         }
         // The ride's world, built while the loading animation plays (without the dragon, no ride: the space just
         // waits for the Digital Crown).
@@ -105,8 +107,9 @@ struct DragonRideView: View {
         }
         .task { await music.load(MusicTrack.ridingTracks) }
         .task { await viewer.start() }
+        // Play with Taps: no hands on the horns, the dragon flies itself and a tap on the sky breathes fire.
         .task {
-            guard await hands.start() else { return }
+            guard !settings.playsWithTaps, await hands.start() else { return }
             await hands.track()
         }
         .onAppear { untangle.immersiveSpaceState = .open }
@@ -348,5 +351,6 @@ private struct FeastMessagesView: View {
         .environment(UntangleViewModel())
         .environment(OrchardViewModel())
         .environment(StoryViewModel())
+        .environment(GameSettings())
 }
 #endif
